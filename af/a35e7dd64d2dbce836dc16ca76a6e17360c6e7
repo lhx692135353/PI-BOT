@@ -1,0 +1,58 @@
+desktop/apps/desktop/ui/main.tsx
+  s_7e3125224eb462::t_822d8549c1aa85 123
+  s_7e3125224eb462::t_5b20c529be4763 114-115,117,120
+  s_7e3125224eb462::t_7d5b5a94eddc41 128
+  s_7e3125224eb462::t_073dbd60497544 104
+  s_7e3125224eb462::t_6bf588bc6fa89c 107
+  s_7e3125224eb462::t_9482e9229a1af9 4
+  s_7e3125224eb462::t_f3ea2f7f917a6f 122
+server/deploy/tagent.yaml
+  s_dc395c07bda753::t_ba185197867140 123,146,222,245
+  s_dc395c07bda753::t_b3bb2e63285121 218
+  s_dc395c07bda753::t_639108e37bb340 3-4
+  s_dc395c07bda753::t_9bc4a3e1a35740 5,120,219
+  s_dc395c07bda753::t_a006f426ce4ec3 1-2,6-82,86-118,121-122,124-145,147-217,220-221,223-244,246-307
+  s_dc395c07bda753::t_cbbf91d7302bd9 83-85
+  s_dc395c07bda753::t_6ae35c99badfeb 119
+desktop/apps/desktop/ui/coding.tsx
+  s_7e3125224eb462::t_675576e288ff23 2
+  s_7e3125224eb462::t_84ea76d6d1cc94 110
+  s_7e3125224eb462::t_b128c1a3b4bb5c 94
+  s_7e3125224eb462::t_b6c3be4c3d9692 124
+  s_7e3125224eb462::t_e6b38ff353894d 157
+.github/workflows/server-image.yml
+  s_dc395c07bda753::t_8b6d5996fe9383 1-40
+desktop/apps/desktop/ui/style.css
+  s_7e3125224eb462::t_372338bd61288f 31-32
+desktop/apps/desktop/ui/cloud-chat.tsx
+  s_7e3125224eb462::t_9059cdbd512a9f 3
+  s_7e3125224eb462::t_cbaad8c5343aa6 48
+desktop/package.json
+  s_7e3125224eb462::t_4219c525076a07 27
+desktop/apps/desktop/ui/navigation.tsx
+  s_7e3125224eb462::t_a86047088dd8e4 33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "afa35e7dd64d2dbce836dc16ca76a6e17360c6e7",
+  "prompts": {},
+  "sessions": {
+    "s_7e3125224eb462": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b7701c0c-1cdf-414c-9a8c-d46772b4ad74",
+        "model": "grok-4.7"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    },
+    "s_dc395c07bda753": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "1099bab4-a070-4427-a037-88f9fb0c85ff",
+        "model": "grok-4.7"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
