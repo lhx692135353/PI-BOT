@@ -1,0 +1,54 @@
+desktop/apps/desktop/src/main.ts
+  s_dc395c07bda753::t_d111c03b54a4d4 17-24
+  s_dc395c07bda753::t_aa39f3aad697fe 2-3
+  s_dc395c07bda753::t_eb4fec06b2ef5f 31-32
+server/deploy/tagent.yaml
+  s_dc395c07bda753::t_355501f1baf10f 17
+  s_dc395c07bda753::t_be2453048885eb 220
+  s_dc395c07bda753::t_cd6c4e27f28e0e 54
+  s_dc395c07bda753::t_4acc4e91523353 85
+  s_dc395c07bda753::t_d23309b129bcd0 120
+desktop/packages/service/src/cloud/sync.ts
+  s_dc395c07bda753::t_2d51c9cf27bd7e 79-80
+desktop/packages/service/src/cloud/client.ts
+  s_dc395c07bda753::t_6b87fca3bcaa98 34
+desktop/apps/desktop/ui/style.css
+  s_dc395c07bda753::t_1f793f476a997c 8
+server/src/tagent_server/bootstrap.py
+  s_dc395c07bda753::t_dc127d51ead195 15,17-22
+  s_dc395c07bda753::t_2c5acf52f9d085 9
+desktop/apps/desktop/ui/cloud.tsx
+  s_dc395c07bda753::t_14a63222e0fd42 11-31
+  s_dc395c07bda753::t_28b7814796d979 34
+  s_dc395c07bda753::t_b9274c28712055 38
+desktop/packages/protocol/src/cloud.ts
+  s_dc395c07bda753::t_71fb765c8da4cd 34-40
+desktop/tests/cloud.test.ts
+  s_dc395c07bda753::t_b3dadd3c6cfd42 72
+desktop/packages/protocol/src/index.ts
+  s_dc395c07bda753::t_d28d4d58c77b1b 55
+desktop/apps/desktop/ui/main.tsx
+  s_dc395c07bda753::t_dc6e2a7b297031 8
+  s_dc395c07bda753::t_81b6161d5bc61c 94-97
+desktop/apps/desktop/src/preload.ts
+  s_dc395c07bda753::t_4506ceb0ae68e6 5-6
+desktop/tests/shared-desktop.spec.ts
+  s_dc395c07bda753::t_31d4a32a7dd9a3 29
+  s_dc395c07bda753::t_f4a0f615431557 13,16-18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c3026f469b8a91a13b69899aa94cd922f740234e",
+  "prompts": {},
+  "sessions": {
+    "s_dc395c07bda753": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "1099bab4-a070-4427-a037-88f9fb0c85ff",
+        "model": "grok-4.7"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
