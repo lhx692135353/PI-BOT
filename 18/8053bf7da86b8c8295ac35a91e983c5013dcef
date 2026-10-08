@@ -1,0 +1,30 @@
+desktop/native/Keychain.swift
+  s_dc395c07bda753::t_d60a9fb527f9ca 5
+  s_dc395c07bda753::t_314f62500398eb 6-18
+  s_dc395c07bda753::t_799fa492a060dd 34-38
+desktop/apps/desktop/src/main.ts
+  s_dc395c07bda753::t_f0bc603b6e34ef 56,60,64-65
+  s_dc395c07bda753::t_5165b4fc9a7fea 27,31,35,38-42
+  s_dc395c07bda753::t_a7e25673023640 47-48
+  s_dc395c07bda753::t_4bc7989367c2fa 43
+desktop/scripts/pack-mac.mjs
+  s_dc395c07bda753::t_2a1d9cfef28427 36,42-51
+  s_dc395c07bda753::t_7f70b242b390ac 37-41
+  s_dc395c07bda753::t_84aa842a2c8e1c 52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "188053bf7da86b8c8295ac35a91e983c5013dcef",
+  "prompts": {},
+  "sessions": {
+    "s_dc395c07bda753": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "1099bab4-a070-4427-a037-88f9fb0c85ff",
+        "model": "grok-4.7"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
