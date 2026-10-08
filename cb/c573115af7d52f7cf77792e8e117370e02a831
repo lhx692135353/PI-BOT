@@ -1,0 +1,33 @@
+desktop/scripts/pack-mac.mjs
+  s_dc395c07bda753::t_2e68519f1c02f4 34-47
+  s_dc395c07bda753::t_6dcd16b764511b 1-33
+desktop/package.json
+  s_dc395c07bda753::t_4b4ff2fc9aeecb 13
+desktop/apps/desktop/src/main.ts
+  s_dc395c07bda753::t_ccc9263542a395 14
+  s_dc395c07bda753::t_ed569464ba1b23 54
+  s_dc395c07bda753::t_69f9ecb5a4bae3 2
+  s_dc395c07bda753::t_c7c87fb7c15186 57
+  s_dc395c07bda753::t_4a3baa7d7393d0 26-35
+desktop/.gitignore
+  s_dc395c07bda753::t_0b9b82cf0fa4ff 4
+desktop/apps/desktop/forge.config.cjs
+  s_dc395c07bda753::t_342a511ebc343d 1-7,9-10
+  s_dc395c07bda753::t_d23feaafe053d0 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "cbc573115af7d52f7cf77792e8e117370e02a831",
+  "prompts": {},
+  "sessions": {
+    "s_dc395c07bda753": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "1099bab4-a070-4427-a037-88f9fb0c85ff",
+        "model": "grok-4.7"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
