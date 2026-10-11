@@ -1,0 +1,79 @@
+server/README.md
+  s_1f75687d8dd6dd::t_0d09caed74d7e6 1,3,7,10-15,18-24,27-29,32,36,38-39,41,46-47,50
+  s_1f75687d8dd6dd::t_f9340a0f903f73 34
+server/ARCHITECTURE.md
+  s_1f75687d8dd6dd::t_a8afee3544bb69 1,3,5,8-22,25,27,29-48,50,52,54-56,58,60,62,64-70,72,74,76,78,80-81,83,85,87-88,90,92-95,97,99-110,113-121,123,125-129,131,133,135-138,140,142-144,146,148-154
+desktop/REQUIREMENTS.md
+  s_1f75687d8dd6dd::t_1a7307430cbbc1 13
+  s_1f75687d8dd6dd::t_035e5236789297 24
+package.json
+  s_1f75687d8dd6dd::t_0ae28e2843e334 15
+boards/esp32-s3-touch-lcd-2.8c/preview/frames/sleeping.svg
+  s_1f75687d8dd6dd::t_c687db89b7d73b 1
+server/tests/integration.test.ts
+  s_1f75687d8dd6dd::t_e1ebc00ae67f12 285-322
+  s_1f75687d8dd6dd::t_48f4f8f97e0c2c 333
+boards/esp32-s3-touch-lcd-2.8c/preview/frames/error.svg
+  s_1f75687d8dd6dd::t_c687db89b7d73b 1
+boards/esp32-s3-touch-lcd-2.8c/preview/frames/working.svg
+  s_1f75687d8dd6dd::t_c687db89b7d73b 1
+desktop/README.md
+  s_1f75687d8dd6dd::t_435cf5a16d401a 21
+  s_1f75687d8dd6dd::t_1a7307430cbbc1 28
+boards/esp32-s3-touch-lcd-2.8c/demo/BoardDemo/BoardDemo.ino
+  s_1f75687d8dd6dd::t_c687db89b7d73b 16,79,91
+boards/esp32-s3-touch-lcd-2.8c/VALIDATION.md
+  s_1f75687d8dd6dd::t_a69c6da00e7d8c 81-89
+boards/esp32-s3-touch-lcd-2.8c/preview/index.html
+  s_1f75687d8dd6dd::t_c687db89b7d73b 1
+boards/esp32-s3-touch-lcd-2.8c/README.md
+  s_1f75687d8dd6dd::t_3a3312f0d8ddbf 1,3,7,11,13-19,22,32,34,37,40,83
+desktop/ARCHITECTURE.md
+  s_1f75687d8dd6dd::t_b8577410f1c84e 1-5,8-22,25-62,64-70,72,74,76,78-111,113-121,123,125-129,131,135-138,140,142-144,146,148-154
+  s_1f75687d8dd6dd::t_a8afee3544bb69 133
+boards/esp32-s3-touch-lcd-2.8c/preview/frames/searching.svg
+  s_1f75687d8dd6dd::t_c687db89b7d73b 1
+server/src/config.ts
+  s_1f75687d8dd6dd::t_035e5236789297 26
+server/.env.example
+  s_1f75687d8dd6dd::t_27abfc8ad1c36f 2-8,10-17,19-27
+boards/esp32-s3-touch-lcd-2.8c/preview/frames/thinking.svg
+  s_1f75687d8dd6dd::t_c687db89b7d73b 1
+boards/esp32-s3-touch-lcd-2.8c/preview/render.cpp
+  s_1f75687d8dd6dd::t_c687db89b7d73b 13
+boards/esp32-s3-touch-lcd-2.8c/preview/frames/waiting.svg
+  s_1f75687d8dd6dd::t_c687db89b7d73b 1
+boards/esp32-s3-touch-lcd-2.8c/tests/test_bridge.py
+  s_1f75687d8dd6dd::t_dd7e4d28de5f14 1,7-12,15-24,26-28,30-65,67-68
+server/REQUIREMENTS.md
+  s_1f75687d8dd6dd::t_c9a18b68651785 1-48
+boards/esp32-s3-touch-lcd-2.8c/preview/frames/idle.svg
+  s_1f75687d8dd6dd::t_c687db89b7d73b 1
+README.md
+  s_1f75687d8dd6dd::t_b7935a1cdec388 1,3,5-8,10-18,20,22,24-41
+boards/esp32-s3-touch-lcd-2.8c/agent_bridge.py
+  s_1f75687d8dd6dd::t_649f0d88e4cc9a 87-89,92,94
+  s_1f75687d8dd6dd::t_f2df5b0c3998f6 1,3,19-31,63-67,72,75,78,80,82-83,90-91,97-99,101-114,118-119,123,126-130,148-150,152,173-174,197
+boards/esp32-s3-touch-lcd-2.8c/preview/frames/success.svg
+  s_1f75687d8dd6dd::t_c687db89b7d73b 1
+packages/agent/tests/agent.test.ts
+  s_1f75687d8dd6dd::t_aa947fab4260f0 1-100
+boards/esp32-s3-touch-lcd-2.8c/examples/BasicDemo.ino
+  s_1f75687d8dd6dd::t_c687db89b7d73b 29,50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "67020306d90fa3eff7e18138fa9a20c602b263fd",
+  "prompts": {},
+  "sessions": {
+    "s_1f75687d8dd6dd": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "083efe0a-1211-4e43-b37f-88bfc7860944",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
