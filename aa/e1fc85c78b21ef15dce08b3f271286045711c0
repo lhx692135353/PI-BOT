@@ -1,0 +1,92 @@
+desktop/REQUIREMENTS.md
+  s_1f75687d8dd6dd::t_3ec8b891c53bb7 1,3,5,7,9-20,22,24-28,30,32-33
+desktop/packages/service/src/cloud.ts
+  s_1f75687d8dd6dd::t_ed28c3a92cb33d 1-87
+desktop/packages/service/src/server.ts
+  s_1f75687d8dd6dd::t_5064099c0d40ac 6-9,24,27-28,44,47-48,57,59,62
+desktop/tests/library.test.ts
+  s_1f75687d8dd6dd::t_de760cce16ef0e 1-118
+desktop/packages/service/package.json
+  s_1f75687d8dd6dd::t_9a2cd46c1d685e 1
+desktop/tests/harness-e2e.test.ts
+  s_1f75687d8dd6dd::t_10e1ba58e3bf2d 1-133
+packages/agent/src/index.ts
+  s_1f75687d8dd6dd::t_4f94fe7918def7 90-96
+desktop/package.json
+  s_1f75687d8dd6dd::t_dcb5f71190efbb 15
+  s_1f75687d8dd6dd::t_006f1a0abaa50e 2-3,21-22,29
+desktop/apps/desktop/ui/bridge.ts
+  s_1f75687d8dd6dd::t_5f0fcc27ee705b 1-6
+desktop/apps/desktop/ui/style.css
+  s_1f75687d8dd6dd::t_6271e273b1e1fd 146
+  s_1f75687d8dd6dd::t_92604f525e64c5 147
+  s_1f75687d8dd6dd::t_b4179364c4bf94 1-26,28-42,44,46-52,54-75,77-83,85-123,125-134,136-137,139-145,148-158
+package.json
+  s_1f75687d8dd6dd::t_dcb5f71190efbb 15
+desktop/ARCHITECTURE.md
+  s_1f75687d8dd6dd::t_1ae47da3ee4822 50
+  s_1f75687d8dd6dd::t_709f9110148e8d 1,4-14,17,19-21,23,25-28,30,32,34-35,37,39-43,45,47,49,51,53,55-57,59,61
+desktop/packages/service/src/paths.ts
+  s_1f75687d8dd6dd::t_0435ac76eba5a5 4,6,9-10
+desktop/README.md
+  s_1f75687d8dd6dd::t_dbb5af6bb738f4 1,3,5-8,12,15,19,21,23,25-29,31,33-36,38,42,44-47,49,51,53,56-59,62
+  s_1f75687d8dd6dd::t_ffaeb65acd797b 37,40,48
+desktop/packages/service/src/executor.ts
+  s_1f75687d8dd6dd::t_ebb8ad54da3034 1-137
+desktop/apps/desktop/forge.config.cjs
+  s_1f75687d8dd6dd::t_7d7c7ffe01959a 3-4
+desktop/tsconfig.json
+  s_1f75687d8dd6dd::t_1829f121907e06 17-18
+desktop/apps/desktop/ui/editor.tsx
+  s_1f75687d8dd6dd::t_36b3234abc71a4 1-48,50-73
+  s_1f75687d8dd6dd::t_6271e273b1e1fd 49
+desktop/apps/desktop/package.json
+  s_1f75687d8dd6dd::t_9a2cd46c1d685e 2-3
+desktop/apps/desktop/ui/timeline.tsx
+  s_1f75687d8dd6dd::t_6c6a40cb6faae3 1-127
+desktop/packages/service/src/keychain.ts
+  s_1f75687d8dd6dd::t_a9d58d4468381b 32
+desktop/packages/service/src/application.ts
+  s_1f75687d8dd6dd::t_231ed36b3d08ec 2,141
+  s_1f75687d8dd6dd::t_90b765d996a123 3-27,29-32,34-52,54-55,57-60,62-116,118-121,125-130,132-140,142-171,173,175
+desktop/apps/desktop/ui/index.html
+  s_1f75687d8dd6dd::t_10e92006665dee 1
+desktop/scripts/build.mjs
+  s_1f75687d8dd6dd::t_a03a3fdd098cf1 6,13
+desktop/packages/service/src/log.ts
+  s_1f75687d8dd6dd::t_a4836a40d8c7de 4-5,9,12-13
+desktop/apps/desktop/src/main.ts
+  s_1f75687d8dd6dd::t_0c9d834b7a610f 7-8,10,19,33,47,52,55,57-59,62,72
+desktop/packages/service/src/library.ts
+  s_1f75687d8dd6dd::t_43490e1e1f316d 1-243
+desktop/apps/desktop/ui/main.tsx
+  s_1f75687d8dd6dd::t_e3e4831fd41bbd 1,3-8,10-81,84-95,97-99,101-109,112,114-195,208-214,216-217
+  s_1f75687d8dd6dd::t_2cf704ce20bc45 110-111,113
+  s_1f75687d8dd6dd::t_deae5229da2cd9 196-207
+desktop/apps/desktop/src/preload.ts
+  s_1f75687d8dd6dd::t_c2a8b70790fb38 6-8
+desktop/scripts/pack-mac.mjs
+  s_1f75687d8dd6dd::t_7d7c7ffe01959a 12,27,34,53,57,60
+desktop/native/Keychain.swift
+  s_1f75687d8dd6dd::t_95fc4ec36a2b71 8,16,21
+desktop/packages/protocol/src/index.ts
+  s_1f75687d8dd6dd::t_c8919da0a9434c 2,4,6-7,9-66
+desktop/packages/protocol/package.json
+  s_1f75687d8dd6dd::t_9a2cd46c1d685e 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "aae1fc85c78b21ef15dce08b3f271286045711c0",
+  "prompts": {},
+  "sessions": {
+    "s_1f75687d8dd6dd": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "083efe0a-1211-4e43-b37f-88bfc7860944",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
