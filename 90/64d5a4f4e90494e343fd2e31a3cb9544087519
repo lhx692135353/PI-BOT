@@ -1,0 +1,39 @@
+admin/src/api.ts
+  s_1f75687d8dd6dd::t_2b392e029ab548 1-123
+admin/src/env.d.ts
+  s_1f75687d8dd6dd::t_91db3880ca7331 1
+admin/index.html
+  s_1f75687d8dd6dd::t_a674e2f772b0f4 1-12
+admin/src/main.tsx
+  s_1f75687d8dd6dd::t_c80ad2f8edaa07 1-584
+admin/src/style.css
+  s_1f75687d8dd6dd::t_6ad90a1bd67220 1-131
+packages/bot-face/tests/bot-face.test.ts
+  s_1f75687d8dd6dd::t_23661cc97ae890 1-145,149
+  s_1f75687d8dd6dd::t_fa2fe549bc7de7 146-148
+admin/vite.config.ts
+  s_1f75687d8dd6dd::t_a1f3d02bd97054 1-15
+packages/bot-face/spec.json
+  s_1f75687d8dd6dd::t_d0df62e87fdb04 56
+admin/package.json
+  s_1f75687d8dd6dd::t_9fb967a4a7a50b 1-22
+admin/tsconfig.json
+  s_1f75687d8dd6dd::t_65b44b95760f22 1-14,16
+  s_1f75687d8dd6dd::t_f74ea81297c02e 15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9064d5a4f4e90494e343fd2e31a3cb9544087519",
+  "prompts": {},
+  "sessions": {
+    "s_1f75687d8dd6dd": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "083efe0a-1211-4e43-b37f-88bfc7860944",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
