@@ -1,0 +1,40 @@
+.github/workflows/server-image.yml
+  s_7fc02730019eac::t_6d09c023873ab2 78-79
+  s_7fc02730019eac::t_7e965abebdc555 44-47
+server/deploy/ubuntu/test_init_env.py
+  s_7fc02730019eac::t_bfb882a6df5ac4 1-47
+server/deploy/ubuntu/install.sh
+  s_7fc02730019eac::t_6d09c023873ab2 1-39
+server/deploy/ubuntu/deploy.sh
+  s_7fc02730019eac::t_994186a9ce65ca 1-59
+server/README.md
+  s_7fc02730019eac::t_6d09c023873ab2 40
+server/deploy/ubuntu/pi-bot-update.service
+  s_7fc02730019eac::t_994186a9ce65ca 1-11
+.gitignore
+  s_7fc02730019eac::t_7e965abebdc555 5
+server/deploy/ubuntu/init-env.py
+  s_7fc02730019eac::t_994186a9ce65ca 1-57
+server/deploy/ubuntu/pi-bot-update.timer
+  s_7fc02730019eac::t_994186a9ce65ca 1-11
+server/deploy/ubuntu/README.md
+  s_7fc02730019eac::t_6d09c023873ab2 1-57
+server/deploy/ubuntu/compose.yml
+  s_7fc02730019eac::t_994186a9ce65ca 1-111
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "56e1efbea9f9605470f7cb52475a0d837f564abe",
+  "prompts": {},
+  "sessions": {
+    "s_7fc02730019eac": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a141e9-8f6b-7662-b2d9-de5d48b00070",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
