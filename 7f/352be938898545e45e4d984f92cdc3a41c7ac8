@@ -1,0 +1,21 @@
+server/README.md
+  s_7fc02730019eac::t_420216d9b6fc8d 40
+server/deploy/ubuntu/README.md
+  s_7fc02730019eac::t_420216d9b6fc8d 43,54
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7f352be938898545e45e4d984f92cdc3a41c7ac8",
+  "prompts": {},
+  "sessions": {
+    "s_7fc02730019eac": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a141e9-8f6b-7662-b2d9-de5d48b00070",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
