@@ -1,0 +1,505 @@
+android/app/src/main/java/dev/pibot/android/face/Status.kt
+  s_45854cb06cd0b0::t_9fe99223a8d623 11-15
+packages/agent/src/skills.ts
+  s_e0534c3e85df36::t_56f24ec1799e8b 1-73
+packages/a2ui/src/renderer.tsx
+  s_d8ee516c94710d::t_856e1ebae949ba 1-216,218-249,251-319,322-349
+  s_d8ee516c94710d::t_b6faa222c171a0 321,350
+  s_d8ee516c94710d::t_5964dd3aecd33a 217,250,320
+packages/a2ui/web/main.tsx
+  s_d8ee516c94710d::t_650eb63035e650 15,36
+  s_d8ee516c94710d::t_856e1ebae949ba 1-14,16-35,37-88
+packages/a2ui/web/style.css
+  s_d8ee516c94710d::t_856e1ebae949ba 1-35
+README.md
+  s_d8ee516c94710d::t_856e1ebae949ba 5,42-44,46-47
+  s_b11d9bee930eda::t_8ff0aa11015dfa 45
+android/app/src/main/java/dev/pibot/android/ui/TimelineScreen.kt
+  s_45854cb06cd0b0::t_2c3b48f55f9658 4
+  s_45854cb06cd0b0::t_49d28d533e76c0 59,63,65
+  s_45854cb06cd0b0::t_765ae2324aff74 173-194,196-197,203-219,238
+  s_7d92a779011bc8::t_9b749a4c7bb2bd 200-202,220
+  s_45854cb06cd0b0::t_8a7032c92eba3d 72
+  s_d8ee516c94710d::t_650eb63035e650 142,195,235-237
+desktop/scripts/build.mjs
+  s_7d92a779011bc8::t_1831533e018289 8-9
+  s_d8ee516c94710d::t_2fb92e03785973 5,7
+server/src/agents.ts
+  s_45854cb06cd0b0::t_a0cc7c13b66c9a 121-124,126-129
+  s_45854cb06cd0b0::t_3e128279e9ff87 1-23,25-120,125,130-310,312-316
+  s_e0534c3e85df36::t_9c694ce0d6a6c7 24
+  s_45854cb06cd0b0::t_4005c5667ba562 311
+desktop/apps/desktop/ui/style.css
+  s_7d92a779011bc8::t_be6f723e16dfa4 65-70
+  s_45854cb06cd0b0::t_f8a185567a882e 116-123
+  s_7d92a779011bc8::t_9b749a4c7bb2bd 124-125
+packages/agent/src/index.ts
+  s_7d92a779011bc8::t_73afcea259955b 55-56,104,120-126,129,131-132,186,189,192,291
+  s_d8ee516c94710d::t_cc3a8b89b81e13 67
+  s_7d92a779011bc8::t_50d1c729cba5af 68
+  s_7d92a779011bc8::t_f4055b795062c7 73,118-119,172-173
+  s_7d92a779011bc8::t_f45723827ad3e2 53-54,103,133-135,169,174-179,290
+  s_7d92a779011bc8::t_cc8b1a037b4780 170
+  s_7fc02730019eac::t_d0f8d934782628 217,243
+  s_e0534c3e85df36::t_e668ecc28a0010 260
+  s_45854cb06cd0b0::t_4111baa3f3b086 86-89
+  s_45854cb06cd0b0::t_e7f3ea0bfa9a21 69
+  s_e0534c3e85df36::t_b025ef1b21c235 105,154-157,165-166,292
+  s_e0534c3e85df36::t_9c694ce0d6a6c7 4,15,49-50,70,136,143,171,205,251-259,261-265,273,275,277
+  s_7d92a779011bc8::t_ec777f9acab300 72
+  s_7d92a779011bc8::t_de2760ca9c1cba 116-117
+  s_7d92a779011bc8::t_ec334d2a0bd893 130
+server/docker-compose.yml
+  s_7d92a779011bc8::t_23ca387ea1dd6d 1,28-29,34,77-95,99
+packages/a2ui/README.md
+  s_d8ee516c94710d::t_856e1ebae949ba 1-7,10-39
+  s_b11d9bee930eda::t_8ff0aa11015dfa 8-9
+packages/a2ui/src/assets.d.ts
+  s_d8ee516c94710d::t_856e1ebae949ba 1
+server/openapi.json
+  s_7fc02730019eac::t_b36010a3619e34 17,19-26,31,36-38,41-44,51,902,912,921-922,924-931,933-936,955,961-963,967-970,977,993,1003,1012-1013,1015-1022,1024-1027,1032,1051,1057,1065,1070,1075,1082,1089-1092,1098-1101,1108,1316,1321,1327-1365
+  s_45854cb06cd0b0::t_cfa1d1791c7ae8 9-10,12,14-16,18,28-29,34,40,45-50,52-219,891-892,894,896-897,899-900,903-911,913-914,916-920,923,966,971-976,978-980,982-983,985,987-988,990-991,994-1002,1004-1005,1007-1011,1014,1029-1031,1097,1102-1107,1109-1111
+  s_7fc02730019eac::t_a2a6eb7acade29 8,11,13,27,30,32-33,35,39,890,893,895,898,901,915,932,937-954,956-960,964-965,981,984,986,989,992,1006,1023,1028,1033-1050,1052-1056,1058-1064,1066-1069,1071-1074,1076-1081,1083-1088,1093-1096
+desktop/packages/service/src/executor.ts
+  s_45854cb06cd0b0::t_ce2661e0200160 17
+  s_45854cb06cd0b0::t_b704c311654847 77-79,83-84
+  s_7d92a779011bc8::t_516842ce073499 16,41,60,103
+  s_d8ee516c94710d::t_cc3a8b89b81e13 3,80
+  s_e0534c3e85df36::t_9c694ce0d6a6c7 18,90,94
+  s_7d92a779011bc8::t_f45723827ad3e2 96-100
+server/tests/ui.test.ts
+  s_d8ee516c94710d::t_ff8922ae609917 108,117
+  s_d8ee516c94710d::t_856e1ebae949ba 1-107,109-116,118-135,137-320
+  s_7fc02730019eac::t_1def2a8dedafe7 136
+server/src/routes.ts
+  s_7d92a779011bc8::t_be6f723e16dfa4 21,277-278,307-308
+  s_45854cb06cd0b0::t_d6c3616ff79f1a 30
+  s_45854cb06cd0b0::t_8582fe8f873d2b 171-215
+  s_7fc02730019eac::t_d0f8d934782628 31,384-390,395-398
+  s_7d92a779011bc8::t_50d1c729cba5af 32,43,158-169
+  s_7fc02730019eac::t_e9f761012178a2 392
+  s_d8ee516c94710d::t_cc3a8b89b81e13 35,170,333-348
+  s_45854cb06cd0b0::t_36ca9b5bdb3dd3 332
+  s_e0534c3e85df36::t_9c694ce0d6a6c7 33,65-66,152-157
+  s_7fc02730019eac::t_504b8f42fdbdbd 34
+desktop/scripts/build-icon.ts
+  s_7d92a779011bc8::t_1831533e018289 1-30
+server/src/migrate.ts
+  s_d8ee516c94710d::t_cc3a8b89b81e13 4
+packages/agent/tests/skills.test.ts
+  s_7fc02730019eac::t_805e7825f18e46 1,25-27,29-32,58,62-63
+  s_e0534c3e85df36::t_3a6325cfbc1b58 2-24,28,33-57,59-61,64-72
+android/ARCHITECTURE.md
+  s_7fc02730019eac::t_78ba79574aaefe 14,22,38
+  s_e0534c3e85df36::t_c07dac334793b2 119-126
+  s_7d92a779011bc8::t_3deed1b90b7a55 172,186-187
+  s_45854cb06cd0b0::t_c514b270f7ac66 17,35,57-58,62,101-118,147,185
+  s_7d92a779011bc8::t_38d39a87d16b7c 94
+  s_d8ee516c94710d::t_856e1ebae949ba 188-197
+  s_7d92a779011bc8::t_48f4b5b7fc5bd8 92-93
+  s_7fc02730019eac::t_9304181394894c 32,78,138
+server/tests/helpers.ts
+  s_45854cb06cd0b0::t_716c347a56e485 58
+  s_d8ee516c94710d::t_ff8922ae609917 9,80
+  s_7fc02730019eac::t_e9f761012178a2 53,55
+  s_7d92a779011bc8::t_6d132ec8e7eb39 89,106-117
+  s_45854cb06cd0b0::t_3f0f05f5fbfb2e 90,93
+  s_e0534c3e85df36::t_7a66140f36f7ef 42-45,59,63,81,85
+  s_45854cb06cd0b0::t_6967fe65de00cf 60,62,64-65,67-68,70-71
+  s_45854cb06cd0b0::t_0ed7c2ac639643 37-41
+  s_45854cb06cd0b0::t_fec6a1297038d1 61
+  s_45854cb06cd0b0::t_b4c503b048f52d 66
+  s_45854cb06cd0b0::t_18a5858e2a6ac5 69
+  s_d8ee516c94710d::t_e4f973cdb731a2 77-79
+  s_e0534c3e85df36::t_948409cf7bef7a 82-84
+  s_45854cb06cd0b0::t_8654201ec37f8f 91-92
+  s_45854cb06cd0b0::t_6cf6d60c53b452 94-95
+  s_7d92a779011bc8::t_1f4b683e5198fc 118-120
+  s_7fc02730019eac::t_a4df9fc4ee28cc 1,50,56-57,74,76,86-88
+server/src/sockets.ts
+  s_45854cb06cd0b0::t_ed7e3cb90d473d 26,36-40,46,48
+  s_45854cb06cd0b0::t_05335a04830024 8
+server/src/app.ts
+  s_7d92a779011bc8::t_50d1c729cba5af 16,103,138
+  s_45854cb06cd0b0::t_f58768207eaf52 178
+  s_45854cb06cd0b0::t_2f8ce94c344f2d 17
+  s_e0534c3e85df36::t_9c694ce0d6a6c7 194
+server/migrations/0006-message-ui.sql
+  s_d8ee516c94710d::t_cc3a8b89b81e13 1
+  s_d8ee516c94710d::t_a720744078b73e 2
+packages/agent/tests/agent.test.ts
+  s_7fc02730019eac::t_805e7825f18e46 1,23-28,30,36-39,41,43,93,100-104,149-150,152
+  s_7d92a779011bc8::t_cc8b1a037b4780 29,34-35,48-80,105
+  s_7d92a779011bc8::t_73afcea259955b 31-33,81-92,94-99,106
+  s_7d92a779011bc8::t_92f2e2ea308dfe 146
+  s_7fc02730019eac::t_e4b8ce642f53a9 155-161
+android/app/build.gradle.kts
+  s_d8ee516c94710d::t_650eb63035e650 63-72,83,85-86
+  s_d8ee516c94710d::t_cfcdb202a32010 73-82,84,90
+packages/a2ui/src/catalog.ts
+  s_d8ee516c94710d::t_0bb368f03d779c 131
+  s_d8ee516c94710d::t_856e1ebae949ba 1-130,132-138
+server/src/search.ts
+  s_7d92a779011bc8::t_50d1c729cba5af 1-57,59-61
+  s_7d92a779011bc8::t_23ca387ea1dd6d 58
+server/migrations/0002-message-progress.sql
+  s_7d92a779011bc8::t_f45723827ad3e2 1
+desktop/REQUIREMENTS.md
+  s_45854cb06cd0b0::t_0531197c7ef881 21
+  s_e0534c3e85df36::t_c9d5ec91a2a94b 5,15,29
+android/app/src/main/java/dev/pibot/android/ui/BotGridScreen.kt
+  s_7d92a779011bc8::t_1831533e018289 143,150-152,159
+admin/src/main.tsx
+  s_7fc02730019eac::t_78ba79574aaefe 131
+  s_7fc02730019eac::t_1f49d141033271 291,294-295,299
+server/src/db.ts
+  s_45854cb06cd0b0::t_21a7d37fada738 24
+  s_e0534c3e85df36::t_9c694ce0d6a6c7 25
+packages/agent/tests/ask-agent.test.ts
+  s_45854cb06cd0b0::t_b387696ae77738 1-98
+android/app/src/test/java/dev/pibot/android/ui/A2uiAssetsTest.kt
+  s_d8ee516c94710d::t_b6faa222c171a0 1-16
+desktop/packages/service/src/application.ts
+  s_d8ee516c94710d::t_5964dd3aecd33a 170-171
+server/tests/llm.test.ts
+  s_7fc02730019eac::t_722809da033fdd 1-55
+desktop/scripts/dev.mjs
+  s_5402f4a55eaa73::t_ff3953cae2fa97 4,13-17
+  s_d8ee516c94710d::t_414105e38287fc 7
+server/src/bots.ts
+  s_7d92a779011bc8::t_516842ce073499 8,326,401,421,464
+  s_45854cb06cd0b0::t_7581a5e1ffcfd2 429-431,443-445,447-450
+  s_45854cb06cd0b0::t_820ce05146fb71 258-275,279,282-284,286,290-291,295,299,301
+  s_45854cb06cd0b0::t_a194feaf906078 402
+  s_d8ee516c94710d::t_cc3a8b89b81e13 2,83,400
+  s_45854cb06cd0b0::t_9f1bff4c313a3b 305,314-315
+  s_e0534c3e85df36::t_9c694ce0d6a6c7 3,81,329,466,489
+  s_7d92a779011bc8::t_be6f723e16dfa4 5,143,216-227
+  s_45854cb06cd0b0::t_ec5875f8a2842c 64-72,84-92,96-106
+  s_d8ee516c94710d::t_a720744078b73e 228,330,411-414,428,438-439,441,446,487,576
+  s_45854cb06cd0b0::t_7e3daea6babbe1 500
+  s_45854cb06cd0b0::t_ea8c765284706a 327-328,331-372,378
+  s_45854cb06cd0b0::t_eab35fc0d280d2 541-542,545
+  s_45854cb06cd0b0::t_5d8456043e1908 461,463,465
+  s_7d92a779011bc8::t_f4055b795062c7 310,407
+  s_45854cb06cd0b0::t_d72f2ab1401196 584,588-589
+  s_45854cb06cd0b0::t_0077a60bc716bb 539-540,543-544,546-547,551-575
+  s_7d92a779011bc8::t_f45723827ad3e2 82,403-406,408,481-486
+server/src/config.ts
+  s_45854cb06cd0b0::t_1387393de93b7b 36-37
+  s_7d92a779011bc8::t_50d1c729cba5af 48-51
+desktop/README.md
+  s_d8ee516c94710d::t_856e1ebae949ba 66-67
+  s_d8ee516c94710d::t_414105e38287fc 21
+  s_7d92a779011bc8::t_3deed1b90b7a55 3,35,41
+  s_d8ee516c94710d::t_981d992a842d7f 64-65
+android/app/src/main/java/dev/pibot/android/data/PiBotRepository.kt
+  s_d8ee516c94710d::t_650eb63035e650 159-170
+desktop/packages/protocol/src/index.ts
+  s_d8ee516c94710d::t_5964dd3aecd33a 2,20-21,40
+  s_7d92a779011bc8::t_be6f723e16dfa4 42
+  s_45854cb06cd0b0::t_5dad626e0c2933 37-39
+server/README.md
+  s_7d92a779011bc8::t_3deed1b90b7a55 32,43-45
+  s_e0534c3e85df36::t_c9d5ec91a2a94b 36-37
+  s_7fc02730019eac::t_0913c08d8ad1d2 20,46,57-58
+desktop/apps/desktop/forge.config.cjs
+  s_7d92a779011bc8::t_1831533e018289 5
+desktop/apps/desktop/ui/timeline.tsx
+  s_45854cb06cd0b0::t_e013722366671a 81
+  s_7d92a779011bc8::t_f4055b795062c7 98-102
+  s_7d92a779011bc8::t_1831533e018289 115-116
+  s_45854cb06cd0b0::t_ab5024a981a35f 6
+  s_d8ee516c94710d::t_5964dd3aecd33a 7-8,133-135
+  s_7d92a779011bc8::t_f45723827ad3e2 22-23,25-26,130
+  s_45854cb06cd0b0::t_bb79a37cecdda7 123-125,131
+  s_45854cb06cd0b0::t_7beb656179828f 27-29,31-40,46-59
+  s_d8ee516c94710d::t_3f72c745e60750 30
+packages/agent/src/a2ui.ts
+  s_d8ee516c94710d::t_cc3a8b89b81e13 10,68
+  s_d8ee516c94710d::t_856e1ebae949ba 1-9,11-28,30-38,40,45-47,49-67
+  s_b11d9bee930eda::t_452b8a640a2fd3 29,39,41-44,48
+server/src/ui.ts
+  s_d8ee516c94710d::t_cc3a8b89b81e13 21,27,42,119
+  s_d8ee516c94710d::t_856e1ebae949ba 1-20,22-26,28-41,43-118
+android/README.md
+  s_d8ee516c94710d::t_856e1ebae949ba 24-25
+server/src/runs.ts
+  s_7d92a779011bc8::t_f45723827ad3e2 14,49,132-134
+  s_d8ee516c94710d::t_cc3a8b89b81e13 17-18,47,126
+  s_d8ee516c94710d::t_dadc3cc8645216 135-137
+android/app/src/main/java/dev/pibot/android/domain/Timeline.kt
+  s_45854cb06cd0b0::t_6211340a539038 3,5
+  s_45854cb06cd0b0::t_a4265a3ba4bb73 78-88
+  s_7d92a779011bc8::t_f45723827ad3e2 24
+  s_d8ee516c94710d::t_650eb63035e650 73-74
+  s_45854cb06cd0b0::t_27a1ca45a10b24 72
+server/src/runner.ts
+  s_7d92a779011bc8::t_d4cd63ef77300f 11,29
+  s_7d92a779011bc8::t_f45723827ad3e2 105
+  s_45854cb06cd0b0::t_d401336b98cee8 8
+  s_45854cb06cd0b0::t_aa6a0e59d671d0 82-86
+  s_45854cb06cd0b0::t_f1dfbbba46b2c5 38-40
+  s_d8ee516c94710d::t_cc3a8b89b81e13 7,87
+  s_e0534c3e85df36::t_9c694ce0d6a6c7 31,99,103
+  s_45854cb06cd0b0::t_de4ed250dafc10 30
+  s_45854cb06cd0b0::t_186ab3eed5b794 102
+server/migrations/0004-agent-tasks.sql
+  s_45854cb06cd0b0::t_d262d5e789808a 1-26
+android/app/src/main/java/dev/pibot/android/ui/AppRoot.kt
+  s_45854cb06cd0b0::t_8aa45addb33cee 64
+packages/a2ui/src/index.ts
+  s_d8ee516c94710d::t_856e1ebae949ba 1-70,72-97,99-140,142-201,204-244,246-260,262-279,281-311,315-336,339-399
+  s_d8ee516c94710d::t_0bb368f03d779c 71,98,141,202-203,245,261,280,313,337,400
+  s_b11d9bee930eda::t_df7ac241c7e172 314
+  s_b11d9bee930eda::t_8ff0aa11015dfa 338
+  s_d8ee516c94710d::t_ff8922ae609917 312
+packages/a2ui/src/math.ts
+  s_d8ee516c94710d::t_856e1ebae949ba 2-26,28,31-35,38-48,51-55,58-66,68-78,80-81,83-94,97-102
+  s_d8ee516c94710d::t_0bb368f03d779c 1,27,29-30,36-37,49-50,56-57,95-96,103-104
+  s_d8ee516c94710d::t_8b40de5395c3d8 67,79,82
+packages/a2ui/scripts/build.mjs
+  s_d8ee516c94710d::t_856e1ebae949ba 1-20
+packages/agent/tests/a2ui.test.ts
+  s_d8ee516c94710d::t_f55242838b0eec 54
+  s_d8ee516c94710d::t_856e1ebae949ba 1-53
+server/src/worker.ts
+  s_d8ee516c94710d::t_a720744078b73e 6,200,215
+  s_45854cb06cd0b0::t_4131b013d9859c 247-256,263
+  s_45854cb06cd0b0::t_e5fe4881238343 63-66,68
+  s_d8ee516c94710d::t_cc3a8b89b81e13 9-10,139-140
+  s_45854cb06cd0b0::t_489db4ba650f0d 20-21,30
+  s_7d92a779011bc8::t_516842ce073499 54,116
+  s_7d92a779011bc8::t_f45723827ad3e2 141-149
+  s_45854cb06cd0b0::t_2dac091f94f342 176
+android/app/src/main/java/dev/pibot/android/data/PiBotApi.kt
+  s_7d92a779011bc8::t_f45723827ad3e2 109
+  s_45854cb06cd0b0::t_a8625b1dc13b39 111-112,116-126
+  s_7d92a779011bc8::t_1831533e018289 85
+  s_d8ee516c94710d::t_650eb63035e650 110,209-213
+  s_d8ee516c94710d::t_83fcc403ecf973 127-128,214
+server/REQUIREMENTS.md
+  s_45854cb06cd0b0::t_58880dec665c79 28
+  s_7fc02730019eac::t_78ba79574aaefe 25
+  s_e0534c3e85df36::t_c9d5ec91a2a94b 20,32-33,49,54
+  s_45854cb06cd0b0::t_d2ae398d0ca006 34
+  s_45854cb06cd0b0::t_6d6b1b0ef117c9 50-51
+server/tests/skills.test.ts
+  s_e0534c3e85df36::t_7a66140f36f7ef 1-4,6-17,19-20,22-35,38-72,74-78,80-92,94-116,118-120,122,124-129,131-139,141,143-144
+  s_e0534c3e85df36::t_ad5b29d0f93773 5,18,21,36-37,73,79,93,117,121,123,130,142
+  s_7fc02730019eac::t_b50ddb2b36dd50 140
+packages/a2ui/web/index.html
+  s_d8ee516c94710d::t_650eb63035e650 1
+desktop/apps/desktop/src/main.ts
+  s_7d92a779011bc8::t_1831533e018289 1,17,52,64
+server/migrations/0005-bot-skills.sql
+  s_e0534c3e85df36::t_56f24ec1799e8b 1-27
+packages/a2ui/src/session.ts
+  s_d8ee516c94710d::t_856e1ebae949ba 1-11,13-20,24-198,200-212
+  s_d8ee516c94710d::t_5964dd3aecd33a 12,21-23,199,213
+server/.env.example
+  s_7d92a779011bc8::t_3deed1b90b7a55 24-27
+server/src/skills.ts
+  s_e0534c3e85df36::t_56f24ec1799e8b 1-47,49,51-52,54,56-57,59-63,65-95
+  s_e0534c3e85df36::t_e668ecc28a0010 48,50,53,55,58,64
+server/tests/integration.test.ts
+  s_7fc02730019eac::t_e9f761012178a2 198-208
+  s_7d92a779011bc8::t_73afcea259955b 10,242,343
+  s_7d92a779011bc8::t_92f2e2ea308dfe 48-59,252,260-263,265-267,300,344-346
+  s_7fc02730019eac::t_e4b8ce642f53a9 377
+  s_7d92a779011bc8::t_6d132ec8e7eb39 12,17,47,72,90,347-351
+  s_7d92a779011bc8::t_1831533e018289 150,515-517
+  s_45854cb06cd0b0::t_d1e375d3c2860d 374,376,379-380,382-491,493-507
+  s_7d92a779011bc8::t_1a7e1122067845 11
+  s_7d92a779011bc8::t_ce375dbdfc6aca 154-172,363-373
+  s_7d92a779011bc8::t_ab3c9210ba3d15 215-223
+  s_7d92a779011bc8::t_4df7797ba2c999 264,558
+  s_45854cb06cd0b0::t_0091beae396b42 492
+  s_7fc02730019eac::t_2b54bc55735622 209
+  s_45854cb06cd0b0::t_efff1e6302c4a3 375
+  s_45854cb06cd0b0::t_63dd2cf41331f5 381
+  s_7fc02730019eac::t_9c80395d1cef1e 184,187,191-192,195-196,212,339-340,378,563
+server/src/llm.ts
+  s_7fc02730019eac::t_d0f8d934782628 11-12,14-15,23,25-34,39,41,45-49,61,84,94-99,152-153,172-173,175,184-186,188-193
+android/app/src/test/java/dev/pibot/android/DomainTest.kt
+  s_45854cb06cd0b0::t_bce2747b80df66 3,6
+  s_7d92a779011bc8::t_cc8b1a037b4780 47,51-53
+  s_45854cb06cd0b0::t_197647978dadad 88-101
+  s_45854cb06cd0b0::t_ada603851672f7 14,16
+  s_45854cb06cd0b0::t_ca241911e50b0d 87
+android/REQUIREMENTS.md
+  s_e0534c3e85df36::t_c9d5ec91a2a94b 23,35
+  s_45854cb06cd0b0::t_af47cc6ec59e14 28
+server/ARCHITECTURE.md
+  s_45854cb06cd0b0::t_48a324bb75034d 101-118
+  s_7fc02730019eac::t_78ba79574aaefe 14,22,38
+  s_45854cb06cd0b0::t_1487ef4c8a2765 17
+  s_45854cb06cd0b0::t_c93827f0b9f4b3 35
+  s_45854cb06cd0b0::t_a089e815adc0c7 57-58
+  s_45854cb06cd0b0::t_0cedc19c4afbed 62
+  s_e0534c3e85df36::t_c07dac334793b2 119-126
+  s_7d92a779011bc8::t_38d39a87d16b7c 94
+  s_d8ee516c94710d::t_856e1ebae949ba 188-197
+  s_45854cb06cd0b0::t_3076917399b5f7 185
+  s_7d92a779011bc8::t_48f4b5b7fc5bd8 92-93
+  s_45854cb06cd0b0::t_486584b11e9fec 147
+  s_7d92a779011bc8::t_3deed1b90b7a55 172,186-187
+  s_7fc02730019eac::t_ac470a8dd41557 32,78,138
+server/migrations/0003-main-bot.sql
+  s_7d92a779011bc8::t_be6f723e16dfa4 1-2
+packages/bot-face/tests/bot-face.test.ts
+  s_45854cb06cd0b0::t_7544bb9310f656 107
+packages/agent/src/web-search.ts
+  s_7d92a779011bc8::t_50d1c729cba5af 1-29
+packages/a2ui/src/style.css
+  s_d8ee516c94710d::t_856e1ebae949ba 1-215
+desktop/package.json
+  s_7d92a779011bc8::t_9a8cfd0473470c 34
+  s_d8ee516c94710d::t_a5614c7a136e06 29-30
+desktop/apps/desktop/ui/main.tsx
+  s_7d92a779011bc8::t_73afcea259955b 208-214
+  s_5402f4a55eaa73::t_7c26e273946f71 123-132,144-147
+  s_7d92a779011bc8::t_1831533e018289 202
+  s_7d92a779011bc8::t_be6f723e16dfa4 4,11,171-175,178
+  s_45854cb06cd0b0::t_457780cd80ec56 207
+  s_5402f4a55eaa73::t_a8bf241d047532 133-142
+packages/agent/README.md
+  s_e0534c3e85df36::t_c9d5ec91a2a94b 1-2,4-44
+  s_7fc02730019eac::t_5c38421fb2bdd8 3
+packages/bot-face/src/status.ts
+  s_45854cb06cd0b0::t_d15c402d444057 32
+server/deploy/pibot.yaml
+  s_7d92a779011bc8::t_3deed1b90b7a55 31,326-416
+  s_7d92a779011bc8::t_e886daea717882 417
+android/app/src/main/java/dev/pibot/android/ui/A2uiContent.kt
+  s_d8ee516c94710d::t_650eb63035e650 1-3,5-40,42-45,48-125
+  s_d8ee516c94710d::t_b0f3d04f2a9d28 4,41,46-47
+server/searxng/settings.yml
+  s_7d92a779011bc8::t_23ca387ea1dd6d 1-17
+packages/a2ui/tests/protocol.test.ts
+  s_b11d9bee930eda::t_8ff0aa11015dfa 183-184
+  s_d8ee516c94710d::t_856e1ebae949ba 1-14,16-29,31-105,107-147,149-160,164-174,176-182,185-187,189-225,240
+  s_d8ee516c94710d::t_f55242838b0eec 15,30,106,148,175,188,226,249
+  s_b11d9bee930eda::t_5dc3afefe8305c 161-163,227-239,241-248
+desktop/tests/a2ui-browser/main.ts
+  s_d8ee516c94710d::t_a720744078b73e 1,41
+  s_d8ee516c94710d::t_856e1ebae949ba 2-3,5-18,20-21,23-40,42-48,50-62,64-72,74-113,115-126,128-151
+  s_b11d9bee930eda::t_8ff0aa11015dfa 4,19,22,49,63,73,114,127
+desktop/tests/a2ui-browser/index.html
+  s_d8ee516c94710d::t_a720744078b73e 1
+server/tests/search.test.ts
+  s_7d92a779011bc8::t_ab3c9210ba3d15 1-56
+packages/agent/tests/responses.ts
+  s_7fc02730019eac::t_d4154b640cfb6c 1-51
+desktop/tests/harness-e2e.test.ts
+  s_7d92a779011bc8::t_1831533e018289 136,139
+  s_e0534c3e85df36::t_b164384ec86c0f 13,57,72-73,174-175,178-179
+  s_7d92a779011bc8::t_cc8b1a037b4780 108,152
+  s_7d92a779011bc8::t_6d132ec8e7eb39 10,38,58,71,86,120-132
+  s_e0534c3e85df36::t_03fc0969c78154 12,133,153-173,176
+  s_7fc02730019eac::t_e9f761012178a2 177
+  s_7d92a779011bc8::t_d8fbd984171392 37
+  s_7d92a779011bc8::t_0106f78b3cfd2c 39-40
+  s_e0534c3e85df36::t_67fd6554084740 134
+  s_7fc02730019eac::t_fed82829888279 1,25,28,30-32,34,42-43,45-46,48
+desktop/ARCHITECTURE.md
+  s_d8ee516c94710d::t_856e1ebae949ba 188-197
+  s_45854cb06cd0b0::t_c514b270f7ac66 17,35,57-58,62,101-118,147,185
+  s_7d92a779011bc8::t_48f4b5b7fc5bd8 92-93
+  s_7d92a779011bc8::t_38d39a87d16b7c 94
+  s_e0534c3e85df36::t_c07dac334793b2 119-126
+  s_7d92a779011bc8::t_3deed1b90b7a55 172,186-187
+  s_7fc02730019eac::t_78ba79574aaefe 14,22,38
+  s_7fc02730019eac::t_ab2d8e012c6189 32,78,138
+packages/agent/src/ask-agent.ts
+  s_45854cb06cd0b0::t_5a01e3426bd5e4 1-85
+desktop/apps/desktop/ui/assets.d.ts
+  s_d8ee516c94710d::t_ba15e771c76c42 2-3
+desktop/scripts/pack-mac.mjs
+  s_d8ee516c94710d::t_f08eca31d79fc5 12,30
+package-lock.json
+  s_d8ee516c94710d::t_0a0ef391f7900e 53,66,6214-6280,9206-9490,9510-9513,9548-9557,10010-10015,10446-10451,10522-10530,10626-10634,10665-10676,11066-11077,11429-11478,11485-11517,11939-11947,11995-12021,12374-12379,12392-12397,12545-12577,12584,12605
+package.json
+  s_d8ee516c94710d::t_318ce3b875a2e8 14-15,19-20
+packages/a2ui/package.json
+  s_d8ee516c94710d::t_450fa9e8123b36 1-26
+packages/a2ui/tsconfig.json
+  s_d8ee516c94710d::t_cf46f44c55e29d 1
+packages/agent/package.json
+  s_d8ee516c94710d::t_c765b7abb83146 6-8,12-13
+server/Dockerfile
+  s_d8ee516c94710d::t_f3269d2f446f83 4
+server/package.json
+  s_d8ee516c94710d::t_fdb3176837f12c 26-27
+server/scripts/build.mjs
+  s_d8ee516c94710d::t_a8986538ff6bc5 2,8-9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ade743349e4e64efc20d24d3ea57f297571f9840",
+  "prompts": {},
+  "humans": {
+    "h_395c29b857facd": {
+      "author": "liuhx <liuhx20@lenovo.com>"
+    }
+  },
+  "sessions": {
+    "s_45854cb06cd0b0": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "8a492872-e78b-4ed2-82f2-313cb04473bd",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    },
+    "s_5402f4a55eaa73": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a12eb3-bd7f-7d21-bd7e-d9b9d8bae332",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    },
+    "s_7d92a779011bc8": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a12f84-9adb-7671-be51-3786917aa800",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    },
+    "s_7fc02730019eac": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a141e9-8f6b-7662-b2d9-de5d48b00070",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    },
+    "s_b11d9bee930eda": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a13a1d-899a-7813-bba6-69fda8cf2713",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    },
+    "s_d8ee516c94710d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1392b-6008-7430-8324-d1053402d9f8",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    },
+    "s_e0534c3e85df36": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a13781-7daf-7990-ba5b-aa675b5d9032",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
