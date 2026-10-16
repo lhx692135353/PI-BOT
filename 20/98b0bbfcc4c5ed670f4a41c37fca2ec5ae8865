@@ -1,0 +1,22 @@
+server/deploy/ubuntu/test_init_env.py
+  s_7fc02730019eac::t_a2030ee94d344b 5,47-61
+  s_7fc02730019eac::t_3104b45ff99fe4 62-63
+server/deploy/ubuntu/compose.yml
+  s_7fc02730019eac::t_a2030ee94d344b 76
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2098b0bbfcc4c5ed670f4a41c37fca2ec5ae8865",
+  "prompts": {},
+  "sessions": {
+    "s_7fc02730019eac": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a141e9-8f6b-7662-b2d9-de5d48b00070",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
