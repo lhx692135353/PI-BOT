@@ -1,0 +1,19 @@
+.github/workflows/server-image.yml
+  s_7fc02730019eac::t_f6b873c822069b 40-42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4065ac60165ae8c24e6b4c7d37c5c8d3fb6cf837",
+  "prompts": {},
+  "sessions": {
+    "s_7fc02730019eac": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a141e9-8f6b-7662-b2d9-de5d48b00070",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
