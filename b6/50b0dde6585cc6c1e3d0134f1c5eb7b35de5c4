@@ -1,0 +1,187 @@
+packages/agent/tests/agent.test.ts
+  s_abc1050798e980::t_04bd1d26b0fdc9 143,156,165
+  s_9053adc1b0d634::t_c53b85f26fba01 29-31,73-89
+  s_9053adc1b0d634::t_d0436df47b559f 90-91
+desktop/packages/service/src/application.ts
+  s_9053adc1b0d634::t_05b6aec4a6f352 84,93-98,114-116
+  s_7fc02730019eac::t_ef537f6e0d33db 64
+  s_9053adc1b0d634::t_d58c47efb254d9 40,90-91,99-103,171-172,195
+  s_9053adc1b0d634::t_7cd8fd4c71633b 187
+  s_9053adc1b0d634::t_e3e649d50722e1 117
+server/src/scheduling.ts
+  s_9053adc1b0d634::t_ed0463674b9ad7 1-9,11-28,30-37,39-50
+  s_9053adc1b0d634::t_e831c5e6ab3388 29
+  s_9053adc1b0d634::t_c0c46d0f0c194d 10,38
+server/migrations/0007-async-tasks.sql
+  s_9053adc1b0d634::t_15b9fd30280b95 1-37
+android/app/src/main/java/dev/pibot/android/data/PiBotRepository.kt
+  s_9053adc1b0d634::t_926aab82ba319d 152-153
+desktop/tests/library.test.ts
+  s_9053adc1b0d634::t_f59ab87c9fa1b2 125-127,133
+  s_9053adc1b0d634::t_c53b85f26fba01 1,120-124,128-132,134-139
+  s_9053adc1b0d634::t_19b14f5a0a200c 140
+server/src/worker.ts
+  s_9053adc1b0d634::t_b0affe37059f69 9,23,40-44,46,131,134-135,197,244,254-255,261
+  s_9053adc1b0d634::t_d58c47efb254d9 101,104
+server/src/routes.ts
+  s_9053adc1b0d634::t_785e90f2e60975 544-546
+  s_9053adc1b0d634::t_54d0dac14ebc27 30,174-177,187-202,204-212,215,217,224-227,246
+  s_9053adc1b0d634::t_e831c5e6ab3388 203
+server/src/runs.ts
+  s_9053adc1b0d634::t_90cbfdc8501c3a 105,185,202
+  s_9053adc1b0d634::t_e831c5e6ab3388 218-221
+  s_9053adc1b0d634::t_b0affe37059f69 17,40-43,51,106,115-121,165,184,187-188,201,203-206,254-257
+android/app/src/test/java/dev/pibot/android/DomainTest.kt
+  s_9053adc1b0d634::t_f59ab87c9fa1b2 6-7,70-77
+  s_9053adc1b0d634::t_9fb8b381808d3d 78-79
+packages/agent/tests/ask-agent.test.ts
+  s_9053adc1b0d634::t_ada2ecacf6958e 51,79,87
+desktop/apps/desktop/ui/style.css
+  s_9053adc1b0d634::t_f59ab87c9fa1b2 139
+  s_9053adc1b0d634::t_7cd8fd4c71633b 166-167
+  s_abc1050798e980::t_bc8ac1fe3d1198 124
+server/tests/integration.test.ts
+  s_abc1050798e980::t_bc8ac1fe3d1198 12,245,347
+  s_9053adc1b0d634::t_c1ff7d9084f55c 131
+  s_9053adc1b0d634::t_24b0684639b610 10-11,249-250,267,299,301,335,344,354,387,390-396,398-409,426-432,450,484-491,493,504
+server/src/config.ts
+  s_9053adc1b0d634::t_471043a9b4282b 38
+server/src/ui.ts
+  s_9053adc1b0d634::t_f966d93bad3530 36
+android/app/src/main/java/dev/pibot/android/domain/Timeline.kt
+  s_9053adc1b0d634::t_926aab82ba319d 37-38,46
+desktop/tests/cloud.test.ts
+  s_7fc02730019eac::t_ef537f6e0d33db 1-31
+desktop/packages/service/src/library.ts
+  s_9053adc1b0d634::t_f966d93bad3530 7,146,244-247
+desktop/tests/harness-e2e.test.ts
+  s_9053adc1b0d634::t_81d0927e0fa8c6 31,33-35,161-166,168-181
+  s_9053adc1b0d634::t_ada2ecacf6958e 108,134,156
+  s_9053adc1b0d634::t_2f3174e20e6d92 167
+  s_abc1050798e980::t_bc8ac1fe3d1198 196
+  s_9053adc1b0d634::t_24b0684639b610 30,32,36,113-116,138,160
+android/app/src/main/java/dev/pibot/android/data/PiBotApi.kt
+  s_9053adc1b0d634::t_926aab82ba319d 89-90,94-102,114,139-141
+server/tests/async-tasks.test.ts
+  s_9053adc1b0d634::t_7312f6298664af 16,167-168,209-248
+  s_9053adc1b0d634::t_1c1b168f6df72b 149-155
+  s_9053adc1b0d634::t_11ffd89f2bc8e8 279-304
+  s_9053adc1b0d634::t_24b0684639b610 41,43,257,260,265-266
+  s_9053adc1b0d634::t_edcbda8ccb3f69 1-10,12-15,17-40,42,44-98,100-148,156-166,169-208,249-256,258-259,261-264,267-269,271-278
+  s_9053adc1b0d634::t_ada2ecacf6958e 11,270
+  s_9053adc1b0d634::t_29dac36680d804 99
+desktop/apps/desktop/ui/timeline.tsx
+  s_9053adc1b0d634::t_7cd8fd4c71633b 33,36,89-93,102-107,111,113-116,147,160,167-168
+  s_abc1050798e980::t_3649f99526a21f 23-25,28
+desktop/README.md
+  s_7fc02730019eac::t_ef537f6e0d33db 21-27
+  s_9053adc1b0d634::t_3d318b97cc9a13 74-75
+server/src/migrate.ts
+  s_9053adc1b0d634::t_471043a9b4282b 4
+packages/agent/src/tasks.ts
+  s_9053adc1b0d634::t_2388e547fc791c 1-3,6-44
+  s_9053adc1b0d634::t_f59ab87c9fa1b2 4-5
+desktop/packages/service/src/mutation-lock.ts
+  s_9053adc1b0d634::t_c97bca98430ea2 1-28
+server/src/llm.ts
+  s_9053adc1b0d634::t_785e90f2e60975 186-190
+android/app/src/main/java/dev/pibot/android/ui/TimelineScreen.kt
+  s_abc1050798e980::t_bc8ac1fe3d1198 205-208,210
+  s_abc1050798e980::t_3649f99526a21f 202-203,209,211
+  s_9053adc1b0d634::t_926aab82ba319d 140-149,157-161,198,215,217,242,277-282,290,302-321
+  s_9053adc1b0d634::t_f59ab87c9fa1b2 77
+desktop/apps/desktop/ui/main.tsx
+  s_9053adc1b0d634::t_7cd8fd4c71633b 49,55,142
+desktop/packages/protocol/src/index.ts
+  s_9053adc1b0d634::t_7cd8fd4c71633b 19,35,39-40,42
+server/tests/helpers.ts
+  s_9053adc1b0d634::t_24b0684639b610 65,86-88
+  s_9053adc1b0d634::t_3fb242e9bcfaee 89-90
+server/src/runner.ts
+  s_9053adc1b0d634::t_05b6aec4a6f352 9,20-21,49-51,62-65,72-91,97-99,115-117,140-144
+desktop/packages/service/src/executor.ts
+  s_9053adc1b0d634::t_05b6aec4a6f352 3,11-12,37-39,56,68,85-87,113-117,139-151
+  s_9053adc1b0d634::t_d58c47efb254d9 61-62,110,127-128,132
+  s_9053adc1b0d634::t_b12ccaac063e85 152
+server/tests/llm.test.ts
+  s_9053adc1b0d634::t_785e90f2e60975 50-52
+desktop/packages/service/src/cloud.ts
+  s_7fc02730019eac::t_ef537f6e0d33db 26-34
+packages/agent/src/index.ts
+  s_9053adc1b0d634::t_54d0dac14ebc27 63,196-197
+  s_abc1050798e980::t_bc8ac1fe3d1198 120,172-173
+  s_9053adc1b0d634::t_f59ab87c9fa1b2 15,71,137,144
+  s_9053adc1b0d634::t_a55b1a57c23274 198
+server/src/bots.ts
+  s_9053adc1b0d634::t_c44d5b2dbb040c 57-58,72-75,82,103,129,131,135,142-147,149-155,168-169,183,285,308,319,331,345-346,367,399,420-428,478,493-494,497,575,619
+  s_9053adc1b0d634::t_f59ab87c9fa1b2 2,88,522
+  s_9053adc1b0d634::t_90cbfdc8501c3a 461,463
+  s_9053adc1b0d634::t_b0affe37059f69 492,558
+  s_abc1050798e980::t_bc8ac1fe3d1198 328,434-435
+  s_9053adc1b0d634::t_c53b85f26fba01 480-481,580
+  s_9053adc1b0d634::t_dc2e94c8ff79e2 590,593-595,603,608
+server/src/agents.ts
+  s_9053adc1b0d634::t_e831c5e6ab3388 51,92,95-99,101-103,105-106,118-121,125,140-141,146-147,162,164,206,208,294-295,318,333-337,339-340,357
+  s_9053adc1b0d634::t_f966d93bad3530 369,377-381,383
+  s_9053adc1b0d634::t_ada2ecacf6958e 175,219-222
+  s_9053adc1b0d634::t_2cca9a86304b99 185,286,289,375-376,382,385,388-421
+  s_9053adc1b0d634::t_08d6552b44dbf3 8,17-21,47-50,169-174,176-184,186-196,200-202,204,216,224,343,351,353-356,358
+packages/agent/src/ask-agent.ts
+  s_9053adc1b0d634::t_ada2ecacf6958e 61-69,71,73
+  s_9053adc1b0d634::t_54d0dac14ebc27 18,55-56
+server/openapi.json
+  s_9053adc1b0d634::t_ec128eef90579c 84-101,161-169
+  s_9053adc1b0d634::t_74958d446780ce 170
+README.md
+  s_9053adc1b0d634::t_b6916b18fbbfe5 48-49
+android/ARCHITECTURE.md
+  s_9053adc1b0d634::t_ad23b5e7404215 34-35,57,83,89,92,96-97,101,103,105-109,111-124,205-208
+android/README.md
+  s_9053adc1b0d634::t_a1d26c8483e31e 26-27
+android/REQUIREMENTS.md
+  s_9053adc1b0d634::t_5b82dc9cdfa8bc 23,28,44-45
+desktop/ARCHITECTURE.md
+  s_9053adc1b0d634::t_3681e6797eaffe 34-35,57,83,89,92,96-97,101,103,105-109,111-124,205-208
+desktop/REQUIREMENTS.md
+  s_9053adc1b0d634::t_ff8a2dca74e880 15,21,36-37
+packages/agent/README.md
+  s_9053adc1b0d634::t_2328fd3edf73e6 45-46
+server/ARCHITECTURE.md
+  s_9053adc1b0d634::t_4d2b9a4d3f8638 34-35,57,83,89,92,96-97,101,103,105-109,111-124,205-208
+server/README.md
+  s_9053adc1b0d634::t_09c1d73aa1c148 60-61
+server/REQUIREMENTS.md
+  s_9053adc1b0d634::t_46c0ddd3f413e6 18,28-29,35,49-51,56-57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b650b0dde6585cc6c1e3d0134f1c5eb7b35de5c4",
+  "prompts": {},
+  "sessions": {
+    "s_7fc02730019eac": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a141e9-8f6b-7662-b2d9-de5d48b00070",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    },
+    "s_9053adc1b0d634": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1454e-d9be-77d1-ad54-653feff3b81f",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    },
+    "s_abc1050798e980": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1444b-92f5-7b62-9caa-36707bbcaf67",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
