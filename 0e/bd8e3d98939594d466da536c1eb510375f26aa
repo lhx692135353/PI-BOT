@@ -1,0 +1,80 @@
+server/src/config.ts
+  s_12b66ceab0b571::t_508e27932ce98a 49
+server/README.md
+  s_12b66ceab0b571::t_42a2512b113422 32,44-47,49-50
+  s_12b66ceab0b571::t_51d3b5bbfb144f 48
+server/.env.example
+  s_12b66ceab0b571::t_413703d7c89d2e 24-26
+admin/src/main.tsx
+  s_12b66ceab0b571::t_74355b1ea74725 444-482,521
+server/deploy/ubuntu/init-env.py
+  s_12b66ceab0b571::t_95b0e0ded424e2 26,47,51
+server/deploy/ubuntu/compose.yml
+  s_12b66ceab0b571::t_95b0e0ded424e2 19
+server/deploy/ubuntu/deploy.sh
+  s_12b66ceab0b571::t_95b0e0ded424e2 42
+server/src/search.ts
+  s_12b66ceab0b571::t_b9595fe4e69453 1,5-26,31,34-72,77-80,82-105,107-111,114,116-118,121,123-133,135-136,138-139,152,155,165-173
+  s_12b66ceab0b571::t_3826a7525772ce 73-76,81
+  s_12b66ceab0b571::t_0a5ce420bcdaa1 119,122,161-163
+server/src/app.ts
+  s_12b66ceab0b571::t_508e27932ce98a 98
+desktop/README.md
+  s_12b66ceab0b571::t_413703d7c89d2e 41
+server/docker-compose.yml
+  s_12b66ceab0b571::t_95b0e0ded424e2 1,80
+server/tests/integration.test.ts
+  s_12b66ceab0b571::t_569fedc74ec9dd 13-14,76,79,228-234,363
+desktop/tests/harness-e2e.test.ts
+  s_12b66ceab0b571::t_569fedc74ec9dd 10-11,81-82,142
+server/src/bots.ts
+  s_12b66ceab0b571::t_413703d7c89d2e 441
+admin/src/api.ts
+  s_12b66ceab0b571::t_74355b1ea74725 101-112,135
+server/tests/helpers.ts
+  s_12b66ceab0b571::t_569fedc74ec9dd 116-118,121-127,131-135
+.vscode/launch.json
+  s_bb3948ee1d9478::t_d5b74703fd7f54 1-21
+server/tests/search.test.ts
+  s_12b66ceab0b571::t_7969eebfaa8c78 4,7-40,42,44-70,72-176
+  s_12b66ceab0b571::t_0a5ce420bcdaa1 177-190
+server/deploy/ubuntu/README.md
+  s_12b66ceab0b571::t_42a2512b113422 3,7,22,27,37-38,56
+server/deploy/ubuntu/test_init_env.py
+  s_12b66ceab0b571::t_95b0e0ded424e2 61-62,66
+admin/src/style.css
+  s_12b66ceab0b571::t_74355b1ea74725 78
+desktop/ARCHITECTURE.md
+  s_12b66ceab0b571::t_42a2512b113422 58,179,194
+server/ARCHITECTURE.md
+  s_12b66ceab0b571::t_42a2512b113422 58,179,194
+server/src/routes.ts
+  s_12b66ceab0b571::t_508e27932ce98a 592-595
+  s_12b66ceab0b571::t_2ab8e9e7d0f76a 591
+server/openapi.json
+  s_12b66ceab0b571::t_3dfca2df486fbb 1892-1912
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0ebd8e3d98939594d466da536c1eb510375f26aa",
+  "prompts": {},
+  "sessions": {
+    "s_12b66ceab0b571": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a148df-3ecc-7ab0-8193-1407d8f52a2d",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    },
+    "s_bb3948ee1d9478": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "1f1ebcc6-9cd3-4a42-88d8-ba353301a643",
+        "model": "grok-4.7"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
