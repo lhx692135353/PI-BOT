@@ -1,0 +1,21 @@
+server/src/memory-maintenance.ts
+  s_ba2d44ab210fde::t_60c9891c222e5b 27-31,33,35,37-45,64-66,99,101-105,107
+server/tests/memory.test.ts
+  s_ba2d44ab210fde::t_27b8d2175f5da8 335-337,434-469
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "af393e5dc0c9c91ed287a2fc4b5896557c88b626",
+  "prompts": {},
+  "sessions": {
+    "s_ba2d44ab210fde": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a14a28-5c4e-7061-905b-ec021deb4cea",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
