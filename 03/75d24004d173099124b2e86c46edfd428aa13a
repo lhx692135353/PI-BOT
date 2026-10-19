@@ -1,0 +1,19 @@
+android/app/src/main/res/xml/network_security_config.xml
+  s_83681fcf53bbe9::t_47ee3a6e4b3435 6-8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0375d24004d173099124b2e86c46edfd428aa13a",
+  "prompts": {},
+  "sessions": {
+    "s_83681fcf53bbe9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15418-4ae2-7b83-8898-015ec90b3da5",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
