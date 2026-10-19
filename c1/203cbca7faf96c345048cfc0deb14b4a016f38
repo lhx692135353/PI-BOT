@@ -1,0 +1,99 @@
+.dockerignore
+  s_83681fcf53bbe9::t_c6a59bc60c6b8a 17-24
+.github/CODEOWNERS
+  s_83681fcf53bbe9::t_2f459750e4e9cd 1-3
+.github/pull_request_template.md
+  s_83681fcf53bbe9::t_9eea8be57bf778 1-17
+.github/rulesets/main.json
+  s_83681fcf53bbe9::t_60daad0c3c929a 1-45
+.github/workflows/ci.yml
+  s_83681fcf53bbe9::t_a33f7cd0e3e8a4 1-50
+.gitignore
+  s_83681fcf53bbe9::t_e2551b41bb4379 10-20
+.vscode/launch.json
+  s_83681fcf53bbe9::t_f0c32c41ce214c 12-15
+CONTRIBUTING.md
+  s_83681fcf53bbe9::t_81e95fb1a1178b 1-49
+LICENSE
+  s_83681fcf53bbe9::t_c44cd2355e36d7 1-202
+NOTICE
+  s_83681fcf53bbe9::t_05c3c8bf64529d 1-9
+README.md
+  s_83681fcf53bbe9::t_8a9302ab0774b5 1,3,5,7,9-41,45-48,50-51,53,57-65,67-71,74-78,81,83,85-91,93,95-98,100-107,109,111-128,133-160,162,164
+SECURITY.md
+  s_83681fcf53bbe9::t_6f39f1d6401bf9 1-25
+THIRD_PARTY_NOTICES.md
+  s_83681fcf53bbe9::t_0ca6913b7081be 1-18
+admin/package.json
+  s_83681fcf53bbe9::t_d37be255836650 21-22
+android/ARCHITECTURE.md
+  s_83681fcf53bbe9::t_a06e16a89555c0 180
+android/README.md
+  s_83681fcf53bbe9::t_7eb223958f876d 5,7-15,27,31,37-38
+android/app/build.gradle.kts
+  s_83681fcf53bbe9::t_394228a4fdc8f4 17,87-109,114
+android/app/src/main/java/dev/pibot/android/domain/ServerUrl.kt
+  s_83681fcf53bbe9::t_c8ef06d2ddfd1c 31,47-49
+android/app/src/main/res/xml/network_security_config.xml
+  s_83681fcf53bbe9::t_f97277dfe41298 4-9
+android/app/src/test/java/dev/pibot/android/DomainTest.kt
+  s_83681fcf53bbe9::t_afc446ab773528 35-41,123,125-126
+desktop/ARCHITECTURE.md
+  s_83681fcf53bbe9::t_62a227f947cef1 180
+desktop/README.md
+  s_83681fcf53bbe9::t_1fa02c26b65083 3,21,24-25
+desktop/apps/desktop/package.json
+  s_83681fcf53bbe9::t_9c5daa98d1039a 11-12
+desktop/apps/desktop/src/main.ts
+  s_83681fcf53bbe9::t_49a194ded6932a 20
+desktop/package.json
+  s_83681fcf53bbe9::t_e7dbae92047cdd 48-49
+desktop/packages/protocol/package.json
+  s_83681fcf53bbe9::t_901c6ecaa61b47 1-7
+desktop/packages/service/package.json
+  s_83681fcf53bbe9::t_0bdffbfbf2042a 1-7
+desktop/scripts/dev.mjs
+  s_83681fcf53bbe9::t_ce8be6794648ad 7
+desktop/scripts/pack-mac.mjs
+  s_83681fcf53bbe9::t_a2038e850c85d9 23-27
+desktop/tests/cloud.test.ts
+  s_83681fcf53bbe9::t_3f1b62c69d6618 11-13
+docs/MAINTAINING.md
+  s_83681fcf53bbe9::t_a77c90bd725800 1-102
+package-lock.json
+  s_83681fcf53bbe9::t_610e92430383b6 25-26,41-42,82-83,90-91,6212-6213,6217-6218,12630-12631,12650-12651,12663-12664,12685-12686
+package.json
+  s_83681fcf53bbe9::t_63af9284dfd1b8 31-32
+packages/a2ui/package.json
+  s_83681fcf53bbe9::t_04bd0f6568d748 25-26
+packages/agent/package.json
+  s_83681fcf53bbe9::t_52c20d354a5953 14-15
+packages/bot-face/package.json
+  s_83681fcf53bbe9::t_311a3e22846328 15-19
+server/ARCHITECTURE.md
+  s_83681fcf53bbe9::t_4f50f494cae41e 180
+server/Dockerfile
+  s_83681fcf53bbe9::t_e0a993b633a0fa 9-10
+server/README.md
+  s_83681fcf53bbe9::t_2d7fa728959f00 42
+server/deploy/pibot.yaml
+  s_83681fcf53bbe9::t_6e6d9e3cfaa7fa 1-3,5,10-11,17,37,52,108,123,184,232,244,250,256,263,276
+server/package.json
+  s_83681fcf53bbe9::t_26ff8490c05471 32-33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c1203cbca7faf96c345048cfc0deb14b4a016f38",
+  "prompts": {},
+  "sessions": {
+    "s_83681fcf53bbe9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15418-4ae2-7b83-8898-015ec90b3da5",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
