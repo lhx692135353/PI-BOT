@@ -1,0 +1,29 @@
+.vscode/launch.example.json
+  s_83681fcf53bbe9::t_bb9c53476f9858 13
+.vscode/settings.example.json
+  s_83681fcf53bbe9::t_bb9c53476f9858 1-3
+.gitignore
+  s_83681fcf53bbe9::t_bb9c53476f9858 21-43
+.dockerignore
+  s_83681fcf53bbe9::t_bb9c53476f9858 25-39
+desktop/README.md
+  s_83681fcf53bbe9::t_bb9c53476f9858 19-27
+CONTRIBUTING.md
+  s_83681fcf53bbe9::t_bb9c53476f9858 15-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9a4634a7145a9e7e6dc9685400e892202ef37d23",
+  "prompts": {},
+  "sessions": {
+    "s_83681fcf53bbe9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15418-4ae2-7b83-8898-015ec90b3da5",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
