@@ -38,7 +38,7 @@ jobs:
           cache: npm
       - name: Install shell used by desktop tests
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends zsh
-      - run: npm ci --ignore-scripts
+      - run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Validate Ubuntu deployment scripts
         run: |
           bash -n server/deploy/ubuntu/install.sh server/deploy/ubuntu/deploy.sh
