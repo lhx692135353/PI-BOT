@@ -6,6 +6,8 @@ RUN npm rebuild argon2 && npm run build --workspace=@pi-bot/admin && npm run bui
 FROM node:24-bookworm-slim
 ENV NODE_ENV=production
 WORKDIR /app
+COPY LICENSE NOTICE THIRD_PARTY_NOTICES.md ./
+COPY packages/agent/src/hermes-memory/LICENSE ./licenses/pi-hermes-memory-LICENSE
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/server/dist ./server/dist
 COPY --from=build /app/server/migrations ./server/migrations

@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Project checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: pibot
+          POSTGRES_PASSWORD: pibot
+          POSTGRES_DB: pibot_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U pibot -d pibot_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install shell used by desktop tests
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends zsh
+      - run: npm ci --ignore-scripts
+      - name: Validate Ubuntu deployment scripts
+        run: |
+          bash -n server/deploy/ubuntu/install.sh server/deploy/ubuntu/deploy.sh
+          python3 -m unittest discover -s server/deploy/ubuntu -p 'test_*.py' -v
+      - run: npm run typecheck
+      - run: npm test
+        env:
+          PI_BOT_TEST_DATABASE_URL: postgresql://pibot:pibot@127.0.0.1:5432/pibot_test
+      - run: npm run build

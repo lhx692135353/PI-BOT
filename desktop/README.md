@@ -1,6 +1,6 @@
 # Pi Bot for Mac
 
-Pi Bot 的 Mac 端是 Bot 们的 **harness**：登录后这台 Mac 绑定到你的账号，Bot 在这里读写资料库、执行命令。支持文件与命令工具，以及通过 Server 提供的联网搜索；没有浏览器自动化、Skills 或 MCP。
+Pi Bot 的 Mac 端是 Bot 们的 **harness**：登录后这台 Mac 绑定到你的账号，Bot 在这里读写资料库、执行命令。支持文件与命令工具，以及通过 Server 提供的联网搜索；支持 Bot 私有 skills，没有浏览器自动化或 MCP。
 
 - 每个 Bot 的资料库是 `~/pi-bot/<slug>/`，在 Finder 里就是普通文件夹。
 - Bot 默认只能碰自己的资料库；要访问外面的路径（如 `~/Desktop`）会先弹出审批，由你在 Mac 或手机上批准，只对本次任务有效。
@@ -18,11 +18,11 @@ npm run desktop:dev
 
 `npm run dev` 先构建 Swift Keychain helper、本地服务和 UI，再启动独立服务进程和 Electron。修改源码后重新执行。
 
-开发启动时登录页默认服务器为 `http://localhost:8000`，可用 `PI_BOT_SERVER_URL` 覆盖；打包应用默认使用 `https://aicloud-app.lenovo.com.cn/pibot`。公网地址默认要求 HTTPS；首次部署使用 IP + HTTP 验证时，可在启动进程中用 `PI_BOT_HTTP_SERVER_URL` 明确允许一个完整后端地址，其他公网 HTTP 地址仍会被拒绝。每次启动都需要该配置。
+开发启动和打包应用的登录页默认服务器都是本机 `http://127.0.0.1:8000`，可用 `PI_BOT_SERVER_URL` 覆盖默认填写值，或在登录页手动修改。已保存的服务器地址优先于默认值。本机回环地址允许 HTTP；远程部署默认要求 HTTPS。临时连接局域网 HTTP 后端时，用 `PI_BOT_HTTP_SERVER_URL` 明确允许那一个完整后端地址，不会放开其他 HTTP 地址。
 
 ```sh
-PI_BOT_SERVER_URL=http://服务器IP:8000 \
-PI_BOT_HTTP_SERVER_URL=http://服务器IP:8000 \
+PI_BOT_SERVER_URL=http://192.168.1.100:8000 \
+PI_BOT_HTTP_SERVER_URL=http://192.168.1.100:8000 \
 npm run desktop:dev
 ```
 

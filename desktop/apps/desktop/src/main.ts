@@ -17,7 +17,7 @@ const page = pathToFileURL(join(__dirname, '../ui-dist/index.html')).href;
 const iconPath = join(__dirname, '../assets/pi-bot.png');
 const client = new ServiceClient(event => window?.webContents.send('agent:event', event));
 function validSender(event: Electron.IpcMainInvokeEvent) { if (!window || event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame || event.senderFrame.url !== page) throw new Error('不受信任的 IPC 来源'); }
-const DEFAULT_SERVER_URL = 'https://aicloud-app.lenovo.com.cn/pibot';
+const DEFAULT_SERVER_URL = 'http://127.0.0.1:8000';
 function computerName() {
   try {
     const name = execFileSync('scutil', ['--get', 'ComputerName'], { encoding: 'utf8', timeout: 2000 }).trim();

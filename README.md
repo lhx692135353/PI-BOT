@@ -1,66 +1,164 @@
-# Pi Bot
+# Pi Bot · T-AGENT
 
-多用户的个人 Bot 平台。每个 Bot 有自己的名字、人设、形象和一条连续的时间线，会记住你们聊过的事；你的 Mac 是 Bot 们干活的电脑，手机随时可以和 Bot 说话、批准请求、看它们产出的文件。
+一个可以自托管的个人 Bot 平台：每个 Bot 有独立的人设、角色形象、长期记忆和连续时间线。Mac 为 Bot 提供工作电脑，Android 用于随时聊天、查看结果与处理审批。
 
-- **云端**：管理员在后台创建用户、配置模型和 Key；所有模型调用都经云端代理，客户端拿不到 Key。Mac 离线时，Bot 在云端回复（对话、联网搜索和交互工具）。
-- **Mac**：登录即绑定为你的 harness。每个 Bot 的资料库是 `~/pi-bot/<slug>/`，Bot 在里面读写文件、执行命令；要碰资料库以外的路径必须先经你批准。
-- **手机**：Bot 网格、时间线、审批、资料库浏览、新建和编辑 Bot。
-- **角色**：一份共享的角色规格（8 种造型、10 种颜色、9 种表情），表情跟着 Bot 的运行状态变化。
+项目采用 [Apache License 2.0](LICENSE)。目前由 [@lhx692135353](https://github.com/lhx692135353) 个人维护，欢迎通过 Issue 和 Pull Request 参与。
 
-| 目录 | 技术栈 | 说明 |
-|---|---|---|
-| [server](server/README.md) | Node.js 24 + Fastify + PostgreSQL | API、管理后台、模型代理、Worker、Runner |
-| [admin](admin) | Vite + React | 管理后台，由 API 在 `/admin/` 提供 |
-| [desktop](desktop/README.md) | Electron + React + Pi SDK | Pi Bot for Mac |
-| [android](android/README.md) | Kotlin + Jetpack Compose | Pi Bot Android |
-| [packages/agent](packages/agent) | Pi SDK | Mac 和云端共用的 Bot agent |
-| [packages/bot-face](packages/bot-face) | TypeScript Canvas | 角色规格、动画引擎、渲染器 |
-| [boards](boards/esp32-s3-touch-lcd-2.8c/README.md) | ESP32-S3 + LVGL | 跟随 Bot 表情的桌面小屏 |
+## 能做什么
 
-整体架构见 [ARCHITECTURE.md](server/ARCHITECTURE.md)（`server/`、`desktop/`、`android/` 三处内容一致），各端需求见各自的 `REQUIREMENTS.md`。
+- **多 Bot 与长期记忆**：为不同任务设置人设、模型和角色形象，沿同一条时间线持续协作。
+- **Mac 工作电脑**：在 `~/pi-bot/<slug>/` 中读写文件、执行命令；访问资料库外路径需要审批。
+- **手机协作**：聊天、查看任务进展、批准请求，以及在 Mac 在线时浏览资料库。
+- **后台任务与长期委托**：对话过程中安排后台任务；登录且保持运行的 Mac 可执行定时工作和自主巡检。
+- **A2UI 交互工具**：在对话里展示表单、计算器、图表和表格，提交后继续任务。
+- **服务端统一配置模型**：管理员配置支持 Responses API 的模型和 API Key；客户端经服务端代理调用。
+- **可选扩展**：服务端配置 Tavily 后提供联网搜索；可接入 Langfuse 记录云端追踪；ESP32 桌面屏可跟随 Bot 显示表情。
+
+需要自行准备模型服务账号和 API Key，相关费用由服务提供方收取。仓库不提供公共后端、共享账号或免费模型服务。
+
+## 组成
+
+```text
+Mac / Android ── API + 管理后台 ── PostgreSQL
+                     │
+                     ├── 模型服务 / Tavily（可选）
+                     └── Worker ── Runner（Mac 离线时的云端对话）
+```
+
+Mac 在线时，Bot 在 Mac 上使用资料库和命令工具；离线时可由云端接续对话与联网搜索，无法访问 Mac 文件。定时工作和自主巡检等待 Mac 在线，不在云端自动执行。
+
+| 目录 | 用途 |
+| --- | --- |
+| [server](server/README.md) | Node.js 24、Fastify、PostgreSQL；API、Worker、Runner、部署说明 |
+| [admin](admin) | React 管理后台，由 API 在 `/admin/` 提供 |
+| [desktop](desktop/README.md) | Electron + React 的 macOS 客户端与本地服务 |
+| [android](android/README.md) | Kotlin + Jetpack Compose 的 Android 客户端 |
+| [packages/agent](packages/agent/README.md) | Mac 与云端共用的 agent、记忆和私有 skills |
+| [packages/a2ui](packages/a2ui/README.md) | 共享交互工具协议与 Web 渲染器 |
+| [packages/bot-face](packages/bot-face) | 共享角色规格、动画引擎与渲染器 |
+| [boards](boards/esp32-s3-touch-lcd-2.8c/README.md) | ESP32-S3 桌面屏 |
+
+详细设计见 [整体架构](server/ARCHITECTURE.md)，各端的需求与限制见对应目录中的 `REQUIREMENTS.md`。
 
 ## 快速开始
 
+### 1. 准备环境与配置
+
+需要 **Node.js 24 或更新版本、npm、Docker Compose**。运行 Mac 客户端还需要 macOS 和 Xcode Command Line Tools；Android 构建要求见 [Android 文档](android/README.md)。
+
 ```sh
+git clone https://github.com/lhx692135353/T-AGENT.git
+cd T-AGENT
 npm ci
-cp server/.env.example server/.env        # 设置管理员口令、JWT 密钥、Runner token、vault 路径
+cp server/.env.example server/.env
 node --import tsx server/scripts/vault-key.ts "$PWD/server/vault.json"
-(cd server && docker compose up postgres -d)
-npm run build && npm start                # API + 管理后台：http://127.0.0.1:8000/admin/
-npm run desktop:dev                       # 另一个终端：Pi Bot for Mac
 ```
 
-在后台添加模型和用户后，用该用户登录 Mac 和手机。详细步骤见 [server/README.md](server/README.md)。
+编辑 `server/.env`，至少替换以下配置：
 
-## 检查
+| 变量 | 填写说明 |
+| --- | --- |
+| `PI_BOT_ADMIN_USERNAME` | 首次启动创建的管理员用户名 |
+| `PI_BOT_ADMIN_PASSWORD` | 你设置的强口令，不使用示例值 |
+| `PI_BOT_JWT_SECRET` | 至少 32 字符的随机字符串 |
+| `PI_BOT_RUNNER_TOKEN` | 另一份至少 32 字符的随机字符串，与 JWT 密钥不同 |
+| `PI_BOT_VAULT_FILE` | 本机运行 API 时填写刚生成的 `server/vault.json` 的绝对路径；Compose 会覆盖为容器内路径 |
+
+可分别运行 `openssl rand -hex 32` 生成随机值。`server/.env` 和 `server/vault.json` 已被 Git 忽略；不要提交它们。请备份 vault 文件，丢失后将无法解密已保存的模型密钥。
+
+### 2. 启动后端
+
+**方式 A：完整后端使用 Docker Compose**
 
 ```sh
-npm run typecheck
-PI_BOT_TEST_DATABASE_URL=postgresql://pibot:pibot@127.0.0.1:5432/pibot npm test   # 会清空该库
-(cd android && ./gradlew :app:testDebugUnitTest)
+cd server
+docker compose up --build -d
+docker compose ps
+# 需要排查启动问题时：
+docker compose logs --tail=100 api worker runner
 ```
 
-## 交互工具（A2UI）
+Compose 会启动 PostgreSQL、API、Worker 和 Runner。管理后台位于 <http://127.0.0.1:8000/admin/>，健康检查为 <http://127.0.0.1:8000/health>。
 
-可以让 Bot 按当前需求生成可操作的表单、计算器和图表。Mac 和 Android 使用同一套 A2UI 目录，输入会保存，点击提交后 Bot 继续处理。普通问答和解释默认使用文字，不提供预置界面。
+**方式 B：在本机开发后端**（从仓库根目录运行）
 
-升级时需同时更新 API、Worker、Runner、Mac 和 Android；Server 自动应用 `0006-message-ui` 迁移。实现和构建说明见 [packages/a2ui](packages/a2ui/README.md)。
+```sh
+# 这里只启动数据库；不要与方式 A 的 API 同时运行。
+# Compose 也会读取 server/.env，因此应先完成上面的配置。
+(cd server && docker compose up postgres -d)
+npm run build
+npm run dev --workspace=@pi-bot/server
+```
 
-异步任务模式：对话持续接话，每个 Bot 最多并行执行两个后台任务，其余排队；用聊天查询进度、补充要求或取消，结果完成后另发。两端需与 API、Worker、Runner 同步升级，服务端自动应用 `0007-async-tasks`；升级前结束旧运行。详情见 [整体架构](server/ARCHITECTURE.md)。
+API 启动时自动执行数据库迁移。Mac 离线时要继续云端对话，还需在另外两个终端分别运行：
 
+```sh
+npm run runner --workspace=@pi-bot/server
+npm run worker --workspace=@pi-bot/server
+```
+
+### 3. 添加模型、创建用户
+
+1. 使用 `.env` 中的管理员账号登录 `/admin/`。管理员只在数据库没有管理员时初始化，修改 `.env` 不会重置已有密码。
+2. 在「模型」中配置 **支持 Responses API** 的服务地址、模型名和 API Key，并测试连通性。Base URL 一般填到 `/v1`，不含 `/responses`；仅支持 Chat Completions 的接口不能直接使用。
+3. 在「用户」中创建普通用户，客户端用该账号登录。项目没有开放注册入口。
+4. 可选：填写服务端 `PI_BOT_TAVILY_API_KEY` 并重启 API、Worker，启用搜索。Langfuse 配置见 [记忆与可观测性](server/MEMORY-OBSERVABILITY.md)。
+
+### 4. 连接客户端
+
+在仓库根目录的另一个终端运行 Mac 客户端：
+
+```sh
+npm run desktop:dev
+```
+
+| 客户端 | 连接电脑上的本地后端 |
+| --- | --- |
+| macOS | 默认 `http://127.0.0.1:8000` |
+| Android 官方模拟器 | 默认 `http://10.0.2.2:8000`，该地址映射到宿主电脑 |
+| Android 真机 | 在登录页改为电脑的局域网地址，例如 `http://192.168.1.100:8000`；手机和电脑须在同一网络，防火墙须允许该端口 |
+| 远程部署 | 使用你自己的 HTTPS 域名，例如 `https://bot.example.com` |
+
+`127.0.0.1` 在真机上指手机本身。客户端会保留已登录/已保存的服务器地址，更改默认值不会覆盖已有配置。Mac 临时连接非本机 HTTP 地址的显式配置方法见 [Mac 文档](desktop/README.md)。
+
+登录 Mac 后创建一个 Bot，发送消息即可开始使用。Mac 休眠、退出应用或断网时不能执行本地任务；Android 当前不提供系统后台推送。
 
 ## 长期委托与自主巡检
 
-全部 Bot 默认具备自主巡检，空闲时逐步降低检查频率，最多六小时检查一次。自动工作只在登录且保持运行的 Mac 上执行；Mac 离线、退出应用或休眠时等待，重连后合并检查。云端仍可接受聊天、保存和管理计划。
-
-直接在聊天中使用：
+可以直接在对话中安排：
 
 - “每十分钟检查一下这个任务，有重要变化再告诉我。”
 - “每天上午九点整理一次，按上海时间。”
 - “现在有哪些自动工作？最近检查出了什么？”
-- “暂停自主巡检。” / “恢复自主巡检，每两小时一次。”
-- “停止这个长期委托。” / “停止全部自动工作。”
+- “暂停自主巡检。” / “停止全部自动工作。”
 
-无重要变化不发消息。重要成果、风险和需要决策的事项在原时间线另发；同一状态不重复回报。普通巡检只读自己的资料，不会擅自修改文件或执行命令；明确委托沿用原有权限，资料库外访问仍需审批。中断时操作结果无法确认会暂停并请你核实。
+Bot 空闲时会逐步降低巡检频率，最多六小时检查一次；无重要变化时保持安静。自动工作仅在登录且保持运行的 Mac 上执行，重连后合并检查。后台任务、自动工作和协议的升级要求见 [整体架构](server/ARCHITECTURE.md)。
 
-首次升级需同步更新 API、Worker、Runner 和 Mac，服务端自动应用 `0009-always-on`；旧 Mac 不启动自动轮次。Android 无需新增配置，不提供系统后台推送。
+## 开发与验证
+
+```sh
+npm run typecheck
+npm run build
+npm test  # 未指定测试数据库时，依赖数据库的测试会跳过
+```
+
+完整集成测试需要**独立的测试数据库**。测试会删除并重建该库的 `public` schema，不能使用实际业务数据库。准备与命令见 [贡献指南](CONTRIBUTING.md)。GitHub PR 的 `Project checks` 会运行带 PostgreSQL 的完整 Node.js 测试。
+
+Android 的构建和单元测试单独执行：
+
+```sh
+(cd android && ./gradlew :app:testDebugUnitTest :app:assembleDebug)
+```
+
+## 部署与安全边界
+
+- 自托管部署见 [服务端说明](server/README.md)；Ubuntu 长期运行见 [Ubuntu 部署指南](server/deploy/ubuntu/README.md)。生产入口使用 HTTPS/WSS；Runner 只在内部网络供 Worker 调用。
+- API 当前须保持单副本，Mac 长连接和资料库 RPC 存于进程内存。Worker 可多副本。
+- Mac 的命令执行工具**不是操作系统沙箱**；它限制默认工作目录，但命令可以调用系统能力。请理解任务内容和审批范围后使用，详见 [安全政策](SECURITY.md)。
+- 数据库、vault 和资料库应定期备份；仓库不包含托管服务、可用性承诺或自动备份保障。
+
+## 参与与许可证
+
+请先阅读 [贡献指南](CONTRIBUTING.md)。普通贡献者通过 Fork → 功能分支 → PR 提交；由维护者决定是否合并。`main` 的规则和开源发布步骤记录在 [维护指南](docs/MAINTAINING.md)。安全问题请按 [安全政策](SECURITY.md) 私下报告。
+
+本项目的原创代码按 [Apache License 2.0](LICENSE) 提供；第三方代码保留其原有许可，详见 [NOTICE](NOTICE) 和 [第三方声明](THIRD_PARTY_NOTICES.md)。仓库各 npm workspace 保留 `private: true`，用于防止误发布到 npm，不影响 GitHub 开源。

@@ -14,7 +14,7 @@ android {
         targetSdk = 37
         versionCode = 2
         versionName = "0.2.0"
-        buildConfigField("String", "DEFAULT_SERVER_URL", "\"https://aicloud-app.lenovo.com.cn/pibot\"")
+        buildConfigField("String", "DEFAULT_SERVER_URL", "\"http://10.0.2.2:8000\"")
     }
 
     buildTypes {
@@ -84,10 +84,34 @@ val copyA2ui = tasks.register<CopyA2ui>("copyA2ui") {
     sourceDir.set(rootProject.layout.projectDirectory.dir("../packages/a2ui/dist"))
 }
 
+// Include the project license and the vendored MIT license in every APK.
+abstract class CopyProjectLicenses : DefaultTask() {
+    @get:InputFiles abstract val licenseFiles: ConfigurableFileCollection
+    @get:OutputDirectory abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun copy() {
+        val dir = outputDir.get().asFile.resolve("licenses")
+        dir.mkdirs()
+        licenseFiles.files.forEach { file ->
+            val name = if (file.parentFile.name == "hermes-memory") "pi-hermes-memory-LICENSE" else file.name
+            file.copyTo(dir.resolve(name), overwrite = true)
+        }
+    }
+}
+val copyOpenSourceLicenses = tasks.register<CopyProjectLicenses>("copyOpenSourceLicenses") {
+    licenseFiles.from(
+        rootProject.file("../LICENSE"), rootProject.file("../NOTICE"),
+        rootProject.file("../THIRD_PARTY_NOTICES.md"),
+        rootProject.file("../packages/agent/src/hermes-memory/LICENSE"),
+    )
+}
+
 androidComponents {
     onVariants { variant ->
         variant.sources.assets?.addGeneratedSourceDirectory(copyBotFaceSpec, CopyBotFaceSpec::outputDir)
         variant.sources.assets?.addGeneratedSourceDirectory(copyA2ui, CopyA2ui::outputDir)
+        variant.sources.assets?.addGeneratedSourceDirectory(copyOpenSourceLicenses, CopyProjectLicenses::outputDir)
     }
 }
 

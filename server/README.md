@@ -39,7 +39,7 @@ npm run worker --workspace=@pi-bot/server
 
 - Ubuntu 长期后端：[deploy/ubuntu/README.md](deploy/ubuntu/README.md)，从阿里云拉取镜像、在目标机生成 `.env`，支持 systemd 自动更新；不自动备份数据库。
 - 单机：`cd server && docker compose up --build -d`（需要先生成 `server/vault.json`，并在环境里设置 `PI_BOT_ADMIN_PASSWORD`、`PI_BOT_JWT_SECRET`、`PI_BOT_RUNNER_TOKEN`）。
-- 集群：[deploy/pibot.yaml](deploy/pibot.yaml)。入口 `https://aicloud-app.lenovo.com.cn/pibot`，后台 `/pibot/admin/`；镜像由 GitHub Actions 推到 `registry.cn-beijing.aliyuncs.com/liuhx/pi-bot-server:latest`。应用前修改 `pibot` Secret 里的口令，并创建 `pibot-vault` Secret（见清单顶部注释）。
+- 集群：[deploy/pibot.yaml](deploy/pibot.yaml) 是部署模板，默认 namespace 为 `pibot`、示例入口为 `https://bot.example.com/pibot`，后台 `/pibot/admin/`。应用前创建 namespace，替换域名、镜像地址、镜像拉取 Secret、存储和 Traefik 配置，修改 `pibot` Secret 中的口令，并创建 `pibot-vault` Secret（见清单顶部注释）；不要原样部署示例凭据。维护者的镜像发布工作流见 [server-image.yml](../.github/workflows/server-image.yml)，Fork 如需发布必须配置自己的镜像仓库和凭据。
 
 联网搜索统一使用 Tavily `fast` 模式，每次消耗 1 credit；关闭自动参数升级，不请求生成答案或网页全文。Server 限制搜索为 20 秒，返回最多 8 条去重结果，对有结果的查询缓存 5 分钟。
 

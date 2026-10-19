@@ -7,3 +7,14 @@ __pycache__/
 .env
 vault.json
 *.vault.json
+
+# Local credentials; commit only explicit configuration examples.
+.env.*
+!.env.example
+vault.json.*.tmp
+*.vault.json.*.tmp
+*.jks
+*.keystore
+
+# Workspace-local development profiles.
+.local/

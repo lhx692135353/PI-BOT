@@ -9,10 +9,10 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "desktop:dev"],
       "env": {
-        "PI_BOT_SERVER_URL": "http://39.109.110.167:8000",
-        "PI_BOT_HTTP_SERVER_URL": "http://39.109.110.167:8000",
-        "PI_BOT_DATA_DIR": "/Users/liuhx/Library/Application Support/Pi Bot Ubuntu",
-        "PI_BOT_LIBRARY_ROOT": "/Users/liuhx/pi-bot-ubuntu"
+        "PI_BOT_SERVER_URL": "http://127.0.0.1:8000",
+        "PI_BOT_HTTP_SERVER_URL": "http://127.0.0.1:8000",
+        "PI_BOT_DATA_DIR": "${workspaceFolder}/.local/desktop-data",
+        "PI_BOT_LIBRARY_ROOT": "${workspaceFolder}/.local/libraries"
       },
       "console": "integratedTerminal",
       "skipFiles": ["<node_internals>/**"]

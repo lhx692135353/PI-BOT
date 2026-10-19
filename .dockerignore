@@ -14,3 +14,11 @@
 android
 boards
 **/*.sqlite*
+
+# Encryption keys must never enter an image build context.
+**/vault.json
+**/*.vault.json
+**/vault.json.*.tmp
+**/*.vault.json.*.tmp
+**/*.jks
+**/*.keystore

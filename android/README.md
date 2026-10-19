@@ -2,9 +2,17 @@
 
 手机上的 Pi Bot：看 Bot 们在干什么、发消息、批准访问请求、浏览 Mac 上的资料库、新建和编辑 Bot。整体设计见 [ARCHITECTURE.md](ARCHITECTURE.md)，需求与验收见 [REQUIREMENTS.md](REQUIREMENTS.md)。
 
-## 构建
+## Android Studio
 
-需要 JDK 17 和 Android SDK（compileSdk 37）。在 `android/local.properties` 写 `sdk.dir=/path/to/android-sdk`，然后：
+1. 首次准备时，在仓库根目录运行 `npm ci`，安装构建 A2UI 资源使用的 Node.js 和依赖。
+2. 在 Android Studio 中选择 **Open**，打开本仓库的 `android/` 目录，等待 Gradle Sync 完成。
+3. 使用项目自带的 Gradle Wrapper；Gradle Daemon JVM 已通过 `gradle/gradle-daemon-jvm.properties` 固定为 Java 25。请使用 Android Studio 自带的 JBR 25（带 `jlink`）。应用源码的 Java 编译目标仍为 17。Cursor / VS Code 的 Red Hat Java 扩展自带 JRE 没有 `jlink`，拿它跑 Gradle 时 `:app:compileDebugJavaWithJavac` 会在生成 `androidJdkImage` 时失败。
+4. 在 SDK Manager 中安装项目要求的 Android SDK Platform（`compileSdk = 37`）；本地 SDK 位置由 Android Studio 写入 `local.properties`。
+5. 在 **Build Variants** 中选择 `app` 的 `debug`，再从工具栏选择运行配置和模拟器或真机。
+
+## 命令行构建
+
+需要 Gradle Daemon 使用 Java 25，以及 Android SDK（`compileSdk = 37`）。在 `android/local.properties` 写 `sdk.dir=/path/to/android-sdk`，并先在仓库根目录完成 `npm ci`，然后：
 
 ```sh
 cd android
@@ -16,15 +24,17 @@ cd android
 
 ## 使用
 
-1. 登录页的服务器地址默认是 `https://aicloud-app.lenovo.com.cn/pibot`。账号由管理员在后台创建。
+1. 登录页默认填写 `http://10.0.2.2:8000`，连接 Android 官方模拟器宿主电脑上的本地后端。真机请点击服务器地址，改为电脑的局域网 IP 或你部署的 HTTPS 域名；`127.0.0.1` 在手机上指手机自身。账号由管理员在后台创建，已保存的地址不会被新默认值覆盖。
 2. 首页是 Bot 网格，点进去是这个 Bot 的时间线；右上角「资料库」在 Mac 在线时可用。
 3. 有审批时 Bot 卡片出现红点，时间线最下方出现审批卡片。
 
-调试本地服务器：debug 构建允许 HTTP 连接本机、模拟器（`http://10.0.2.2:8000`）和局域网地址；release 只允许 HTTPS。
+本机与 Android 官方模拟器的 HTTP 地址在 debug/release 中均可使用；debug 另允许局域网 HTTP，release 的远程地址须使用 HTTPS。支持带路径前缀的地址（如 `https://bot.example.com/pibot`），实时连接随协议使用 `ws://` 或 `wss://`。在登录页点击服务器地址即可修改。
 
 A2UI 交互工具显示在 Bot 回复中；输入会保存，提交后进入正常任务流程。构建会自动打包 `packages/a2ui` 的 Web 渲染器，需要先在仓库根目录运行 `npm ci`；桥接仅处理交互事件，不在页面中提供账号凭据。
 
 异步任务模式：对话持续接话，每个 Bot 最多并行执行两个后台任务，其余排队；用聊天查询进度、补充要求或取消，结果完成后另发。两端需与 API、Worker、Runner 同步升级，服务端自动应用 `0007-async-tasks`；升级前结束旧运行。详情见 [整体架构](ARCHITECTURE.md)。
+
+主 Bot 在进入首页时会跳动并转身，之后保持呼吸、眨眼；系统关闭动画时保持静止。会话列表的小头像使用静态帧以减少开销。折叠、调整窗口或切换 Bot 时保留各自的输入草稿。
 
 
 ## 长期委托与自主巡检

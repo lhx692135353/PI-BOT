@@ -12,6 +12,9 @@
     "react": ">=19"
   },
   "peerDependenciesMeta": {
-    "react": { "optional": true }
-  }
+    "react": {
+      "optional": true
+    }
+  },
+  "license": "Apache-2.0"
 }

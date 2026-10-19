@@ -33,6 +33,13 @@ fun message(id: String, seq: Int, status: String = "completed", content: String 
 
 class DomainTest {
     @Test
+    fun localBackendDefaultsAlsoWorkOutsideDebug() {
+        for (host in listOf("localhost", "127.0.0.1", "10.0.2.2")) {
+            assertEquals("http://$host:8000", parseServerUrl("http://$host:8000/", false).base)
+        }
+    }
+
+    @Test
     fun timelineMergesByIdInSeqOrder() {
         val t = Timeline().merge(listOf(message("c", 3), message("d", 4)), hasMore = true)
         assertTrue(t.loaded && t.hasMore)
@@ -113,10 +120,10 @@ class DomainTest {
 
     @Test
     fun serverUrlsMayHaveAPathPrefix() {
-        assertEquals("https://aicloud-app.lenovo.com.cn/pibot", parseServerUrl(" https://aicloud-app.lenovo.com.cn/pibot/ ", false).base)
+        assertEquals("https://bot.example.com/pibot", parseServerUrl(" https://bot.example.com/pibot/ ", false).base)
         assertEquals(
-            "wss://aicloud-app.lenovo.com.cn/pibot/ws/events?token=a%2Bb",
-            parseServerUrl("https://aicloud-app.lenovo.com.cn/pibot", false).eventsSocket("a+b"),
+            "wss://bot.example.com/pibot/ws/events?token=a%2Bb",
+            parseServerUrl("https://bot.example.com/pibot", false).eventsSocket("a+b"),
         )
         assertEquals("ws://192.168.1.5:8787/ws/events?token=t", parseServerUrl("http://192.168.1.5:8787", true).eventsSocket("t"))
         assertThrows(IllegalArgumentException::class.java) { parseServerUrl("http://192.168.1.5:8787", false) }

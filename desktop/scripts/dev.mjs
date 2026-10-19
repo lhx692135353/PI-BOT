@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs';
 import electron from 'electron';
 const node = resolve('node_modules/node/bin/node');
 if (!existsSync(node)) throw new Error('请先运行 npm install 安装项目 Node.js 24');
-const env = { ...process.env, PI_BOT_SERVER_URL: process.env.PI_BOT_SERVER_URL || 'http://localhost:8000' };
+const env = { ...process.env, PI_BOT_SERVER_URL: process.env.PI_BOT_SERVER_URL || 'http://127.0.0.1:8000' };
 const children = new Set(); let closing = false;
 function run(binary, args, options = {}) { const child = spawn(binary, args, { stdio: 'inherit', env, detached: true, ...options }); children.add(child); child.on('exit', () => children.delete(child)); return child; }
 const build = run(node, ['scripts/build.mjs']);

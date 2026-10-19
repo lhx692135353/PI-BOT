@@ -20,6 +20,11 @@ run(node, ['scripts/build.mjs'], root);
 
 rmSync(runtime, { recursive: true, force: true });
 mkdirSync(resolve(runtime, 'bin'), { recursive: true });
+mkdirSync(resolve(runtime, 'licenses'), { recursive: true });
+for (const file of ['LICENSE', 'NOTICE', 'THIRD_PARTY_NOTICES.md']) {
+  cpSync(resolve(root, '..', file), resolve(runtime, file));
+}
+cpSync(resolve(root, '../packages/agent/src/hermes-memory/LICENSE'), resolve(runtime, 'licenses/pi-hermes-memory-LICENSE'));
 cpSync(resolve(root, 'node_modules/node/bin/node'), resolve(runtime, 'bin/node'));
 cpSync(resolve(root, 'packages/service/dist/server.mjs'), resolve(runtime, 'server.mjs'));
 cpSync(resolve(root, 'native/dist/keychain'), resolve(runtime, 'keychain'));

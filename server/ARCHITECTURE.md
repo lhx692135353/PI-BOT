@@ -177,7 +177,7 @@ Mac 回传的 `run_event`：`started`、`instruction_ack`、`text`（完整文�
 ## 部署
 
 - 本地完整栈：`server/docker-compose.yml`（Postgres、API、Worker、Runner）。
-- 集群：`server/deploy/pibot.yaml`（命名空间 `n-88`，入口 `https://aicloud-app.lenovo.com.cn/pibot`，管理后台在 `/pibot/admin/`）。镜像 `registry.cn-beijing.aliyuncs.com/liuhx/pi-bot-server`。需要先创建 `pibot` 与 `pibot-vault` 两个 Secret。
+- 集群：`server/deploy/pibot.yaml`（示例命名空间 `pibot`，入口 `https://bot.example.com/pibot`，管理后台在 `/pibot/admin/`）。镜像 `registry.cn-beijing.aliyuncs.com/liuhx/pi-bot-server`。需要先创建 `pibot` 与 `pibot-vault` 两个 Secret。
 - API 单副本；Worker 可多副本（`FOR UPDATE SKIP LOCKED` 认领）；Runner 只在内网可达。
 
 ## 验收

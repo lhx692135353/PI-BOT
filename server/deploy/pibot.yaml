@@ -1,19 +1,20 @@
-# Pi Bot server。集群约定与 n-88 上其他服务一致：
-# ClusterIP + Traefik IngressRoute，入口 https://aicloud-app.lenovo.com.cn/pibot
-# 管理后台：https://aicloud-app.lenovo.com.cn/pibot/admin/
+# Pi Bot server Kubernetes 示例；请按实际集群调整入口、存储、镜像和拉取凭据。
+# ClusterIP + Traefik IngressRoute，入口 https://bot.example.com/pibot
+# 管理后台：https://bot.example.com/pibot/admin/
 # 镜像由 GitHub Actions 推到 registry.cn-beijing.aliyuncs.com/liuhx/pi-bot-server:latest
+# 应用前创建 namespace：kubectl create namespace pibot
 # 应用前：
 #   1. 修改下方 Secret 中的口令、JWT（至少 32 位）和 Runner token（至少 32 位）
 #   2. 生成模型密钥加密文件并创建 Secret：
 #        node --import tsx server/scripts/vault-key.ts "$PWD/vault.json"
-#        kubectl -n n-88 create secret generic pibot-vault --from-file=vault.json
-#   3. 确认私有仓库拉取密钥 liuhx-aliyun-registry 已存在
+#        kubectl -n pibot create secret generic pibot-vault --from-file=vault.json
+#   3. 替换镜像地址和拉取 Secret（示例名 liuhx-aliyun-registry），配置实际存储与 Ingress
 # API 必须单副本：Mac 的 WebSocket 连接和资料库 RPC 终止在 API 进程内。
 apiVersion: v1
 kind: Secret
 metadata:
   name: pibot
-  namespace: n-88
+  namespace: pibot
 type: Opaque
 stringData:
   POSTGRES_USER: pibot
@@ -33,7 +34,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: pibot-postgres
-  namespace: n-88
+  namespace: pibot
 spec:
   ports:
     - name: postgres
@@ -48,7 +49,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: pibot-postgres
-  namespace: n-88
+  namespace: pibot
   labels:
     app: pibot-postgres
 spec:
@@ -63,7 +64,6 @@ spec:
       labels:
         app: pibot-postgres
     spec:
-      nodeName: heto4-ai06
       containers:
         - name: postgres
           image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/postgres:16-alpine
@@ -105,7 +105,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: pibot
-  namespace: n-88
+  namespace: pibot
 spec:
   ports:
     - name: http
@@ -120,7 +120,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: pibot
-  namespace: n-88
+  namespace: pibot
   labels:
     app: pibot
 spec:
@@ -135,7 +135,6 @@ spec:
       labels:
         app: pibot
     spec:
-      nodeName: heto4-ai06
       imagePullSecrets:
         - name: liuhx-aliyun-registry
       initContainers:
@@ -182,7 +181,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: pibot-worker
-  namespace: n-88
+  namespace: pibot
   labels:
     app: pibot-worker
 spec:
@@ -195,7 +194,6 @@ spec:
       labels:
         app: pibot-worker
     spec:
-      nodeName: heto4-ai06
       imagePullSecrets:
         - name: liuhx-aliyun-registry
       initContainers:
@@ -231,7 +229,7 @@ apiVersion: traefik.containo.us/v1alpha1
 kind: Middleware
 metadata:
   name: pibot-strip-prefix
-  namespace: n-88
+  namespace: pibot
 spec:
   stripPrefix:
     prefixes:
@@ -243,26 +241,26 @@ metadata:
   annotations:
     kubernetes.io/ingress.class: traefik-internet
   name: pibot-https
-  namespace: n-88
+  namespace: pibot
 spec:
   entryPoints:
     - https
   routes:
     - kind: Rule
-      match: Host(`aicloud-app.lenovo.com.cn`) && PathPrefix(`/pibot`)
+      match: Host(`bot.example.com`) && PathPrefix(`/pibot`)
       middlewares:
         - name: pibot-strip-prefix
       services:
         - kind: Service
           name: pibot
-          namespace: n-88
+          namespace: pibot
           port: 8000
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: pibot-runner
-  namespace: n-88
+  namespace: pibot
 spec:
   selector:
     app: pibot-runner
@@ -275,7 +273,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: pibot-runner
-  namespace: n-88
+  namespace: pibot
 spec:
   replicas: 1
   selector:
@@ -286,7 +284,6 @@ spec:
       labels:
         app: pibot-runner
     spec:
-      nodeName: heto4-ai06
       imagePullSecrets:
         - name: liuhx-aliyun-registry
       securityContext:

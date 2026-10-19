@@ -8,6 +8,9 @@ test('public HTTP requires an explicit matching backend and cannot expand to oth
     delete process.env.PI_BOT_HTTP_SERVER_URL;
     assert.equal(checkServerUrl('https://backend.example/pibot/'), 'https://backend.example/pibot');
     assert.equal(checkServerUrl('http://localhost:8000'), 'http://localhost:8000');
+    assert.equal(checkServerUrl('http://127.0.0.1:8000/'), 'http://127.0.0.1:8000');
+    assert.equal(checkServerUrl('http://[::1]:8000/'), 'http://[::1]:8000');
+    assert.throws(() => checkServerUrl('http://192.0.2.10:8000'), /HTTPS/);
     assert.throws(() => checkServerUrl('http://backend.example:8000'), /HTTPS/);
 
     process.env.PI_BOT_HTTP_SERVER_URL = 'http://BACKEND.example:8000/pibot/';
