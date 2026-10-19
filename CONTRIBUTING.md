@@ -12,6 +12,8 @@
 
 按照 [README 快速开始](README.md#快速开始) 安装 Node.js 24、依赖和后端。数据库、`.env`、模型 API Key、vault、设备私钥和本机 IDE 配置不要提交。纯文档修改无需准备模型账号。
 
+VS Code 配置从 `.vscode/*.example.json` 复制到本机的 `launch.json` / `settings.json` 后使用，具体步骤见 [Mac 文档](desktop/README.md)。示例中只使用本地默认地址，不写个人后端、账号或绝对路径。Android `.run/` 中使用工程相对路径的共享运行配置可以提交；`.idea/`、SDK 路径、日志和构建缓存留在本地。
+
 ```sh
 npm ci
 npm run typecheck

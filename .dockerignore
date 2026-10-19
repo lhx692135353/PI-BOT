@@ -22,3 +22,18 @@ boards
 **/*.vault.json.*.tmp
 **/*.jks
 **/*.keystore
+
+# Local accounts, libraries, IDE configuration, and development output.
+**/.local
+**/.vscode
+**/.idea
+**/.gradle
+**/.kotlin
+**/.cache
+**/.mypy_cache
+**/.ruff_cache
+**/coverage
+**/htmlcov
+**/playwright-report
+**/*.log
+**/*.tsbuildinfo

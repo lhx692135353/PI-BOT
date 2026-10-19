@@ -16,6 +16,15 @@ npm ci              # 在仓库根目录；会下载 Electron
 npm run desktop:dev
 ```
 
+使用 VS Code 调试时，先在仓库根目录复制示例：
+
+```sh
+cp .vscode/launch.example.json .vscode/launch.json
+cp .vscode/settings.example.json .vscode/settings.json
+```
+
+然后在「运行和调试」中选择 `Pi Bot Desktop (Mac)`。在本地 `launch.json` 的 `env` 中配置默认后端和 HTTP 例外；本机 JDK 路径可写入 `settings.json`。这两个本地配置文件已被 Git 忽略，仓库只共享示例；调试账号与资料库保存在同样被忽略的 `.local/` 中。
+
 `npm run dev` 先构建 Swift Keychain helper、本地服务和 UI，再启动独立服务进程和 Electron。修改源码后重新执行。
 
 开发启动和打包应用的登录页默认服务器都是本机 `http://127.0.0.1:8000`，可用 `PI_BOT_SERVER_URL` 覆盖默认填写值，或在登录页手动修改。已保存的服务器地址优先于默认值。本机回环地址允许 HTTP；远程部署默认要求 HTTPS。临时连接局域网 HTTP 后端时，用 `PI_BOT_HTTP_SERVER_URL` 明确允许那一个完整后端地址，不会放开其他 HTTP 地址。

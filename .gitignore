@@ -18,3 +18,26 @@ vault.json.*.tmp
 
 # Workspace-local development profiles.
 .local/
+
+# Machine-specific IDE settings; share only sanitized templates and recommendations.
+/.vscode/*
+!/.vscode/*.example.json
+!/.vscode/extensions.json
+.idea/
+*.iml
+
+# Logs, incremental build caches, and test output.
+*.log
+*.tsbuildinfo
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+*.py[cod]
+coverage/
+.coverage
+.coverage.*
+htmlcov/
+test-results/
+playwright-report/
