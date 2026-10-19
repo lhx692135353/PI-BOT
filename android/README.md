@@ -10,6 +10,16 @@
 4. 在 SDK Manager 中安装项目要求的 Android SDK Platform（`compileSdk = 37`）；本地 SDK 位置由 Android Studio 写入 `local.properties`。
 5. 在 **Build Variants** 中选择 `app` 的 `debug`，再从工具栏选择运行配置和模拟器或真机。
 
+共享运行配置位于 `.run/`，打开 `android/` 工程后自动加载：
+
+| 配置 | 用途 |
+| --- | --- |
+| `Pi Bot Android` | 构建、安装并启动默认 Activity；Run 正常运行，Debug 可断点调试，自动显示 Logcat |
+| `Android Unit Tests` | 执行 `:app:testDebugUnitTest`，无需连接设备 |
+| `Android Debug APK` | 执行 `:app:assembleDebug`，生成 Debug APK，无需连接设备 |
+
+配置使用工程相对路径，不绑定设备；`.idea/`、SDK 路径与个人 IDE 设置继续保持本地文件。
+
 ## 命令行构建
 
 需要 Gradle Daemon 使用 Java 25，以及 Android SDK（`compileSdk = 37`）。在 `android/local.properties` 写 `sdk.dir=/path/to/android-sdk`，并先在仓库根目录完成 `npm ci`，然后：
@@ -25,10 +35,10 @@ cd android
 ## 使用
 
 1. 登录页默认填写 `http://10.0.2.2:8000`，连接 Android 官方模拟器宿主电脑上的本地后端。真机请点击服务器地址，改为电脑的局域网 IP 或你部署的 HTTPS 域名；`127.0.0.1` 在手机上指手机自身。账号由管理员在后台创建，已保存的地址不会被新默认值覆盖。
-2. 首页是 Bot 网格，点进去是这个 Bot 的时间线；右上角「资料库」在 Mac 在线时可用。
-3. 有审批时 Bot 卡片出现红点，时间线最下方出现审批卡片。
+2. 首页上方展示主 Bot，下方为会话列表，支持搜索名字与最近消息、下拉刷新。窄屏点列表进入对话；窗口宽度达到 720dp 时自动显示左列表、右对话，默认选中主 Bot。对话右上角「更多选项」可进入资料库或编辑 Bot，资料库在 Mac 在线时可用。
+3. 有审批时 Bot 会话头像出现红点，时间线最下方出现审批卡片。
 
-本机与 Android 官方模拟器的 HTTP 地址在 debug/release 中均可使用；debug 另允许局域网 HTTP，release 的远程地址须使用 HTTPS。支持带路径前缀的地址（如 `https://bot.example.com/pibot`），实时连接随协议使用 `ws://` 或 `wss://`。在登录页点击服务器地址即可修改。
+Debug 和 release 均支持 HTTP 与 HTTPS 服务器地址，包括公网域名、IP 和带路径前缀的地址（如 `http://example.com:8000/pibot`）；实时连接随协议使用 `ws://` 或 `wss://`。在登录页点击服务器地址即可修改。HTTP 仅建议用于本地开发；远程部署使用 HTTPS。
 
 A2UI 交互工具显示在 Bot 回复中；输入会保存，提交后进入正常任务流程。构建会自动打包 `packages/a2ui` 的 Web 渲染器，需要先在仓库根目录运行 `npm ci`；桥接仅处理交互事件，不在页面中提供账号凭据。
 

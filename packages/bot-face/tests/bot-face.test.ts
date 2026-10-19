@@ -109,6 +109,8 @@ test("run status maps to moods", () => {
   assert.equal(moodFor({ status: "completed", finishedAt: now - 1000, now }), "celebrate");
   assert.equal(moodFor({ status: "completed", finishedAt: now - 60000, now }), "idle");
   assert.equal(moodFor({ status: "failed", finishedAt: now - 1000, now }), "error");
+  assert.equal(moodFor({ status: "failed", finishedAt: now - 60000, now }), "idle");
+  assert.equal(moodFor({ status: "cancelled", finishedAt: now, now }), "idle");
   assert.equal(moodFor({ status: "completed", finishedAt: now - 8 * 86400_000, lastActiveAt: now - 7 * 86400_000, now }), "sleeping");
   assert.equal(sleepLabel(now - 7 * 86400_000, now), "7 天");
   assert.equal(sleepLabel(now - 3600_000, now), null);
@@ -137,6 +139,10 @@ test("renderer draws every shape, color and mood without a real canvas", () => {
       e.setMood(mood);
       e.step(0.05);
       for (const color of COLORS.slice(0, 3)) drawBot(ctx, e.frame(), { shape, color, scheme: "dark" }, 120);
+      const list = new BotEngine(mood, { seed: 2, motionProfile: "list" });
+      list.setInteraction({ active: true });
+      list.step(0.05);
+      for (const size of [44, 64]) drawBot(ctx, list.frame(), { shape, color: "orange", scheme: "light" }, size);
     }
   assert.ok(calls.includes("bezierCurveTo"));
   assert.ok(calls.includes("fill"));
@@ -147,4 +153,103 @@ test("outline smoothing produces one cubic per point", () => {
   const outline = smoothOutline(pts, 1);
   assert.equal(outline.segments.length, pts.length);
   assert.deepEqual(outline.segments.at(-1)![2], pts[0], "outline closes on the first anchor");
+});
+
+const advance = (engine: BotEngine, seconds = 1) => {
+  for (let i = 0; i < Math.ceil(seconds * 60); i++) engine.step(1 / 60);
+  return engine.frame();
+};
+
+test("list interaction greets once, tracks the row and eases back after leaving", () => {
+  const once = new BotEngine("idle", { seed: 12, motionProfile: "list" });
+  const moving = new BotEngine("idle", { seed: 12, motionProfile: "list" });
+  const interaction = { active: true, pointer: { x: 1, y: -1 } };
+  once.setInteraction(interaction);
+  for (let i = 0; i < 90; i++) {
+    moving.setInteraction(interaction);
+    once.step(1 / 60);
+    moving.step(1 / 60);
+    assert.deepEqual(moving.frame(), once.frame(), "moving within a row must not repeat the hop");
+  }
+  assert.ok(once.frame().wave! > 0.99);
+  assert.ok(once.frame().gazeX > 0.9 && once.frame().gazeY < -0.9);
+  once.setInteraction({ active: false });
+  const easing = advance(once, 1 / 60);
+  assert.ok(easing.wave! > 0 && easing.wave! < 0.99, "wave eases out rather than snapping");
+  assert.ok(advance(once).wave! < 0.001);
+  assert.ok(Math.abs(once.frame().gazeX) < 0.25, "eyes return to their idle gaze");
+});
+
+test("list hover preserves task moods, acknowledges briefly and does not leak between bots", () => {
+  for (const mood of ["thinking", "searching", "working", "waiting", "celebrate", "error"] as const) {
+    const bot = new BotEngine(mood, { seed: 2, motionProfile: "list" });
+    const other = new BotEngine(mood, { seed: 2, motionProfile: "list" });
+    bot.setInteraction({ active: true, pointer: { x: -1, y: -1 } });
+    const greeting = advance(bot, 0.3);
+    const baseline = advance(other, 0.3);
+    assert.equal(greeting.mood, mood);
+    assert.equal(greeting.wave, 0);
+    assert.equal(greeting.gazeX, baseline.gazeX, "busy gaze follows the task");
+    assert.ok(greeting.offsetY > baseline.offsetY, "hover adds a brief nod");
+    assert.equal(other.frame().wave, 0);
+    assert.deepEqual(advance(bot), advance(other), "the nod settles while hover remains active");
+  }
+});
+
+test("sleeping list bots wake visually without changing their real mood", () => {
+  const bot = new BotEngine("sleeping", { motionProfile: "list" });
+  bot.setInteraction({ active: true, pointer: { x: 0.7, y: -0.3 } });
+  assert.equal(advance(bot).mood, "idle");
+  assert.equal(bot.currentMood, "sleeping");
+  assert.ok(bot.frame().gazeX > 0.6);
+  bot.setInteraction({ active: false });
+  assert.equal(advance(bot).mood, "sleeping");
+});
+
+test("list work accents are opt-in and survive transitions during hover", () => {
+  for (const mood of ["thinking", "working", "searching"] as const) {
+    const list = new BotEngine(mood, { motionProfile: "list" });
+    const normal = new BotEngine(mood);
+    const listFrame = advance(list, 0.25);
+    const normalFrame = advance(normal, 0.25);
+    assert.ok(Math.abs(listFrame.rotation) > 0.01);
+    assert.equal(normalFrame.rotation, 0);
+    assert.equal(normalFrame.armActivity, undefined);
+    if (mood === "working") assert.ok(listFrame.armActivity! > 2);
+  }
+  const list = new BotEngine("idle", { motionProfile: "list" });
+  list.setInteraction({ active: true });
+  advance(list);
+  list.setMood("working");
+  assert.equal(advance(list).wave, 0);
+  list.setMood("celebrate");
+  assert.equal(advance(list, 0.1).mood, "celebrate");
+  list.setMood("idle");
+  assert.ok(advance(list).wave! > 0.99);
+  const normal = new BotEngine("idle", { seed: 5 });
+  const untouched = new BotEngine("idle", { seed: 5 });
+  normal.setInteraction({ active: true, pointer: { x: 1, y: 1 } });
+  assert.deepEqual(advance(normal), advance(untouched), "default avatars ignore row interaction");
+});
+
+test("reduced-motion list frames freeze all motion, including arms and effects", () => {
+  for (const mood of MOODS) {
+    const bot = new BotEngine(mood, { motionProfile: "list" });
+    bot.setInteraction({ active: true });
+    advance(bot, 0.3);
+    bot.setReducedMotion(true);
+    const still = advance(bot);
+    assert.deepEqual(advance(bot, 5), still, `${mood} stays completely still`);
+    assert.equal(still.t, 0, "renderer arms and effects use a frozen clock");
+    assert.equal(still.scaleX, 1);
+    assert.equal(still.scaleY, 1);
+    assert.equal(still.rotation, 0);
+    assert.equal(still.offsetY, 0);
+    assert.equal(still.particles.length, 0);
+    bot.setInteraction({ active: false });
+    assert.deepEqual(advance(bot), advance(bot, 5));
+    assert.equal(bot.currentMood, mood);
+    bot.setReducedMotion(false);
+    assert.ok(advance(bot).t > 0, "motion resumes after the preference changes");
+  }
 });

@@ -1,4 +1,4 @@
-# Pi Bot · T-AGENT
+# Pi Bot
 
 一个可以自托管的个人 Bot 平台：每个 Bot 有独立的人设、角色形象、长期记忆和连续时间线。Mac 为 Bot 提供工作电脑，Android 用于随时聊天、查看结果与处理审批。
 
@@ -47,8 +47,8 @@ Mac 在线时，Bot 在 Mac 上使用资料库和命令工具；离线时可由�
 需要 **Node.js 24 或更新版本、npm、Docker Compose**。运行 Mac 客户端还需要 macOS 和 Xcode Command Line Tools；Android 构建要求见 [Android 文档](android/README.md)。
 
 ```sh
-git clone https://github.com/lhx692135353/T-AGENT.git
-cd T-AGENT
+git clone https://github.com/lhx692135353/PI-BOT.git
+cd PI-BOT
 npm ci
 cp server/.env.example server/.env
 node --import tsx server/scripts/vault-key.ts "$PWD/server/vault.json"

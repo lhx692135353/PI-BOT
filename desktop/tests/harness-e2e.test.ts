@@ -1,4 +1,4 @@
-import { ResponseStream } from "../../packages/agent/tests/responses.js";
+import { isRealToolResult, latestUserText, realToolOutputs, ResponseStream } from "../../packages/agent/tests/responses.js";
 import test, { after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -25,11 +25,11 @@ async function scriptedProvider(outside: string) {
     let raw = ''; for await (const chunk of req) raw += chunk;
     const json = JSON.parse(raw);
     const messages: any[] = json.input;
-    const user = text(messages.filter(m => m.role === 'user').at(-1)?.content);
-    const last = messages.at(-1);
-    const results = messages.filter(m => m.type === 'function_call_output').map(m => text(m.output));
+    const user = latestUserText(messages);
+    const toolDone = isRealToolResult(messages);
+    const results = realToolOutputs(messages).map(m => text(m.output));
     let reply: { text?: string; tool?: { name: string; args: object } };
-    if (user === '建立自动检查链路测试') reply = last.type === 'function_call_output'
+    if (user === '建立自动检查链路测试') reply = toolDone
       ? { text: '已建立长期委托，重要结果会告诉你。' }
       : { tool: { name: 'automation_manage', args: { action: 'create', title: '自动检查链路测试', goal: '把已授权的检查结论保存到自动记录文件，完成后告知', authorization: '用户授权在自己的资料库创建 automation/result.txt', schedule: { type: 'interval', minutes: 10 } } } };
     else if (user.startsWith('自动工作：自主巡检')) {
@@ -48,18 +48,18 @@ async function scriptedProvider(outside: string) {
     }
     else if (user.startsWith('这是你之前委托给')) reply = { text: user.split('结果：\n').at(-1)! };
     else if (json.tools.some((t: any) => t.name === 'start_task') && /写文件|桌面|联网搜索|长任务/.test(user))
-      reply = last.type === 'function_call_output' ? { text: '任务已安排，完成后告诉你。' } : { tool: { name: 'start_task', args: { title: user.slice(0, 40), task: user } } };
-    else if (user.startsWith('补充任务:')) reply = last.type === 'function_call_output' ? { text: '补充已送达。' } : { tool: { name: 'task_message', args: { task_id: user.slice('补充任务:'.length), text: '改为蓝色' } } };
+      reply = toolDone ? { text: '任务已安排，完成后告诉你。' } : { tool: { name: 'start_task', args: { title: user.slice(0, 40), task: user } } };
+    else if (user.startsWith('补充任务:')) reply = toolDone ? { text: '补充已送达。' } : { tool: { name: 'task_message', args: { task_id: user.slice('补充任务:'.length), text: '改为蓝色' } } };
     else if (user === '改为蓝色') reply = { text: '已根据补充改为蓝色。' };
-    else if (user === '长任务') reply = last.type === 'function_call_output' ? { text: '长任务已完成。' } : { tool: { name: 'run_command', args: { command: 'sleep 2; echo completed' } } };
-    else if (user === '沉淀方法') reply = last.type === 'function_call_output' ? { text: '方法已记住。' } : { tool: { name: 'skill_manage', args: { action: 'create', name: 'mac-report', description: '整理报告时使用', instructions: 'PRIVATE-MAC-WORKFLOW：先核实来源，再整理。' } } };
-    else if (user === '复用方法') reply = last.type === 'function_call_output' ? { text: '报告已整理。' } : { tool: { name: 'skill_load', args: { name: 'mac-report' } } };
-    else if (user.includes('写文件')) reply = last.type === 'function_call_output' ? { text: `完成：${results.at(-1)}` } : { tool: { name: 'write_file', args: { path: 'notes/hello.md', content: '# Hello from Pi Bot' } } };
+    else if (user === '长任务') reply = toolDone ? { text: '长任务已完成。' } : { tool: { name: 'run_command', args: { command: 'sleep 2; echo completed' } } };
+    else if (user === '沉淀方法') reply = toolDone ? { text: '方法已记住。' } : { tool: { name: 'skill_manage', args: { action: 'create', name: 'mac-report', description: '整理报告时使用', instructions: 'PRIVATE-MAC-WORKFLOW：先核实来源，再整理。' } } };
+    else if (user === '复用方法') reply = toolDone ? { text: '报告已整理。' } : { tool: { name: 'skill_load', args: { name: 'mac-report' } } };
+    else if (user.includes('写文件')) reply = toolDone ? { text: `完成：${results.at(-1)}` } : { tool: { name: 'write_file', args: { path: 'notes/hello.md', content: '# Hello from Pi Bot' } } };
     else if (user.includes('桌面')) {
-      if (last.type !== 'function_call_output') reply = { tool: { name: 'request_outside_access', args: { path: outside, reason: '需要看看桌面上的文件' } } };
+      if (!toolDone) reply = { tool: { name: 'request_outside_access', args: { path: outside, reason: '需要看看桌面上的文件' } } };
       else if (results.length === 1 && results[0].includes('已批准')) reply = { tool: { name: 'list_files', args: { path: outside } } };
       else reply = { text: `桌面上有：${results.at(-1)}` };
-    } else if (user.includes('联网搜索')) reply = last.type === 'function_call_output' ? { text: `搜到：${results.at(-1)}` } : { tool: { name: 'web_search', args: { query: 'Mac 搜索测试', language: 'zh-CN' } } };
+    } else if (user.includes('联网搜索')) reply = toolDone ? { text: `搜到：${results.at(-1)}` } : { tool: { name: 'web_search', args: { query: 'Mac 搜索测试', language: 'zh-CN' } } };
     else reply = { text: '你好，我在。' };
     assert.equal(req.url, "/v1/responses");
     const stream = new ResponseStream(res, json.model);

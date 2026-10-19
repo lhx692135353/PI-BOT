@@ -25,7 +25,7 @@ function Progress({ lines }: { lines: string[] }) {
   if (!remarks.length) return null;
   return (
     <div className="progress" aria-label="任务进度">
-      {remarks.slice(0, 3).map((line, i) => <div className="bubble markdown" key={i}><Markdown text={line} /></div>)}
+      {remarks.map((line, i) => <div className="bubble markdown" key={i}><Markdown text={line} /></div>)}
     </div>
   );
 }

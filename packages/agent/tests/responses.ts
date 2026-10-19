@@ -1,6 +1,29 @@
 import type { ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
 
+const textOf = (c: any): string => (Array.isArray(c) ? c.map((p) => p.text ?? "").join("") : String(c ?? ""));
+
+/** User input is carried by standard Responses user messages. */
+export function latestUserText(input: any): string {
+  const messages = Array.isArray(input) ? input : [];
+  const user = [...messages].reverse().find((m) => m?.role === "user");
+  return textOf(user?.content);
+}
+
+/** Results of tool calls returned by the model. */
+export function realToolOutputs(input: any): any[] {
+  const messages = Array.isArray(input) ? input : [];
+  return messages.filter((m) => m?.type === "function_call_output");
+}
+
+export function isRealToolResult(input: any): boolean {
+  const messages = Array.isArray(input) ? input : [];
+  const last = messages.at(-1);
+  if (last?.type !== "function_call_output") return false;
+  const call = messages.find((m) => m?.type === "function_call" && m.call_id === last.call_id);
+  return !!call;
+}
+
 /** Native Responses events shared by provider doubles, including complete-call xAI events. */
 export class ResponseStream {
   private output: any[] = [];

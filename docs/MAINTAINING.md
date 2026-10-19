@@ -1,6 +1,6 @@
 # 维护与开源发布
 
-适用于个人仓库 `lhx692135353/T-AGENT`，维护者为 `@lhx692135353`。本文件和 JSON 模板记录目标配置；**把文件放进仓库不会自动修改 GitHub 设置**。
+适用于个人仓库 `lhx692135353/PI-BOT`，维护者为 `@lhx692135353`。本文件和 JSON 模板记录目标配置；**把文件放进仓库不会自动修改 GitHub 设置**。
 
 ## main 的目标规则
 
@@ -41,28 +41,28 @@ Settings → Rules → Rulesets → New ruleset → New branch ruleset，按上�
 先运行 `gh auth login`，认证仓库所有者账号。Token 需要本仓库 Administration 写权限；仅有 Contents 权限的连接器不能完成这些设置。
 
 ```sh
-gh repo view lhx692135353/T-AGENT --json visibility,defaultBranchRef,viewerPermission
-gh api repos/lhx692135353/T-AGENT/rulesets
+gh repo view lhx692135353/PI-BOT --json visibility,defaultBranchRef,viewerPermission
+gh api repos/lhx692135353/PI-BOT/rulesets
 ```
 
 CI 已运行、确认没有需要合并的既有规则后，从仓库根目录创建：
 
 ```sh
-gh api --method POST repos/lhx692135353/T-AGENT/rulesets \
+gh api --method POST repos/lhx692135353/PI-BOT/rulesets \
   --input .github/rulesets/main.json
-gh repo edit lhx692135353/T-AGENT \
+gh repo edit lhx692135353/PI-BOT \
   --enable-squash-merge --enable-merge-commit=false --enable-rebase-merge=false \
   --delete-branch-on-merge --enable-auto-merge=false
 ```
 
-修改已有同名规则时，先读取完整内容，使用 PUT 到 `repos/lhx692135353/T-AGENT/rulesets/RULESET_ID`，不要盲目 POST 或删除已有规则。
+修改已有同名规则时，先读取完整内容，使用 PUT 到 `repos/lhx692135353/PI-BOT/rulesets/RULESET_ID`，不要盲目 POST 或删除已有规则。
 
 完成发布检查后，显式公开仓库并核实实际生效规则：
 
 ```sh
-gh repo edit lhx692135353/T-AGENT --visibility public --accept-visibility-change-consequences
-gh repo view lhx692135353/T-AGENT --json visibility
-gh api repos/lhx692135353/T-AGENT/rules/branches/main
+gh repo edit lhx692135353/PI-BOT --visibility public --accept-visibility-change-consequences
+gh repo view lhx692135353/PI-BOT --json visibility
+gh api repos/lhx692135353/PI-BOT/rules/branches/main
 ```
 
 核实输出包含 PR、状态检查、禁止删除和禁止强推的要求。若没有，先修正规则后再接受贡献。

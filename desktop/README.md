@@ -66,6 +66,8 @@ PI_BOT_TEST_DATABASE_URL=postgresql://... \
 npm run pack:mac --workspace=pi-bot-desktop  # 生成 Pi Bot.app / dmg
 ```
 
+列表头像动画可在无账号的本地验证页检查：从仓库根目录运行 `npx vite --host 127.0.0.1`，打开 `/desktop/tests/bot-face-browser/`。页面挂载真实桌面 UI，提供任务状态切换和“减少动态效果”模拟开关；可检查整行悬停、键盘聚焦、睡眠唤醒及完成后的恢复。此页仅用于开发，不进入应用构建。
+
 架构见 [ARCHITECTURE.md](./ARCHITECTURE.md)，需求与验收标准见 [REQUIREMENTS.md](./REQUIREMENTS.md)。
 
 应用图标由 `scripts/build-icon.ts` 从共享 Bot 绘制代码生成，Dock、安装包和主智能体均使用默认橙色小人。登录后，Pi Bot 主智能体自动固定在列表顶部，其他 Bot 按最近活动排序。

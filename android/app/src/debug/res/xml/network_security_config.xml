@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<network-security-config>
-    <!-- Debug builds may call this Mac over the LAN. Release builds keep cleartext disabled. -->
-    <base-config cleartextTrafficPermitted="true" />
-</network-security-config>

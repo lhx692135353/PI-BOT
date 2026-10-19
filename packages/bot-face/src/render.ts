@@ -71,7 +71,9 @@ export function drawBot(
     ctx.strokeStyle = bottom;
     ctx.lineWidth = 0.2;
     for (const side of [-1, 1] as const) {
-      const a = armAngle(mood.arms, side, t);
+      let a = armAngle(mood.arms, side, t);
+      if (mood.arms === "type") a = 0.95 + (a - 0.95) * (frame.armActivity ?? 1);
+      if (frame.wave) a += (armAngle("wave", side, t) - a) * frame.wave;
       const sx = side * 0.68,
         sy = 0.18;
       ctx.beginPath();

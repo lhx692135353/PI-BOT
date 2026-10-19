@@ -1,4 +1,4 @@
-import { ResponseStream } from "../../packages/agent/tests/responses.js";
+import { isRealToolResult, latestUserText, ResponseStream } from "../../packages/agent/tests/responses.js";
 import { createServer, type IncomingMessage } from "node:http";
 import { generateKeyPairSync, randomBytes, randomUUID, sign } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -52,9 +52,9 @@ export async function mockProvider() {
     requests.push({ headers: req.headers, body: json });
     const input = typeof json.input === "string" ? [{ role: "user", content: json.input }] : json.input;
     const text = (c: any): string => (Array.isArray(c) ? c.map((p) => p.text ?? "").join("") : String(c ?? ""));
-    const last = text(input.filter((m: any) => m.role === "user").at(-1)?.content);
+    const last = latestUserText(input);
     const all = JSON.stringify(json.input);
-    const toolDone = json.input.at(-1)?.type === "function_call_output";
+    const toolDone = isRealToolResult(json.input);
     const delegation = DELEGATIONS[last];
     const skill = SKILLS[last];
     const answer = (() => {
@@ -92,7 +92,7 @@ export async function mockProvider() {
       else stream.text("已开始核查，完成后告诉你。");
       return void stream.end();
     }
-    if (last === "联网搜索链路测试" && json.input.at(-1)?.type !== "function_call_output") {
+    if (last === "联网搜索链路测试" && !toolDone) {
       stream.tool("web_search", { query: "Pi Bot 搜索测试", language: "zh-CN" }, "search_1");
       return void stream.end();
     }

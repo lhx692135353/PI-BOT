@@ -81,6 +81,9 @@ export { askAgentTool, type AskAgentOptions } from "./ask-agent.js";
 export { isInternalTool, type SkillSummary } from "./skills.js";
 
 export const CANCELLED = "CANCELLED";
+/** Safety ceiling for agent-authored progress. The agent chooses the words and how many segments. */
+export const PROGRESS_SEGMENTS = 8;
+export const PROGRESS_CHARS = 2000;
 
 export function redactor(secrets: string[]) {
   const list = secrets.filter((s) => s.length >= 6);
@@ -176,12 +179,12 @@ export class PiAgent implements AgentHandle {
         failed = msg.stopReason === "error";
         aborted = msg.stopReason === "aborted";
         if (!failed && !aborted && msg.content.some((c) => c.type === "toolCall")) {
-          const line = this.redact(content).trim().split(/\n|(?<=[。！？])|(?<=[.!?])\s+/u)[0]?.trim().slice(0, 200);
-          if (!internal && line && !progress.includes(line) && progress.length < 3) {
-            progress.push(line);
+          const remark = this.redact(content).trim().slice(0, PROGRESS_CHARS);
+          if (!internal && remark && !progress.includes(remark) && progress.length < PROGRESS_SEGMENTS) {
+            progress.push(remark);
             this.onProgress?.([...progress]);
           }
-          // The next model message is a fresh answer, not a continuation of this remark.
+          // The next model message is the answer. This remark stays in progress.
           content = "";
           onText("");
         }

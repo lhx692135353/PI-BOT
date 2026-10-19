@@ -6,18 +6,27 @@ import type { AccountState, AppEvent, Bot, LocalActivity, Message, MessagePage, 
 import { bridge, call, errorText } from './bridge.js';
 import { BotEditor } from './editor.js';
 import { Timeline } from './timeline.js';
+import { BotListItem } from './bot-list-item.js';
 import './style.css';
 
 const ORANGE = DEFAULT_AVATAR;
 
 function Login({ state }: { state: AccountState }) {
   const [serverUrl, setServerUrl] = useState(state.serverUrl ?? '');
+  const serverUrlEdited = useRef(false);
   const [username, setUsername] = useState(state.user?.username ?? '');
   const [password, setPassword] = useState('');
   const [advanced, setAdvanced] = useState(false);
   const [mood, setMood] = useState<Mood>(state.connection === 'revoked' ? 'error' : 'idle');
   const [error, setError] = useState(state.connection === 'revoked' ? '这台 Mac 已被解绑或账号不可用，请重新登录。' : '');
-  useEffect(() => { if (!serverUrl) void bridge.defaultServerUrl().then(setServerUrl); }, [serverUrl]);
+  useEffect(() => {
+    if (state.serverUrl || serverUrlEdited.current) return;
+    let active = true;
+    void bridge.defaultServerUrl().then(url => {
+      if (active && !serverUrlEdited.current) setServerUrl(url);
+    });
+    return () => { active = false; };
+  }, [state.serverUrl]);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setMood('thinking'); setError('');
@@ -35,10 +44,10 @@ function Login({ state }: { state: AccountState }) {
         <label>用户名<input value={username} onChange={e => setUsername(e.target.value)} autoFocus autoComplete="username" /></label>
         <label>密码<input type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete="current-password" /></label>
         {advanced
-          ? <label>服务器地址<input value={serverUrl} onChange={e => setServerUrl(e.target.value)} /></label>
+          ? <label>服务器地址<input value={serverUrl} onChange={e => { serverUrlEdited.current = true; setServerUrl(e.target.value); }} /></label>
           : <button type="button" className="link" onClick={() => setAdvanced(true)}>服务器：{serverUrl.replace(/^https?:\/\//, '')}</button>}
         {error && <p className="error">{error}</p>}
-        <button className="primary" disabled={!username || !password || mood === 'thinking'}>登录并绑定这台 Mac</button>
+        <button className="primary" disabled={!serverUrl.trim() || !username || !password || mood === 'thinking'}>登录并绑定这台 Mac</button>
         <p className="muted small">账号由管理员创建。一个账号只绑定一台 Mac，重新绑定会替换旧设备。</p>
       </form>
     </div>
@@ -170,17 +179,14 @@ function App() {
           {bots.map(b => {
             const mood = botMood(b, activities[b.id], now);
             return (
-              <button key={b.id} className={`bot-item ${b.is_main ? 'main-bot' : ''} ${b.id === selected ? 'active' : ''}`} onClick={() => setSelected(b.id)}>
-                <span className="bot-avatar">
-                  <PiBot avatar={b.avatar} mood={mood} size={b.is_main ? 64 : 44} />
-                  {b.is_main && <span className="main-star" aria-label="主智能体">★</span>}
-                </span>
-                <span className="bot-text">
-                  <strong>{b.name}</strong>
-                  <span className={b.pending_approvals.length ? 'attention' : ''}>{b.is_main && !b.latest_run && !b.last_message ? '主智能体 · 有什么想做的，告诉我' : statusLine(b, mood, now)}</span>
-                </span>
-                {b.pending_approvals.length > 0 && <i className="badge-dot" />}
-              </button>
+              <BotListItem
+                key={b.id}
+                bot={b}
+                mood={mood}
+                summary={b.is_main && !b.latest_run && !b.last_message ? '主智能体 · 有什么想做的，告诉我' : statusLine(b, mood, now)}
+                selected={b.id === selected}
+                onSelect={() => setSelected(b.id)}
+              />
             );
           })}
           {!bots.length && online && !loadError && <p className="muted small empty-list">还没有 Bot</p>}

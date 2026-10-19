@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -21,6 +23,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -79,7 +83,7 @@ fun MacChip(online: Boolean, modifier: Modifier = Modifier) {
     ) {
         Box(Modifier.size(7.dp).background(if (online) Good else Muted, CircleShape))
         Spacer(Modifier.width(6.dp))
-        Text(if (online) "Mac 在线" else "Mac 离线", fontSize = 12.sp, color = if (online) Good else Muted)
+        Text(if (online) "Mac 在线" else "Mac 离线", fontSize = 12.sp, lineHeight = 16.sp, color = if (online) Good else Muted)
     }
 }
 
@@ -101,3 +105,14 @@ fun EmptyState(avatar: Avatar, mood: String, title: String, body: String, modifi
 }
 
 val ORANGE = Avatar("blob", "orange", "light")
+
+/** Shared 48 dp touch target for the list and conversation toolbars. */
+@Composable
+fun CircleAction(label: String, onClick: () -> Unit, content: @Composable () -> Unit) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier.size(48.dp).semantics { contentDescription = label },
+        colors = IconButtonDefaults.iconButtonColors(containerColor = Card, contentColor = Ink),
+        content = content,
+    )
+}

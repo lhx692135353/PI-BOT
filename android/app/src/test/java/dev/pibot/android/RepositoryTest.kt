@@ -11,8 +11,10 @@ import dev.pibot.android.face.Avatar
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
@@ -20,6 +22,9 @@ import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.OkHttpClient
+import okhttp3.Response
+import okhttp3.WebSocket
+import okhttp3.WebSocketListener
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -27,6 +32,9 @@ import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.net.InetAddress
+import java.net.Proxy
+import java.util.concurrent.TimeUnit
 
 private class MemoryStorage : SessionStorage {
     var session: Session? = null
@@ -56,11 +64,14 @@ class RepositoryTest {
         server = MockWebServer()
         server.start()
         storage = MemoryStorage()
-        repo = PiBotRepository(PiBotApi(http), http, storage, CoroutineScope(SupervisorJob() + Dispatchers.Unconfined), allowCleartext = true, io = Dispatchers.Unconfined)
+        repo = PiBotRepository(PiBotApi(http), http, storage, CoroutineScope(SupervisorJob() + Dispatchers.Unconfined), io = Dispatchers.Unconfined)
     }
 
     @After
-    fun tearDown() = server.shutdown()
+    fun tearDown() {
+        repo.stopEvents()
+        server.shutdown()
+    }
 
     private fun respond(code: Int, body: String) = server.enqueue(MockResponse().setResponseCode(code).setHeader("content-type", "application/json").setBody(body))
     private fun base() = server.url("/pibot").toString()
@@ -80,6 +91,50 @@ class RepositoryTest {
         assertEquals("tok", session.token)
         assertEquals("bob", session.user.username)
         assertEquals(base().trimEnd('/'), storage.lastServerUrl())
+    }
+
+    @Test
+    fun publicHttpServerSupportsLoginRestAndLiveEvents() = runBlocking {
+        // Exercise a non-LAN hostname without using any external server or DNS.
+        val client = http.newBuilder()
+            .dns { listOf(InetAddress.getByName(server.hostName)) }
+            .proxy(Proxy.NO_PROXY)
+            .build()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        repo = PiBotRepository(PiBotApi(client), client, storage, scope, io = Dispatchers.Unconfined)
+        try {
+            val url = server.url("/pibot").newBuilder().host("http-server.example").build().toString()
+            respond(200, """{"access_token":"tok","expires_in":3600,"user":$USER}""")
+            repo.login(url, "bob", "secret")
+            assertEquals("/pibot/auth/login", server.takeRequest(5, TimeUnit.SECONDS)!!.path)
+            assertEquals(url, storage.load()!!.serverUrl)
+
+            server.enqueue(MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
+                override fun onOpen(webSocket: WebSocket, response: Response) {
+                    webSocket.send("""{"type":"hello","mac_online":true}""")
+                }
+
+                override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                    webSocket.close(code, reason)
+                }
+            }))
+            respond(200, """{"bots":[$BOT],"mac":{"online":true}}""")
+            repo.startEvents()
+            withTimeout(5000) {
+                repo.live.first { it }
+                repo.bots.first { it != null }
+            }
+            val socket = server.takeRequest(5, TimeUnit.SECONDS)!!
+            assertEquals("/pibot/ws/events?token=tok", socket.path)
+            assertEquals("websocket", socket.getHeader("Upgrade")?.lowercase())
+            val refreshed = server.takeRequest(5, TimeUnit.SECONDS)!!
+            assertEquals("/pibot/bots", refreshed.path)
+            assertEquals("Bearer tok", refreshed.getHeader("Authorization"))
+            assertTrue(repo.mac.value.online)
+        } finally {
+            repo.stopEvents()
+            scope.cancel()
+        }
     }
 
     @Test

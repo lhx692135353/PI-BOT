@@ -52,15 +52,22 @@ fun parseColor(hex: String): Color = Color(android.graphics.Color.parseColor(hex
 /**
  * Animated Pi Bot character. [paused] renders a still frame (lists with many bots);
  * [seed] keeps confetti and blinking deterministic per bot.
+ * [entrance] plays a single welcome hop and turn, respecting reduced motion.
  */
 @Composable
-fun PiBotFace(avatar: Avatar, mood: String, size: Dp, modifier: Modifier = Modifier, seed: Int = 1, paused: Boolean = false, effects: Boolean = true) {
+fun PiBotFace(avatar: Avatar, mood: String, size: Dp, modifier: Modifier = Modifier, seed: Int = 1, paused: Boolean = false, effects: Boolean = true, entrance: Boolean = false) {
     val context = LocalContext.current
     val spec = remember { BotFaceAssets.spec(context) }
     val reduceMotion = remember { reduceMotion(context) }
     val engine = remember(seed) { PiBotEngine(spec, mood, seed, reduceMotion) }
     var frame by remember(engine) { mutableStateOf(engine.frame()) }
     engine.setMood(mood)
+    LaunchedEffect(engine, entrance) {
+        if (entrance && !paused) {
+            engine.bounce()
+            engine.spin()
+        }
+    }
     LaunchedEffect(engine, paused, mood) {
         if (paused || reduceMotion) {
             engine.step(0.0)

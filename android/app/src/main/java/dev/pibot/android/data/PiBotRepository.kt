@@ -41,7 +41,6 @@ class PiBotRepository(
     http: OkHttpClient,
     private val storage: SessionStorage,
     private val scope: CoroutineScope,
-    private val allowCleartext: Boolean,
     private val io: CoroutineDispatcher = Dispatchers.IO,
 ) {
     private val socketClient = http.newBuilder().pingInterval(25, TimeUnit.SECONDS).readTimeout(0, TimeUnit.MILLISECONDS).build()
@@ -70,7 +69,7 @@ class PiBotRepository(
     fun bot(botId: String): Flow<Bot?> = _bots.map { list -> list?.firstOrNull { it.id == botId } }.distinctUntilChanged()
 
     suspend fun login(rawUrl: String, username: String, password: String) {
-        val url = parseServerUrl(rawUrl, allowCleartext)
+        val url = parseServerUrl(rawUrl)
         val r = withContext(io) { api.login(url, username.trim(), password) }
         val session = Session(url.base, r.accessToken, System.currentTimeMillis() + r.expiresIn * 1000, r.user)
         storage.save(session)

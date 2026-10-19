@@ -13,6 +13,7 @@ import { createBotAgent } from "@pi-bot/agent";
 import { WebSearch } from "../src/search.js";
 import { Hub } from "../src/hub.js";
 import { DEFAULT_AVATAR } from "@pi-bot/bot-face";
+import { latestUserText } from "../../packages/agent/tests/responses.js";
 import { deviceKeys, eventually, mockProvider, mockSearch, resetDatabase, socket, TEST_DB, tempDir, vaultFile } from "./helpers.js";
 
 const skip = !TEST_DB && "需要 PI_BOT_TEST_DATABASE_URL";
@@ -261,7 +262,8 @@ test("Mac online: runs execute on the Mac with tools, approvals and file RPC", {
   assert.equal(run.bot.slug, "research-bot");
   assert.match(run.system, /~\/pi-bot\/research-bot/);
   assert.match(run.system, /帮我整理资料/);
-  assert.match(run.system, /最多三句/);
+  assert.doesNotMatch(run.system, /user_message/);
+  assert.doesNotMatch(run.system, /最多三句/);
   assert.equal(run.text, "整理一下桌面");
   const runId = run.run_id;
   mac.send({ type: "run_event", run_id: runId, event: { kind: "started" } });
@@ -314,6 +316,9 @@ test("Mac online: runs execute on the Mac with tools, approvals and file RPC", {
 
   await api("POST", `/bots/${state.bot}/messages`, { token: state.alice, body: { text: "再做一件事", request_id: randomUUID() } });
   const second = await mac.next((m) => m.type === "run");
+  assert.deepEqual(second.run.history.filter((m: any) => m.role === "assistant").map((m: any) => m.content), ["我先看看桌面上的文件。", "桌面已整理好。"]);
+  assert.ok(second.run.history.some((m: any) => m.role === "user" && m.content === "整理一下桌面"));
+  assert.equal(JSON.stringify(second.run.history).includes("list_files"), false, "tool execution stays out of later context");
   mac.send({ type: "run_event", run_id: second.run.run_id, event: { kind: "started" } });
   const cancelled = await api("POST", `/runs/${second.run.run_id}/cancel`, { token: state.alice });
   assert.equal(cancelled.status, 200);
@@ -346,7 +351,7 @@ test("Mac offline: runs fall back to the cloud runner through the proxy, with me
   const first = await send("记住蓝鲸");
   assert.equal(first.status, "completed", JSON.stringify(first));
   assert.equal(first.content, "好的，我记住了蓝鲸。");
-  const forwarded = provider.requests.findLast(r => r.body.stream && r.body.input.at(-1)?.role === "user" && JSON.stringify(r.body.input.at(-1).content).includes("记住蓝鲸"))!.body;
+  const forwarded = provider.requests.findLast(r => r.body.stream && latestUserText(r.body.input).includes("记住蓝鲸"))!.body;
   assert.equal(forwarded.model, "upstream-model");
   assert.match(forwarded.input[0].content, /Mac 当前离线/);
   assert.deepEqual(forwarded.tools.map((t: any) => t.name), ["start_task", "task_status", "task_message", "cancel_task", "automation_manage", "ask_agent", "get_ui_catalog", "show_ui", "skill_manage", "skill_load", "memory_manage", "history_search", "agent_directory", "resume_task"], "cloud conversation runs get memory and collaboration, never file or shell tools");
@@ -385,11 +390,7 @@ test("the main bot can chat using the default model and stays pinned after other
   assert.equal((await api("GET", "/bots", { token: state.alice })).json.bots[0].id, state.mainBot);
 });
 
-const userText = (r: any) => {
-  if (typeof r.body.input === "string") return r.body.input;
-  const m = r.body.input.filter((x: any) => x.role === "user").at(-1)?.content;
-  return Array.isArray(m) ? m.map((p: any) => p.text ?? "").join("") : String(m ?? "");
-};
+const userText = (r: any) => typeof r.body.input === "string" ? r.body.input : latestUserText(r.body.input);
 const systemText = (r: any) => String(r.body.input[0]?.content ?? "");
 
 test("conversation delegation is asynchronous and reports a private specialist result back later", { skip }, async () => {

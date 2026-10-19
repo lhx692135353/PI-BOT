@@ -1,4 +1,4 @@
-import { ResponseStream } from "./responses.js";
+import { isRealToolResult, ResponseStream } from "./responses.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
@@ -22,7 +22,7 @@ test("the Pi extension loads private skills without read/bash or filesystem disc
       return void res.end(JSON.stringify({ name: "weekly-report", version: 1, instructions: "先核实来源再整理。", references: [] }));
     }
     requests.push(body);
-    const done = body.input.at(-1).type === "function_call_output";
+    const done = isRealToolResult(body.input);
     assert.equal(req.url, "/v1/responses");
     const stream = new ResponseStream(res, body.model);
     if (!done) {

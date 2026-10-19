@@ -162,7 +162,7 @@ Mac 回传的 `run_event`：`started`、`instruction_ack`、`text`（完整文�
 - 单 Activity + Compose Navigation：登录、Bot 网格、新建/编辑 Bot、时间线、资料库浏览、设置。
 - `PiBotApi`（OkHttp + kotlinx.serialization）调用与 Mac 相同的 REST 接口；`PiBotRepository` 用 StateFlow 保存会话、Bot 列表、Mac 状态和各 Bot 的时间线，没有本地数据库。
 - 应用在前台时连接 `/ws/events`：`delta` 直接合并进时间线，`bot` 事件 200ms 内合并成一次刷新，断线按 1、2、4…30 秒退避重连，重连后补拉列表和已打开的时间线；4401 或 401 退出登录。
-- 会话（服务器地址、用户、令牌）存在 EncryptedSharedPreferences。服务器地址必须是 HTTPS；debug 构建允许局域网和模拟器地址用 HTTP。
+- 会话（服务器地址、用户、令牌）存在 EncryptedSharedPreferences。Android 的 debug 和 release 均支持 HTTP、HTTPS 服务器地址，实时连接相应使用 WS、WSS。
 - 消息按 `seq` 分页（每页 50 条），滚到顶部加载更早的消息。
 
 ## 角色

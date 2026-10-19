@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { UI_INSTRUCTIONS, isInternalTool, TASK_TOOL_NAMES, type SkillSummary } from "@pi-bot/agent";
+import { UI_INSTRUCTIONS, isInternalTool, PROGRESS_CHARS, PROGRESS_SEGMENTS, TASK_TOOL_NAMES, type SkillSummary } from "@pi-bot/agent";
 import { skillCatalog } from "./skills.js";
 import { z } from "zod";
 import { SHAPES, COLORS, SCHEMES, DEFAULT_AVATAR, avatarFor } from "@pi-bot/bot-face";
@@ -460,10 +460,9 @@ export function systemPrompt(
   if (options.search) parts.push("联网检索请优先使用 web_search，支持中文查询和 site: 域名限定；它返回标题、链接和摘要。重要结论要核对原始来源，不要把搜索摘要当作已读过网页全文。搜索失败时及时说明，不要反复重试同一查询。工具返回‘搜索额度到了’时，直接告知用户搜索额度到了，停止搜索，不要重试或重新创建搜索任务。");
   if (options.agents?.length) parts.push(collaborationPrompt(options.agents, options.depth ?? 0));
   parts.push([
-    "任务进度：需要使用工具或进行较长任务时，先结合用户当前的问题和对话上下文，用一句简短、自然的话回应具体诉求，再说明接下来要做什么，然后立即开始行动。能判断的问题先给出有依据的简短回应，不要在核实前编造结论或声称已经完成。",
-    "开场回应也是正式回复，语气和最终回答保持一致；不要使用‘收到’、‘我来看看’、‘稍后给你结果’这类适用于任何问题的套话。问候、闲聊和简单问题直接回答，不要为了开场而多加一条回复。",
-    "只在发现重要信息、改变方案或进入关键阶段时再补一句有用的进度，不要每次调用工具都说话，也不要逐条播报命令、文件或重复计划。",
-    "一个复杂任务的进度说明总共两三句、最多三句，每次只说一句；不要使用标题、列表或技术执行日志。最终回答另行给出结果，无需重复前面的进度说明。",
+    "回复分段：你说给用户的每段话都会显示，并在之后作为你的回复保留。工具执行过程不会进入之后的上下文。",
+    "需要分段时自己决定内容和次数。调用工具前可以先说明要做什么；没有必要时直接给最终回答，不要为了开场多说一段。",
+    "不要使用‘收到’、‘我来看看’、‘稍后给你结果’这类套话，也不要逐条播报命令、文件或执行日志。能判断的问题先给出有依据的回应，不要在核实前编造结论或声称已经完成。",
     "调研任务优先核对直接相关的官方或一手来源，找到足以回答的依据后及时给出结论和链接；遇到来源不可访问时说明限制，不要无休止换检索方式或编写与问题无关的脚本。",
   ].join("\n"));
   return parts.join("\n\n");
@@ -487,9 +486,10 @@ export async function buildContext(
   const forgotten=await forgottenContext(tx,bot.bot_id);
   const question = await tx.get("bot_messages", run.user_message_id, true);
   const rows = await tx.rows(
-    `SELECT m.role, m.content, m.ui_action, f.name AS from_name FROM bot_messages m
+    `SELECT m.role, m.content, m.progress, m.ui_action, f.name AS from_name FROM bot_messages m
      LEFT JOIN bots f ON f.bot_id=m.from_bot_id
-     WHERE m.bot_id=$1 AND m.seq>$2 AND (m.seq<$3 OR m.role='assistant') AND m.visibility='public' AND m.content<>'' AND m.status IN ('completed','cancelled')
+     WHERE m.bot_id=$1 AND m.seq>$2 AND (m.seq<$3 OR m.role='assistant') AND m.visibility='public' AND m.status IN ('completed','cancelled')
+     AND ((m.role='user' AND m.content<>'') OR (m.role='assistant' AND (m.content<>'' OR m.progress <> '[]'::jsonb)))
      AND NOT EXISTS(SELECT 1 FROM memory_entries e WHERE e.bot_id=m.bot_id AND e.deleted AND e.source_message_id=m.message_id)
      ORDER BY m.seq DESC LIMIT $4`,
     [bot.bot_id, memory?.through_seq ?? 0, run.origin === "report" ? Number.MAX_SAFE_INTEGER : question.seq, Math.max(s.historyLimit, s.memoryThreshold+20)],
@@ -510,16 +510,25 @@ export async function buildContext(
   const tokens=(text:string)=>estimateTokens({role:"user",content:text,timestamp:0});
   const budget = Math.max(0,model.context_window-model.max_tokens-tokens(system+memoryContext+modelMessageContent(question)+JSON.stringify(skills)+JSON.stringify(instructions))-4096);
   let used = 0;
+  let covered = 0;
+  let truncated = false;
   const history: RunContext["history"] = [];
   for (const r of rows) {
-    const content=maskForgotten(modelMessageContent(r),forgotten);
-    used += tokens(content);
-    if (used > budget) break;
-    history.unshift({ role: r.role, content: r.from_name ? `（来自智能体「${r.from_name}」）${content}` : content });
+    const pieces = replayPieces(r);
+    const kept: RunContext["history"] = [];
+    for (let i = pieces.length - 1; i >= 0; i--) {
+      const content = maskForgotten(pieces[i].content, forgotten);
+      used += tokens(content);
+      if (used > budget) { truncated = true; break; }
+      kept.unshift({ role: pieces[i].role, content });
+    }
+    history.unshift(...kept);
+    covered++;
+    if (truncated) break;
   }
   const from = question.from_bot_id ? await tx.get("bots", question.from_bot_id) : undefined;
   let text = modelMessageContent(question);
-  if(history.length<rows.length) text+="\n（部分早期对话超出窗口，需要时用 history_search 检索，不代表没有历史。）";
+  if (truncated || covered < rows.length) text+="\n（部分早期对话超出窗口，需要时用 history_search 检索，不代表没有历史。）";
   if (run.origin === "agent" && from && from.bot_id !== bot.bot_id)
     text = `你收到来自智能体「${from.name}」的委托，它正在为用户处理一项任务：\n\n${text}\n\n请直接完成并给出自包含的结果，「${from.name}」会把它转述给用户。缺少必要信息时直接说明缺什么，不要向用户提问。`;
   else if (run.origin === "report")
@@ -564,8 +573,19 @@ export interface ToolEvent {
   state: "running" | "completed" | "failed";
   summary?: string;
 }
+/** Assistant turns replay as progress segments followed by the final reply; user turns keep their standard role. */
+function replayPieces(row: Row): { role: "user" | "assistant"; content: string }[] {
+  const prefix = row.from_name ? `（来自智能体「${row.from_name}」）` : "";
+  if (row.role === "assistant") {
+    const progress = (Array.isArray(row.progress) ? row.progress : []).filter((line: unknown): line is string => typeof line === "string" && line.trim() !== "");
+    const content = modelMessageContent(row);
+    const texts = content ? [...progress, prefix + content] : progress.map((line) => prefix + line);
+    return texts.map((content) => ({ role: "assistant", content }));
+  }
+  return [{ role: "user", content: prefix + modelMessageContent(row) }];
+}
 export async function setProgress(tx: Tx, run: Row, lines: string[]) {
-  const progress = [...new Set(lines.map(line => line.trim().slice(0, 200)).filter(Boolean))].slice(0, 3);
+  const progress = [...new Set(lines.map(line => line.trim().slice(0, PROGRESS_CHARS)).filter(Boolean))].slice(0, PROGRESS_SEGMENTS);
   await tx.rows(
     "UPDATE bot_messages SET progress=$2, content='', updated_at=now() WHERE message_id=$1 AND status='running'",
     [run.assistant_message_id, JSON.stringify(progress)],

@@ -159,10 +159,10 @@ Mac 回传的 `run_event`：`started`、`instruction_ack`、`text`（完整文�
 
 ## Android 端
 
-- 单 Activity + Compose Navigation：登录、Bot 网格、新建/编辑 Bot、时间线、资料库浏览、设置。
+- 单 Activity + Compose Navigation：登录、Bot 会话列表、新建/编辑 Bot、时间线、资料库浏览、设置。`AppRoot` 按当前窗口宽度适配：<720dp 时列表与对话单页切换，≥720dp 时左侧列表（280–360dp）、右侧时间线，初次展开默认打开主 Bot；编辑、资料库、设置仍为独立页面。各 Bot 草稿由已登录的根布局通过 `rememberSaveable` 保存，折叠、旋转和切换会话不丢失输入。`BotListScreen` 提供主 Bot 入场跳动/转身、搜索名字与最近消息、列表选中态；列表小头像暂停动画，主 Bot 与对话头像保持实时表情。
 - `PiBotApi`（OkHttp + kotlinx.serialization）调用与 Mac 相同的 REST 接口；`PiBotRepository` 用 StateFlow 保存会话、Bot 列表、Mac 状态和各 Bot 的时间线，没有本地数据库。
 - 应用在前台时连接 `/ws/events`：`delta` 直接合并进时间线，`bot` 事件 200ms 内合并成一次刷新，断线按 1、2、4…30 秒退避重连，重连后补拉列表和已打开的时间线；4401 或 401 退出登录。
-- 会话（服务器地址、用户、令牌）存在 EncryptedSharedPreferences。服务器地址必须是 HTTPS；debug 构建允许局域网和模拟器地址用 HTTP。
+- 会话（服务器地址、用户、令牌）存在 EncryptedSharedPreferences。Android 的 debug 和 release 均支持 HTTP、HTTPS 服务器地址，实时连接相应使用 WS、WSS。
 - 消息按 `seq` 分页（每页 50 条），滚到顶部加载更早的消息。
 
 ## 角色

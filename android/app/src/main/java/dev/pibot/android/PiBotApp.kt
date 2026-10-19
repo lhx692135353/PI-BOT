@@ -25,7 +25,6 @@ class PiBotApp : Application() {
             http = http,
             storage = SessionStore(this),
             scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
-            allowCleartext = BuildConfig.DEBUG,
         )
     }
 }

@@ -1,6 +1,6 @@
 # Pi Bot agent 与私有 skills
 
-Mac 与云端共用 `createBotAgent`，统一使用 Pi 的 `openai-responses` 适配器访问 `/llm/v1/responses`，支持 Grok 等兼容 Responses API 的模型。历史、工具结果通过 `input` 发送，服务商不保存会话（`store: false`）。平台通过 Pi SDK 的 `extensionFactories` 加载内置 `skillsExtension`，每个会话只允许显式提供的工具，以及 `skill_manage`、`skill_load`。不会发现用户家目录、资料库或祖先目录中的 extensions、skills、AGENTS、提示词模板；智能体不能修改平台插件。
+Mac 与云端共用 `createBotAgent`，统一使用 Pi 的 `openai-responses` 适配器访问 `/llm/v1/responses`，支持 Grok 等兼容 Responses API 的模型。用户输入和历史保留标准的 `role: "user"` / `role: "assistant"` 消息；只有模型真实发起的工具调用使用 `function_call` / `function_call_output`，并通过 `call_id` 配对。消息通过 `input` 发送，服务商不保存会话（`store: false`）。平台通过 Pi SDK 的 `extensionFactories` 加载内置 `skillsExtension`，每个会话只允许显式提供的工具，以及 `skill_manage`、`skill_load`。不会发现用户家目录、资料库或祖先目录中的 extensions、skills、AGENTS、提示词模板；智能体不能修改平台插件。
 
 ## 所属与存储
 

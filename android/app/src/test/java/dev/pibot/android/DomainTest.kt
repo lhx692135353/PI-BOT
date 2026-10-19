@@ -33,13 +33,6 @@ fun message(id: String, seq: Int, status: String = "completed", content: String 
 
 class DomainTest {
     @Test
-    fun localBackendDefaultsAlsoWorkOutsideDebug() {
-        for (host in listOf("localhost", "127.0.0.1", "10.0.2.2")) {
-            assertEquals("http://$host:8000", parseServerUrl("http://$host:8000/", false).base)
-        }
-    }
-
-    @Test
     fun timelineMergesByIdInSeqOrder() {
         val t = Timeline().merge(listOf(message("c", 3), message("d", 4)), hasMore = true)
         assertTrue(t.loaded && t.hasMore)
@@ -120,17 +113,19 @@ class DomainTest {
 
     @Test
     fun serverUrlsMayHaveAPathPrefix() {
-        assertEquals("https://bot.example.com/pibot", parseServerUrl(" https://bot.example.com/pibot/ ", false).base)
+        assertEquals("https://bot.example.com/pibot", parseServerUrl(" https://bot.example.com/pibot/ ").base)
         assertEquals(
             "wss://bot.example.com/pibot/ws/events?token=a%2Bb",
-            parseServerUrl("https://bot.example.com/pibot", false).eventsSocket("a+b"),
+            parseServerUrl("https://bot.example.com/pibot").eventsSocket("a+b"),
         )
-        assertEquals("ws://192.168.1.5:8787/ws/events?token=t", parseServerUrl("http://192.168.1.5:8787", true).eventsSocket("t"))
-        assertThrows(IllegalArgumentException::class.java) { parseServerUrl("http://192.168.1.5:8787", false) }
-        assertThrows(IllegalArgumentException::class.java) { parseServerUrl("http://example.com", true) }
-        assertThrows(IllegalArgumentException::class.java) { parseServerUrl("https://x.com/?a=1", false) }
-        assertThrows(IllegalArgumentException::class.java) { parseServerUrl("ftp://x.com", false) }
-        assertThrows(IllegalArgumentException::class.java) { parseServerUrl("", false) }
+        assertEquals("ws://192.168.1.5:8787/ws/events?token=t", parseServerUrl("http://192.168.1.5:8787").eventsSocket("t"))
+        assertEquals("http://example.com", parseServerUrl("http://example.com").base)
+        assertEquals("http://203.0.113.5:8000/pibot", parseServerUrl(" http://203.0.113.5:8000/pibot/ ").base)
+        assertEquals("ws://example.com:8000/pibot/ws/events?token=a%2Bb", parseServerUrl("HTTP://example.com:8000/pibot").eventsSocket("a+b"))
+        assertEquals("wss://example.com/pibot/ws/events?token=t", parseServerUrl("HTTPS://example.com/pibot").eventsSocket("t"))
+        for (invalid in listOf("https://x.com/?a=1", "http://x.com/#fragment", "http://user:password@x.com", "http:///missing-host", "ftp://x.com", "")) {
+            assertThrows(IllegalArgumentException::class.java) { parseServerUrl(invalid) }
+        }
     }
 
     @Test

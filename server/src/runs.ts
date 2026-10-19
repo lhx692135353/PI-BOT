@@ -17,6 +17,7 @@ import {
 import { claimExecution } from "./scheduling.js";
 import {recordUi} from "./ui.js";
 import { observationSchema, recordObservation } from "./observations.js";
+import { PROGRESS_CHARS, PROGRESS_SEGMENTS } from "@pi-bot/agent";
 
 export const MAC_OFFLINE = "Mac 已离线，可重新发送（将在云端运行）";
 
@@ -59,7 +60,7 @@ const runEvent = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("instruction_ack"), id: z.string().uuid() }),
   z.object({ kind: z.literal("ui"), messages: z.array(z.record(z.string(),z.unknown())).min(1).max(20) }),
   z.object({ kind: z.literal("text"), text: z.string().max(400000) }),
-  z.object({ kind: z.literal("progress"), lines: z.array(z.string().max(200)).max(3) }),
+  z.object({ kind: z.literal("progress"), lines: z.array(z.string().max(PROGRESS_CHARS)).max(PROGRESS_SEGMENTS) }),
   z.object({
     kind: z.literal("tool"),
     id: z.string().max(80),
