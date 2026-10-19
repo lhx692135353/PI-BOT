@@ -1,0 +1,19 @@
+.github/workflows/ci.yml
+  s_83681fcf53bbe9::t_cb320575d17090 41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ce042245a8f528fdab28d8967d6f60362391063b",
+  "prompts": {},
+  "sessions": {
+    "s_83681fcf53bbe9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15418-4ae2-7b83-8898-015ec90b3da5",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
