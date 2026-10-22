@@ -154,12 +154,15 @@ class PiBotRepository(
         _timelines.update { all -> all + (botId to (all[botId] ?: Timeline()).merge(page.messages, page.hasMore)) }
     }
 
-    suspend fun send(botId: String, text: String, requestId: String = UUID.randomUUID().toString()): Run {
-        val result = authed { u, t -> api.send(u, t, botId, text, requestId) }
+    suspend fun send(botId: String, text: String, requestId: String = UUID.randomUUID().toString(), images: List<ChatImage> = emptyList()): Run {
+        val result = authed { u, t -> api.send(u, t, botId, text, requestId, images) }
         _timelines.update { all -> all + (botId to (all[botId] ?: Timeline()).merge(result.messages)) }
         _bots.update { list -> list?.map { if (it.id == botId) it.copy(latestRun = result.run) else it } }
         return result.run
     }
+
+    suspend fun image(botId: String, messageId: String, imageId: String): ChatImage =
+        authed { u, t -> api.image(u, t, botId, messageId, imageId) }
 
     suspend fun saveUiState(botId: String, messageId: String, payload: JsonObject): JsonObject {
         val message = authed { u, t -> api.uiState(u, t, botId, messageId, payload) }

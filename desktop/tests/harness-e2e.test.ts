@@ -21,9 +21,11 @@ const text = (c: any): string => (Array.isArray(c) ? c.map(p => p.text ?? '').jo
 
 /** A provider double that drives the agent through tool calls based on the latest user text. */
 async function scriptedProvider(outside: string) {
+  const requests: any[] = [];
   const server = createServer(async (req, res) => {
     let raw = ''; for await (const chunk of req) raw += chunk;
     const json = JSON.parse(raw);
+    requests.push(json);
     const messages: any[] = json.input;
     const user = latestUserText(messages);
     const toolDone = isRealToolResult(messages);
@@ -73,7 +75,7 @@ async function scriptedProvider(outside: string) {
     stream.end();
   });
   await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
-  return { url: `http://127.0.0.1:${(server.address() as any).port}/v1`, close: () => new Promise<void>(r => { server.closeAllConnections(); server.close(() => r()); }) };
+  return { requests, url: `http://127.0.0.1:${(server.address() as any).port}/v1`, close: () => new Promise<void>(r => { server.closeAllConnections(); server.close(() => r()); }) };
 }
 
 let dir: string, api: Awaited<ReturnType<typeof createApp>>, base: string, provider: Awaited<ReturnType<typeof scriptedProvider>>, app: Application;
@@ -143,6 +145,22 @@ test('the Mac harness logs in, binds itself and runs bots against its library', 
   assert.deepEqual(files.json.entries.map((e: any) => e.name), ['hello.md']);
   const content = await http('GET', `/bots/${bot.id}/files/content?path=notes/hello.md`, undefined, bobToken);
   assert.equal(content.json.content, '# Hello from Pi Bot');
+});
+
+test('the Mac sends, loads and replays image attachments through its signed cloud connection', { skip }, async () => {
+  const bot = await app.call('botCreate', { name: 'Vision', persona: '', avatar: { shape: 'bean', color: 'mint', scheme: 'light' } }) as Bot;
+  const image = { name: 'pixel.png', mime_type: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC' };
+  const sent = await app.call('send', { botId: bot.id, text: '', images: [image] }) as { messages: MessagePage['messages'] };
+  const incoming = sent.messages[0];
+  assert.equal(incoming.images?.length, 1);
+  const loaded = await app.call('image', { botId: bot.id, messageId: incoming.id, imageId: incoming.images![0].id }) as typeof image;
+  assert.equal(loaded.data, image.data);
+  await eventually(async () => (await app.call('messages', { botId: bot.id }) as MessagePage).messages.at(-1)?.status === 'completed');
+  const imageParts = (body: any) => body.input.filter((m: any) => m.role === 'user').flatMap((m: any) => Array.isArray(m.content) ? m.content.filter((p: any) => p.type === 'input_image') : []);
+  assert.equal(imageParts(provider.requests.at(-1)).length, 1);
+  await app.call('send', { botId: bot.id, text: '再看图片' });
+  await eventually(async () => (await app.call('messages', { botId: bot.id }) as MessagePage).messages.at(-1)?.status === 'completed');
+  assert.equal(imageParts(provider.requests.at(-1)).length, 1);
 });
 
 test('the Mac agent searches through the authenticated Server gateway', { skip }, async () => {

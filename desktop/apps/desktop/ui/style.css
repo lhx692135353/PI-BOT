@@ -140,6 +140,17 @@ main { display: flex; flex-direction: column; min-width: 0; min-height: 0; backg
 .send { width: 34px; height: 34px; border-radius: 50%; padding: 0; flex-shrink: 0; font-size: 16px; font-weight: 700; }
 .send { background: var(--accent); color: #fff; }
 .send:hover:not(:disabled) { background: #f36a1b; }
+.attach { flex-shrink: 0; width: 34px; height: 34px; padding: 0; font-size: 23px; }
+.image-drafts, .message-pictures { display: flex; flex-wrap: wrap; gap: 8px; }
+.image-drafts > div { position: relative; }
+.image-drafts img { display: block; width: 76px; height: 76px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); }
+.image-drafts button { position: absolute; top: -5px; right: -5px; width: 22px; height: 22px; padding: 0; border-radius: 50%; background: #2b2c31; color: white; }
+.message-pictures { max-width: 80%; justify-content: flex-end; margin-bottom: 6px; }
+.message-picture { border: 0; padding: 0; background: transparent; overflow: hidden; border-radius: 12px; }
+.message-picture img { display: block; width: 200px; height: 150px; object-fit: contain; background: var(--panel); }
+.image-viewer { z-index: 100; cursor: zoom-out; }
+.image-viewer > img { max-width: 92vw; max-height: 90vh; object-fit: contain; }
+.image-viewer > button { position: absolute; top: 20px; right: 24px; font-size: 24px; }
 
 .empty { flex: 1; display: grid; place-content: center; justify-items: center; gap: 12px; text-align: center; padding: 40px; }
 .empty p { max-width: 380px; }

@@ -1,9 +1,11 @@
 import { z } from 'zod';
+import { validImages, IMAGE_TYPES, MAX_IMAGES, MAX_IMAGE_BYTES, IMAGE_LIMIT_HINT, type MessageImage } from '@pi-bot/agent/images';
 import type { UiDocument } from '@pi-bot/a2ui';
 import { COLORS, SCHEMES, SHAPES, type Avatar, type Mood } from '@pi-bot/bot-face';
 
 export const avatarSchema = z.object({ shape: z.enum(SHAPES), color: z.enum(COLORS), scheme: z.enum(SCHEMES) });
 const id = z.string().uuid();
+const imagesSchema = z.array(z.object({ name: z.string().trim().min(1).max(255), mime_type: z.enum(IMAGE_TYPES), data: z.string().min(1).max(Math.ceil(MAX_IMAGE_BYTES / 3) * 4) })).max(MAX_IMAGES).refine(validImages, IMAGE_LIMIT_HINT);
 
 /** Local service methods the Electron UI may call. Every cloud call is signed by the service. */
 export const schemas = {
@@ -19,7 +21,8 @@ export const schemas = {
   botUpdate: z.object({ id, name: z.string().trim().min(1).max(40).optional(), persona: z.string().max(8000).optional(), model_id: id.nullable().optional(), execution_device_id: id.nullable().optional(), avatar: avatarSchema.optional() }),
   botDelete: z.object({ id }),
   messages: z.object({ botId: id, before: z.number().int().positive().optional() }),
-  send: z.object({ botId: id, text: z.string().trim().min(1).max(100000), request_id: id.optional() }),
+  send: z.object({ botId: id, text: z.string().trim().max(100000).default(''), images: imagesSchema.default([]), request_id: id.optional() }).refine(body => body.text.length > 0 || body.images.length > 0, '请填写消息或选择图片'),
+  image: z.object({ botId: id, messageId: id, imageId: id }),
   uiState: z.object({ botId: id, messageId: id, revision: z.number().int().positive(), states: z.unknown() }),
   uiAction: z.object({ botId: id, messageId: id, revision: z.number().int().positive(), states: z.unknown(), action: z.unknown(), request_id: id }),
   cancel: z.object({ runId: id }),
@@ -40,7 +43,7 @@ export interface ToolEntry { id: string; name: string; state: 'running' | 'compl
 /** Another bot that wrote a `user` message: a delegated task, or the report of one this bot handed off. */
 export interface FromBot { id: string; name: string; avatar: Avatar | null; kind: 'task' | 'report' }
 export interface AgentTaskRef { id: string; bot_id: string; bot_name: string; status: 'queued' | 'running' | 'waiting_approval' | 'completed' | 'failed' | 'cancelled'; mode: 'wait' | 'report'; kind?: 'background' | 'delegation'; title?: string; updated_at?: string; activity?: string | null }
-export interface Message { task_id?: string | null; id: string; bot_id: string; run_id: string | null; seq: number; role: 'user' | 'assistant'; content: string; status: 'completed' | 'running' | 'failed' | 'cancelled'; executor: 'device' | 'cloud' | null; tools: ToolEntry[]; progress?: string[]; ui?: UiDocument | null; from_bot?: FromBot | null; agent_tasks?: AgentTaskRef[]; created_at: string; updated_at: string }
+export interface Message { task_id?: string | null; id: string; bot_id: string; run_id: string | null; seq: number; role: 'user' | 'assistant'; content: string; images?: MessageImage[]; status: 'completed' | 'running' | 'failed' | 'cancelled'; executor: 'device' | 'cloud' | null; tools: ToolEntry[]; progress?: string[]; ui?: UiDocument | null; from_bot?: FromBot | null; agent_tasks?: AgentTaskRef[]; created_at: string; updated_at: string }
 export interface Approval { id: string; run_id: string; bot_id: string; kind: 'outside_access'; path: string; reason: string; status: string; expires_at: string }
 export interface Bot { execution_device_id?: string | null; active_tasks?: AgentTaskRef[]; activity?: { status: RunStatus | null; tool: string | null; summary: string | null; running_count: number; queued_count: number }; id: string; name: string; slug: string; persona: string; model_id: string | null; avatar: Avatar; is_main?: boolean; created_at: string; last_active_at: string; latest_run: Run | null; last_message: { role: string; preview: string; status: string; created_at: string } | null; pending_approvals: Approval[] }
 export interface ModelOption { id: string; name: string; is_default: boolean }

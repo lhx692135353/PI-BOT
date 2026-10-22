@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { imageBytes, MAX_IMAGES_BYTES, type ChatImage } from '@pi-bot/agent/images';
 import { UI_INSTRUCTIONS, isInternalTool, PROGRESS_CHARS, PROGRESS_SEGMENTS, TASK_TOOL_NAMES, type SkillSummary } from "@pi-bot/agent";
 import { skillCatalog } from "./skills.js";
 import { z } from "zod";
@@ -90,6 +91,7 @@ export const messageOut = (m: Row, tasks: Row[] = []) => ({
   seq: m.seq,
   role: m.role,
   content: m.content,
+  images: (m.images ?? []).map((image: ChatImage & { id: string }) => ({ id: image.id, name: image.name, mime_type: image.mime_type })),
   status: m.status,
   executor: m.executor,
   tools: (m.tools ?? []).filter((tool: ToolEvent) => !isInternalTool(tool.name) && !TASK_TOOL_NAMES.has(tool.name)),
@@ -288,6 +290,7 @@ export async function postMessage(
   text: string,
   requestId: string,
   computer: { deviceId: string } | null,
+  images: ChatImage[] = [],
 ) {
   const bot = await ownBot(tx, userId, botId, true);
   const existing = await tx.one(
@@ -296,7 +299,7 @@ export async function postMessage(
   );
   if (existing) return { run: existing, bot, created: false };
   if (!(await resolveModel(tx, bot))) fail(503, "管理员尚未配置可用模型");
-  const run = await insertRun(tx, { userId, botId, requestId, text, computer });
+  const run = await insertRun(tx, { userId, botId, requestId, text, computer, images });
   return { run, bot, created: true };
 }
 
@@ -308,6 +311,7 @@ export interface NewRun {
   computer: { deviceId: string } | null;
   /** Fixed target for queued device tasks, even while it is offline. */
   targetDeviceId?: string | null;
+  images?: ChatImage[];
   origin?: "user" | "agent" | "report" | "automation";
   automationId?: string;
   executionPolicy?: "any" | "device_only";
@@ -354,6 +358,7 @@ export async function insertRun(tx: Tx, o: NewRun) {
     seq,
     role: "user",
     content: o.text,
+    images: (o.images ?? []).map(image => ({ ...image, id: randomUUID() })),
     status: "completed",
     from_bot_id: o.fromBotId ?? null,
     visibility: o.lane === "task" ? "task" : o.origin === "report" ? "internal" : "public",
@@ -381,8 +386,9 @@ export interface RunContext {
   bot: { id: string; name: string; slug: string };
   model: { id: string; name: string; context_window: number; max_tokens: number };
   system: string;
-  history: { role: "user" | "assistant"; content: string }[];
+  history: { role: "user" | "assistant"; content: string; images?: ChatImage[] }[];
   text: string;
+  images?: ChatImage[];
   lane: "conversation" | "task";
   instructions?: { id: string; text: string }[];
   memory_context?: string;
@@ -506,10 +512,10 @@ export async function buildContext(
   const forgotten=await forgottenContext(tx,bot.bot_id);
   const question = await tx.get("bot_messages", run.user_message_id, true);
   const rows = await tx.rows(
-    `SELECT m.role, m.content, m.progress, m.ui_action, f.name AS from_name FROM bot_messages m
+    `SELECT m.role, m.content, m.images, m.progress, m.ui_action, f.name AS from_name FROM bot_messages m
      LEFT JOIN bots f ON f.bot_id=m.from_bot_id
      WHERE m.bot_id=$1 AND m.seq>$2 AND (m.seq<$3 OR m.role='assistant') AND m.visibility='public' AND m.status IN ('completed','cancelled')
-     AND ((m.role='user' AND m.content<>'') OR (m.role='assistant' AND (m.content<>'' OR m.progress <> '[]'::jsonb)))
+     AND ((m.role='user' AND (m.content<>'' OR m.images <> '[]'::jsonb)) OR (m.role='assistant' AND (m.content<>'' OR m.progress <> '[]'::jsonb)))
      AND NOT EXISTS(SELECT 1 FROM memory_entries e WHERE e.bot_id=m.bot_id AND e.deleted AND e.source_message_id=m.message_id)
      ORDER BY m.seq DESC LIMIT $4`,
     [bot.bot_id, memory?.through_seq ?? 0, run.origin === "report" ? Number.MAX_SAFE_INTEGER : question.seq, Math.max(s.historyLimit, s.memoryThreshold+20)],
@@ -528,7 +534,9 @@ export async function buildContext(
   const skills=await skillCatalog(tx,bot.bot_id);
   const instructions=run.task_id && run.lane === "task" ? (await tx.rows("SELECT instruction_id AS id, text FROM agent_task_instructions WHERE task_id=$1 AND delivered_at IS NULL ORDER BY created_at, instruction_id", [run.task_id])) as { id: string; text: string }[] : [];
   const tokens=(text:string)=>estimateTokens({role:"user",content:text,timestamp:0});
-  const budget = Math.max(0,model.context_window-model.max_tokens-tokens(system+memoryContext+modelMessageContent(question)+JSON.stringify(skills)+JSON.stringify(instructions))-4096);
+  const questionImages: ChatImage[] = question.images ?? [];
+  const budget = Math.max(0,model.context_window-model.max_tokens-tokens(system+memoryContext+modelMessageContent(question)+JSON.stringify(skills)+JSON.stringify(instructions))-questionImages.length*4096-4096);
+  let imageSize = questionImages.reduce((n, image) => n + imageBytes(image), 0);
   let used = 0;
   let covered = 0;
   let truncated = false;
@@ -538,16 +546,21 @@ export async function buildContext(
     const kept: RunContext["history"] = [];
     for (let i = pieces.length - 1; i >= 0; i--) {
       const content = maskForgotten(pieces[i].content, forgotten);
-      used += tokens(content);
+      const images = pieces[i].images ?? [];
+      const size = images.reduce((n, image) => n + imageBytes(image), 0);
+      // Bound both the model window and transport size, keeping recent turns intact.
+      used += tokens(content) + images.length * 4096;
+      if (imageSize + size > MAX_IMAGES_BYTES) { truncated = true; break; }
       if (used > budget) { truncated = true; break; }
-      kept.unshift({ role: pieces[i].role, content });
+      imageSize += size;
+      kept.unshift({ role: pieces[i].role, content, ...(images.length ? { images } : {}) });
     }
     history.unshift(...kept);
     covered++;
     if (truncated) break;
   }
   const from = question.from_bot_id ? await tx.get("bots", question.from_bot_id) : undefined;
-  let text = modelMessageContent(question);
+  let text = modelMessageContent(question) || (questionImages.length ? '请查看这些图片。' : '');
   if (truncated || covered < rows.length) text+="\n（部分早期对话超出窗口，需要时用 history_search 检索，不代表没有历史。）";
   if (run.origin === "agent" && from && from.bot_id !== bot.bot_id)
     text = `你收到来自智能体「${from.name}」的委托，它正在为用户处理一项任务：\n\n${text}\n\n请直接完成并给出自包含的结果，「${from.name}」会把它转述给用户。缺少必要信息时直接说明缺什么，不要向用户提问。`;
@@ -572,6 +585,7 @@ export async function buildContext(
     system,
     history,
     text,
+    images: questionImages,
     search_enabled: run.lane === "task" && search,
     execution_policy: run.execution_policy,
     automation_readonly: run.automation_readonly,
@@ -594,7 +608,7 @@ export interface ToolEvent {
   summary?: string;
 }
 /** Assistant turns replay as progress segments followed by the final reply; user turns keep their standard role. */
-function replayPieces(row: Row): { role: "user" | "assistant"; content: string }[] {
+function replayPieces(row: Row): RunContext['history'] {
   const prefix = row.from_name ? `（来自智能体「${row.from_name}」）` : "";
   if (row.role === "assistant") {
     const progress = (Array.isArray(row.progress) ? row.progress : []).filter((line: unknown): line is string => typeof line === "string" && line.trim() !== "");
@@ -602,7 +616,7 @@ function replayPieces(row: Row): { role: "user" | "assistant"; content: string }
     const texts = content ? [...progress, prefix + content] : progress.map((line) => prefix + line);
     return texts.map((content) => ({ role: "assistant", content }));
   }
-  return [{ role: "user", content: prefix + modelMessageContent(row) }];
+  return [{ role: "user", content: prefix + modelMessageContent(row), ...(row.images?.length ? { images: row.images } : {}) }];
 }
 export async function setProgress(tx: Tx, run: Row, lines: string[]) {
   const progress = [...new Set(lines.map(line => line.trim().slice(0, PROGRESS_CHARS)).filter(Boolean))].slice(0, PROGRESS_SEGMENTS);

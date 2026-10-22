@@ -1,4 +1,5 @@
 import { mkdirSync } from "node:fs";
+import { modelImages, type ChatImage } from './images.js';
 import {
   createAgentSession,
   DefaultResourceLoader,
@@ -33,6 +34,7 @@ export interface ModelConfig {
 export interface HistoryMessage {
   role: "user" | "assistant";
   content: string;
+  images?: ChatImage[];
 }
 export interface ToolActivity {
   id: string;
@@ -65,7 +67,7 @@ export interface BotAgentOptions {
 }
 export interface AgentHandle {
   tools: string[];
-  prompt(text: string, onText: (text: string) => void): Promise<string>;
+  prompt(text: string, onText: (text: string) => void, images?: ChatImage[]): Promise<string>;
   setApiKey(key: string): Promise<void>;
   steer?(text: string): Promise<void>;
   abort(): Promise<void>;
@@ -122,7 +124,7 @@ export class PiAgent implements AgentHandle {
   setApiKey(key: string) {
     return this.runtime.setRuntimeApiKey(this.provider, key);
   }
-  async prompt(text: string, onText: (text: string) => void) {
+  async prompt(text: string, onText: (text: string) => void, images?: ChatImage[]) {
     let content = "",
       failed = false,
       aborted = false,
@@ -192,7 +194,7 @@ export class PiAgent implements AgentHandle {
       if (event.type === "agent_settled") settled = true;
     });
     try {
-      await this.session.prompt(text, { expandPromptTemplates: false });
+      await this.session.prompt(text, { expandPromptTemplates: false, images: modelImages(images) });
       if (!settled) await this.session.waitForIdle();
       if (timedOut) throw new Error("模型长时间没有响应，已停止本次任务，请稍后重试");
       if (aborted) throw new Error(CANCELLED);
@@ -235,7 +237,7 @@ export const createBotAgent: AgentFactory = async (o) => {
         id: o.model.modelId,
         name: o.model.name,
         reasoning: false,
-        input: ["text"],
+        input: ["text", "image"],
         contextWindow: o.model.contextWindow,
         maxTokens: o.model.maxTokens,
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
@@ -250,7 +252,7 @@ export const createBotAgent: AgentFactory = async (o) => {
   for (const m of o.history)
     sessionManager.appendMessage(
       m.role === "user"
-        ? { role: "user", content: m.content, timestamp: Date.now() }
+        ? { role: "user", content: m.images?.length ? [{ type: 'text', text: m.content }, ...modelImages(m.images)] : m.content, timestamp: Date.now() }
         : {
             role: "assistant",
             content: [{ type: "text", text: m.content }],

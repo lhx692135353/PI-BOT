@@ -110,6 +110,12 @@ data class BotList(val bots: List<Bot>, val computer: ComputerStatus = ComputerS
 data class ToolEntry(val id: String, val name: String, val state: String, val summary: String? = null)
 
 @Serializable
+data class ChatImage(val name: String, @SerialName("mime_type") val mimeType: String, val data: String)
+
+@Serializable
+data class MessageImage(val id: String, val name: String, @SerialName("mime_type") val mimeType: String)
+
+@Serializable
 data class Message(
     val id: String,
     @SerialName("bot_id") val botId: String,
@@ -118,6 +124,7 @@ data class Message(
     val seq: Int,
     val role: String,
     val content: String,
+    val images: List<MessageImage> = emptyList(),
     val status: String,
     val executor: String? = null,
     val tools: List<ToolEntry> = emptyList(),
@@ -182,7 +189,7 @@ data class BotInput(
 private data class LoginBody(val username: String, val password: String)
 
 @Serializable
-private data class SendBody(val text: String, @SerialName("request_id") val requestId: String)
+private data class SendBody(val text: String, @SerialName("request_id") val requestId: String, val images: List<ChatImage> = emptyList())
 
 @Serializable
 private data class DecisionBody(val decision: String)
@@ -226,8 +233,11 @@ class PiBotApi(private val http: OkHttpClient, private val json: Json = API_JSON
     fun messages(url: ServerUrl, token: String, botId: String, before: Int? = null): MessagePage =
         call(url, "GET", "/bots/$botId/messages", token, query = listOfNotNull("limit" to "50", before?.let { "before" to it.toString() }))
 
-    fun send(url: ServerUrl, token: String, botId: String, text: String, requestId: String): SendResult =
-        call(url, "POST", "/bots/$botId/messages", token, SendBody(text, requestId))
+    fun send(url: ServerUrl, token: String, botId: String, text: String, requestId: String, images: List<ChatImage> = emptyList()): SendResult =
+        call(url, "POST", "/bots/$botId/messages", token, SendBody(text, requestId, images))
+
+    fun image(url: ServerUrl, token: String, botId: String, messageId: String, imageId: String): ChatImage =
+        call(url, "GET", "/bots/$botId/messages/$messageId/images/$imageId", token)
 
     fun uiState(url: ServerUrl, token: String, botId: String, messageId: String, body: JsonObject): Message =
         call(url, "POST", "/bots/$botId/messages/$messageId/ui-state", token, body)

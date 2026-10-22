@@ -52,14 +52,14 @@ before(async () => {
   search = await mockSearch();
   runner = await createRunner({ token: RUNNER_TOKEN, dir: dir.path, factory: async options => {
     const agent = await createBotAgent(options);
-    return { ...agent, tools: agent.tools, setApiKey: key => agent.setApiKey(key), abort: () => agent.abort(), dispose: () => agent.dispose(), prompt: async (text, onText) => {
+    return { ...agent, tools: agent.tools, setApiKey: key => agent.setApiKey(key), abort: () => agent.abort(), dispose: () => agent.dispose(), prompt: async (text, onText, images) => {
       if (text === "进度链路测试") {
         onText("我先查查资料。");
         options.onProgress?.(["我先查查资料。"]);
         onText("");
         options.onProgress?.(["我先查查资料。", "信息已核对，开始整理。"]);
       }
-      return agent.prompt(text, onText);
+      return agent.prompt(text, onText, images);
     } };
   } });
   await runner.listen({ port: 0, host: "127.0.0.1" });
@@ -375,6 +375,41 @@ test("Mac offline: runs fall back to the cloud runner through the proxy, with me
   assert.equal(memory.summary, "用户喜欢蓝鲸。");
   const after = await send("之前说了什么？");
   assert.equal(after.content, "你之前说的是蓝鲸。", "memory summary reaches the prompt");
+});
+
+test('image-only messages persist, load with authorization, replay and reach the cloud model', { skip }, async () => {
+  const bot = await api('POST', '/bots', { token: state.alice, body: { name: '图片测试' } });
+  const path = `/bots/${bot.json.id}/messages`;
+  const image = { name: 'pixel.png', mime_type: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC' };
+  const body = { images: [image], request_id: randomUUID() };
+  const posted = await api('POST', path, { token: state.alice, body });
+  assert.equal(posted.status, 200, JSON.stringify(posted.json));
+  const incoming = posted.json.messages[0];
+  assert.equal(incoming.content, '');
+  assert.equal(incoming.images.length, 1);
+  assert.equal('data' in incoming.images[0], false);
+  const again = await api('POST', path, { token: state.alice, body });
+  assert.equal(again.json.run.id, posted.json.run.id);
+  assert.equal(again.json.messages[0].images[0].id, incoming.images[0].id);
+  const picturePath = `${path}/${incoming.id}/images/${incoming.images[0].id}`;
+  assert.equal((await api('GET', picturePath, { token: state.alice })).json.data, image.data);
+  const charlie = (await api('POST', '/auth/login', { body: { username: 'charlie', password: 'charlie-password' } })).json.access_token;
+  assert.equal((await api('GET', picturePath, { token: charlie })).status, 404);
+  assert.equal((await api('GET', `${path}/${incoming.id}/images/${randomUUID()}`, { token: state.alice })).status, 404);
+  await eventually(async () => {
+    const page = await api('GET', path, { token: state.alice });
+    return page.json.messages.at(-1)?.status === 'completed';
+  });
+  const imageTurns = (body: any) => (Array.isArray(body.input) ? body.input : []).filter((m: any) => m.role === 'user').flatMap((m: any) => Array.isArray(m.content) ? m.content.filter((p: any) => p.type === 'input_image') : []);
+  assert.ok(provider.requests.some(r => imageTurns(r.body).some((p: any) => /^data:image\/(png|jpeg|webp);base64,/.test(p.image_url))));
+  const follow = await api('POST', path, { token: state.alice, body: { text: '继续分析图片', request_id: randomUUID() } });
+  await eventually(async () => {
+    const page = await api('GET', path, { token: state.alice });
+    return page.json.messages.find((m: any) => m.id === follow.json.run.assistant_message_id)?.status === 'completed';
+  });
+  const request = provider.requests.findLast(r => latestUserText(r.body.input) === '继续分析图片')!;
+  assert.equal(imageTurns(request.body).length, 1, 'image-only user history is replayed');
+  assert.equal((await api('POST', path, { token: state.alice, body: { images: [{ ...image, mime_type: 'text/html' }], request_id: randomUUID() } })).status, 422);
 });
 
 test("the main bot can chat using the default model and stays pinned after other bots run", { skip }, async () => {

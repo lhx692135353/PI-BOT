@@ -10,6 +10,7 @@ import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { createBotAgent, redactor, summarize, automationTools, type ToolActivity } from "../src/index.js";
 
 const SECRET = "proxy-token-123456";
+const picture = { name: 'pixel.png', mime_type: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC' };
 const text = (c: any): string => (Array.isArray(c) ? c.map((p) => p.text ?? "").join("") : String(c ?? ""));
 const requests: any[] = [];
 const checkpoints: any[] = [];
@@ -77,6 +78,21 @@ before(async () => {
   });
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
   url = `http://127.0.0.1:${(server.address() as any).port}/v1`;
+});
+
+test('current and historical images reach the Responses provider as image inputs', async () => {
+  const agent = await createBotAgent({
+    model: { id: 'vision', name: '测试', baseUrl: url, modelId: 'test', contextWindow: 32000, maxTokens: 1000 },
+    apiKey: SECRET, cwd: dir, agentDir: join(dir, 'vision'), systemPrompt: '测试',
+    history: [{ role: 'user', content: '上次的图片', images: [picture] }, { role: 'assistant', content: '已看到' }], tools: [],
+  });
+  try {
+    await agent.prompt('直接回答', () => {}, [picture]);
+    const turns = requests.at(-1).body.input.filter((m: any) => m.role === 'user');
+    assert.equal(turns.length, 2);
+    // Pi may normalize/re-encode the current image before sending it.
+    for (const turn of turns) assert.ok(turn.content.some((part: any) => part.type === 'input_image' && /^data:image\/(png|jpeg|webp);base64,\S+$/.test(part.image_url)), JSON.stringify(turn));
+  } finally { agent.dispose(); }
 });
 
 test("tool-round remarks are kept in full and do not pollute final streaming", async () => {

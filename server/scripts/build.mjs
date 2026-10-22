@@ -5,6 +5,7 @@ const root = resolve(import.meta.dirname, "../..");
 const workspace = {
   name: "pi-bot-workspace",
   setup(build) {
+    build.onResolve({ filter: /^@pi-bot\/agent\/images$/ }, () => ({ path: resolve(root, 'packages/agent/src/images.ts') }));
     build.onResolve({filter:/^zod$/}, args => args.importer.includes("packages/a2ui/") ? {path:createRequire(resolve(root,"packages/a2ui/package.json")).resolve("zod")} : undefined);
     build.onResolve({ filter: /^@pi-bot\/(agent|bot-face|a2ui)$/ }, (args) => ({
       path: resolve(root, "packages", args.path.split("/")[1], "src/index.ts"),

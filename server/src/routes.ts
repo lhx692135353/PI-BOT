@@ -1,6 +1,8 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import type { ChatImage } from '@pi-bot/agent/images';
+import { imagesSchema } from './images.js';
 import { fail, type Database, type Row, type Tx } from "./db.js";
 import type { Settings } from "./config.js";
 import type { Hub } from "./hub.js";
@@ -388,14 +390,24 @@ export const routes: Route[] = [
   },
   {
     method: "POST", path: "/bots/:id/messages", auth: "actor", tag: "bots", summary: "给 Bot 发消息；电脑在线时在电脑上运行，否则在云端运行",
-    body: z.object({ text: z.string().trim().min(1).max(100000), request_id: z.string().min(8).max(80) }),
+    body: z.object({ text: z.string().trim().max(100000).default(''), images: imagesSchema.default([]), request_id: z.string().min(8).max(80) }).refine(body => body.text.length > 0 || body.images.length > 0, '请填写消息或选择图片'),
     handler: async ({ db, tx, s, hub, user, params, body, after }) => {
       await ownBot(tx,user.user_id,params.id,true);
       const conn = await botConnection(tx,hub,user.user_id,params.id);
-      const { run, created } = await postMessage(tx, user.user_id, params.id, body.text, body.request_id, conn ? { deviceId: conn.deviceId } : null);
+      const { run, created } = await postMessage(tx, user.user_id, params.id, body.text, body.request_id, conn ? { deviceId: conn.deviceId } : null, body.images);
       if (created && run.executor === "device") after(() => dispatchDevice(db, s, hub, run.run_id));
       const messages = await tx.rows("SELECT * FROM bot_messages WHERE message_id = ANY($1) ORDER BY seq", [[run.user_message_id, run.assistant_message_id]]);
       return { run: runOut(run), messages: messages.map((m) => messageOut(m)) };
+    },
+  },
+  {
+    method: 'GET', path: '/bots/:id/messages/:messageId/images/:imageId', auth: 'actor', tag: 'bots', summary: '读取消息图片',
+    handler: async ({ tx, user, params }) => {
+      await ownBot(tx, user.user_id, params.id);
+      const message = await tx.one("SELECT images FROM bot_messages WHERE message_id=$1 AND bot_id=$2 AND visibility='public'", [params.messageId, params.id]);
+      const image = message?.images.find((image: ChatImage & { id: string }) => image.id === params.imageId);
+      if (!image) fail(404, '图片不存在');
+      return image;
     },
   },
   {

@@ -32,7 +32,7 @@ const server = createServer(socket => {
   const timer = setTimeout(() => { if (!authed) socket.destroy(); }, 5000);
   socket.on('error', () => {}); socket.on('close', () => { clearTimeout(timer); peers.delete(socket); });
   socket.on('data', data => {
-    buffer += data.toString('utf8'); if (buffer.length > 1_000_000) { socket.destroy(); return; }
+    buffer += data.toString('utf8'); if (buffer.length > 8 * 1024 * 1024) { socket.destroy(); return; }
     let i: number;
     while ((i = buffer.indexOf('\n')) >= 0) {
       const line = buffer.slice(0, i); buffer = buffer.slice(i + 1);

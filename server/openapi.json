@@ -984,9 +984,43 @@
                 "type": "object",
                 "properties": {
                   "text": {
+                    "default": "",
                     "type": "string",
-                    "minLength": 1,
                     "maxLength": 100000
+                  },
+                  "images": {
+                    "default": [],
+                    "maxItems": 4,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 255
+                        },
+                        "mime_type": {
+                          "type": "string",
+                          "enum": [
+                            "image/jpeg",
+                            "image/png",
+                            "image/webp",
+                            "image/gif"
+                          ]
+                        },
+                        "data": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 2796204
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "mime_type",
+                        "data"
+                      ]
+                    }
                   },
                   "request_id": {
                     "type": "string",
@@ -995,13 +1029,65 @@
                   }
                 },
                 "required": [
-                  "text",
                   "request_id"
                 ]
               }
             }
           }
         },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "{ detail }"
+          }
+        }
+      }
+    },
+    "/bots/{id}/messages/{messageId}/images/{imageId}": {
+      "get": {
+        "tags": [
+          "bots"
+        ],
+        "summary": "读取消息图片",
+        "security": [
+          {
+            "UserBearer": []
+          },
+          {
+            "DeviceSignature": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "messageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "imageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK"

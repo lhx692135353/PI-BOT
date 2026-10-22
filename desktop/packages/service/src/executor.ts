@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { ChatImage } from '@pi-bot/agent/images';
 import { join } from 'node:path';
 import { a2uiTools, askAgentTool, taskTools, automationTools, CANCELLED, createBotAgent, webSearchTool, type AgentFactory, type AgentHandle, type ToolActivity, type SkillSummary } from '@pi-bot/agent';
 import type { Mood } from '@pi-bot/bot-face';
@@ -18,8 +19,9 @@ export interface RunContext {
   bot: { id: string; name: string; slug: string };
   model: { id: string; name: string; context_window: number; max_tokens: number };
   system: string;
-  history: { role: 'user' | 'assistant'; content: string }[];
+  history: { role: 'user' | 'assistant'; content: string; images?: ChatImage[] }[];
   text: string;
+  images?: ChatImage[];
   search_enabled?: boolean;
   agents_enabled?: boolean;
   skills?: SkillSummary[];
@@ -155,7 +157,7 @@ export class Executor {
         latest = text;
         if (Date.now() - lastSent > 150) flush();
         else pendingText ??= setTimeout(flush, 150);
-      });
+      }, run.images);
       clearTimeout(pendingText);
       event({ kind: 'done', state: 'completed', text: final });
       this.deps.activity(run, null, run.automation ? null : 'celebrate');

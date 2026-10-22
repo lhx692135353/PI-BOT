@@ -2,6 +2,8 @@ package dev.pibot.android
 
 import dev.pibot.android.data.ApiException
 import dev.pibot.android.data.BotInput
+import dev.pibot.android.data.ChatImage
+import kotlinx.serialization.json.jsonArray
 import dev.pibot.android.data.PiBotApi
 import dev.pibot.android.data.PiBotRepository
 import dev.pibot.android.data.Session
@@ -144,6 +146,25 @@ class RepositoryTest {
         val e = assertThrows(ApiException::class.java) { runBlocking { repo.login(base(), "bob", "nope") } }
         assertEquals("用户名或密码错误", e.message)
         assertNull(repo.session.first())
+    }
+
+    @Test
+    fun imageOnlyMessagesSendAndLoadThroughAuthenticatedApi() = runBlocking {
+        login()
+        val image = ChatImage("pixel.png", "image/png", "aW1hZ2U=")
+        val user = msg("m1", 1, "user", "", "completed").dropLast(1) + """, "images":[{"id":"i1","name":"pixel.png","mime_type":"image/png"}]}"""
+        respond(200, """{"run":$RUN,"messages":[$user]}""")
+        repo.send("b1", "", "request-1", listOf(image))
+        val request = server.takeRequest()
+        val body = Json.parseToJsonElement(request.body.readUtf8()).jsonObject
+        assertEquals("", body["text"]!!.jsonPrimitive.content)
+        assertEquals(image.data, body["images"]!!.jsonArray.single().jsonObject["data"]!!.jsonPrimitive.content)
+        assertEquals("i1", repo.timeline("b1").first().messages.single().images.single().id)
+        respond(200, """{"name":"pixel.png","mime_type":"image/png","data":"aW1hZ2U="}""")
+        assertEquals(image, repo.image("b1", "m1", "i1"))
+        val read = server.takeRequest()
+        assertEquals("/pibot/bots/b1/messages/m1/images/i1", read.path)
+        assertEquals("Bearer tok", read.getHeader("Authorization"))
     }
 
     @Test

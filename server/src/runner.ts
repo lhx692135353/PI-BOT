@@ -1,5 +1,6 @@
 import Fastify from "fastify";
 import { z } from "zod";
+import { imagesSchema } from './images.js';
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { timingSafeEqual } from "node:crypto";
@@ -35,8 +36,9 @@ const requestSchema = z.object({
       max_tokens: z.number().int().positive(),
     }),
     system: z.string(),
-    history: z.array(z.object({ role: z.enum(["user", "assistant"]), content: z.string() })),
+    history: z.array(z.object({ role: z.enum(["user", "assistant"]), content: z.string(), images: imagesSchema.optional() })),
     text: z.string().min(1),
+    images: imagesSchema.optional(),
     search_enabled: z.boolean().default(false),
     agents_enabled: z.boolean().default(false),
     skills: z.array(z.object({ name: z.string().max(64), description: z.string().max(1024), version: z.number().int().positive() })).max(64).default([]),
@@ -153,7 +155,7 @@ export async function createRunner(options: { token: string; dir: string; factor
       for (const i of initial) emit({ type: "instruction_ack", id: i.id });
       state.prompted = true;
       const input = p.run.text + initial.map(i => `\n\n用户追加要求：\n${i.text}`).join("");
-      const text = await state.agent.prompt(input, (t) => emit({ type: "text", text: t }));
+      const text = await state.agent.prompt(input, (t) => emit({ type: "text", text: t }), p.run.images);
       emit({ type: "done", state: "completed", text });
     } catch (e) {
       const cancelled = state.cancelled || (e instanceof Error && e.message === CANCELLED);
