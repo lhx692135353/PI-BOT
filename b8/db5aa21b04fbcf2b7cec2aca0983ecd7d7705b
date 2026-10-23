@@ -1,0 +1,23 @@
+.github/workflows/android.yml
+  s_3cfe246c6f6464::t_fbaaa0c27d89c9 26
+.github/workflows/desktop.yml
+  s_3cfe246c6f6464::t_66ca11ee978324 13
+desktop/scripts/pack-mac.mjs
+  s_3cfe246c6f6464::t_3948d6c38177fb 14,18-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b8db5aa21b04fbcf2b7cec2aca0983ecd7d7705b",
+  "prompts": {},
+  "sessions": {
+    "s_3cfe246c6f6464": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b40046b4-9798-4bc1-8756-16c4242653a2",
+        "model": "grok-4.7"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
