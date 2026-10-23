@@ -1,0 +1,154 @@
+server/src/voice.ts
+  s_b17831623899de::t_ddc435602de9e4 479-480,482
+  s_b17831623899de::t_b045c1916247f7 9
+  s_b17831623899de::t_e3177bdbc6074c 177
+  s_b17831623899de::t_fe60005f1e5826 50
+  s_b17831623899de::t_8cfaf2b3a578da 51-52,54
+.github/workflows/android.yml
+  s_b17831623899de::t_0cbd8026e0df3a 3,6-8,11-13
+desktop/packages/service/src/application.ts
+  s_b17831623899de::t_31c2cff9aa54fd 207-209
+server/src/automations.ts
+  s_b17831623899de::t_7359a5ab743f4f 11,13-29,31-32,34,37-41,43-46,48-79,82-91,101,107,112-113,118,121,127-128,130-150,152-157,159-167,169,177,179,181,183-184,194,203,206,217-218,222,225-226,233,237,255,258-275,277-278,290,292-293,298-299,301-305,308,317-319,325-328,333,352,370,373,375
+  s_b17831623899de::t_1473f39e1a3a55 93-99,103-106,114-117,122-126
+  s_b17831623899de::t_fbad96cc9edb29 109-111
+  s_b17831623899de::t_400854e5982b08 119
+  s_b17831623899de::t_8f1c048dc01078 120
+  s_b17831623899de::t_0afd31b7eb8410 182
+  s_b17831623899de::t_d62dec380ce5f7 331
+desktop/apps/desktop/ui/main.tsx
+  s_b17831623899de::t_8b37eda9e552ab 204-205
+  s_b17831623899de::t_75375494f8a7f9 131
+  s_b17831623899de::t_ad507924d61e44 330
+  s_b17831623899de::t_06a8e6fc62a1fe 350-360
+  s_b17831623899de::t_a7f0ea5d3d5aaf 118-130,132-141,143-144,147-193
+  s_b17831623899de::t_b3e7654fc1d343 294
+  s_b17831623899de::t_9dc45a6d7cfbc8 1
+  s_b17831623899de::t_be169215eda2ab 313-319
+  s_b17831623899de::t_6ada629df21bd8 142,145-146
+packages/agent/src/automations.ts
+  s_b17831623899de::t_1187bdd3e02abd 15-19,21-22,24,27,30
+  s_b17831623899de::t_6de0d05c66bce0 44-45
+  s_b17831623899de::t_f926d37b7dcdc8 12,29,32-41
+  s_b17831623899de::t_d0eb3a732d8ba2 28,31,42-43
+server/tests/devices.test.ts
+  s_b17831623899de::t_2233f71936fee9 42-43
+server/src/llm.ts
+  s_b17831623899de::t_21238dc86c3826 117
+desktop/packages/service/src/executor.ts
+  s_b17831623899de::t_da922cfb61b1d4 17
+server/src/db.ts
+  s_b17831623899de::t_a1ee60ee1f0d93 27
+.github/workflows/desktop.yml
+  s_b17831623899de::t_9f33ac46daadc4 2-3,6-12,15-21
+server/src/runner.ts
+  s_b17831623899de::t_f944c6dce3d013 106
+server/tests/automations.test.ts
+  s_b17831623899de::t_fb6e9fb9d1f6f8 284-286
+  s_b17831623899de::t_504ccbbb0abe2a 13,19,34-41,47-50,52,55,57-65,67-68,83,97-98,103-130,140-141,149-152,155,172,174-175,184,186,189-190,192-194,197-198,202-203,205-207,209-210,213,231,235-236,242,244,254-257,259-261,264-270,287-289,293-296,299-300,304,314-315,317,320-324,326,329-337,339-345,347-349
+  s_b17831623899de::t_3f9fe0dee68c9d 10
+  s_b17831623899de::t_7f192d6c04f471 273,275-283
+packages/agent/tests/agent.test.ts
+  s_b17831623899de::t_dfea3b0512e3b0 28
+  s_b17831623899de::t_c91dd23852f73b 19
+server/migrations/0013-goals.sql
+  s_b17831623899de::t_587e3d0e908603 1-51
+desktop/apps/desktop/ui/bot-list-item.tsx
+  s_b17831623899de::t_d171b4f5d0cdac 29
+  s_b17831623899de::t_7d9ead3bed87f5 1
+  s_b17831623899de::t_e4c1dae56d53dd 6,12
+desktop/apps/desktop/ui/editor.tsx
+  s_b17831623899de::t_5acb98229a1236 19
+desktop/tests/harness-e2e.test.ts
+  s_b17831623899de::t_63c1ad8cd5b80a 44-46
+  s_b17831623899de::t_fb479edc38c15b 34,36-43,48,51
+  s_b17831623899de::t_8764bbf9c30f72 252,256,270-272,280,283-290,297
+desktop/REQUIREMENTS.md
+  s_b17831623899de::t_1499ae6cb47de7 42-45
+android/app/src/main/java/dev/pibot/android/ui/BotEditorScreen.kt
+  s_b17831623899de::t_bb916210eba66c 210
+desktop/apps/desktop/ui/style.css
+  s_b17831623899de::t_832f58d011f472 85
+  s_b17831623899de::t_d61bdbc86f38ae 90-91,94-112
+android/REQUIREMENTS.md
+  s_b17831623899de::t_1a6caf69e88021 50-53
+server/src/bots.ts
+  s_b17831623899de::t_c8cdbf7c8dfdd6 12
+  s_b17831623899de::t_a97f58dd2e7d00 669
+  s_b17831623899de::t_65a2d7b21328bd 532-533
+  s_b17831623899de::t_b79d90e69b5d33 534
+  s_b17831623899de::t_1af8c576007ff1 402
+  s_b17831623899de::t_49622ef4b866cb 379
+  s_b17831623899de::t_0979cd84c76937 166
+  s_b17831623899de::t_f9e96dec0dd428 595
+  s_b17831623899de::t_d24dbcdbf81020 687
+README.md
+  s_b17831623899de::t_646f10df3e7b7a 29
+  s_b17831623899de::t_11373bc09f7ea1 13
+  s_b17831623899de::t_302d1e772796e5 129,133-135,137
+server/src/routes.ts
+  s_b17831623899de::t_d674e6524f32bd 149
+  s_b17831623899de::t_0e6ba6c8cb5b58 152-155
+  s_b17831623899de::t_f0a28e9ba265fd 40
+  s_b17831623899de::t_7a8467b38276d8 384
+  s_b17831623899de::t_8e3dc8e8cf337e 364-366
+  s_b17831623899de::t_a4c04c8757e049 363
+packages/agent/src/hermes-memory/extension.ts
+  s_b17831623899de::t_26861d9ac122f1 92
+desktop/README.md
+  s_b17831623899de::t_a1a9f56856cb25 16
+  s_b17831623899de::t_92cd9a47f29760 101,103,107-110,112
+desktop/LINUX.md
+  s_b17831623899de::t_f83a57af666516 84
+server/tests/integration.test.ts
+  s_b17831623899de::t_114961a1cbb879 357
+server/src/memory.ts
+  s_b17831623899de::t_904ce19422b8e9 98
+server/ARCHITECTURE.md
+  s_b17831623899de::t_99e50497448121 211,213,215-222,224
+  s_b17831623899de::t_83465cec92539d 233
+android/ARCHITECTURE.md
+  s_b17831623899de::t_f2959be074f370 233
+  s_b17831623899de::t_cc95ee12851999 211,213,215-222,224
+desktop/packages/protocol/src/index.ts
+  s_b17831623899de::t_247b93ad122b6e 33-35
+server/src/agents.ts
+  s_b17831623899de::t_90742da54d0fdf 244
+  s_b17831623899de::t_4bfb1999f356ab 106-107
+server/REQUIREMENTS.md
+  s_b17831623899de::t_024b16794c7d71 62-65
+packages/agent/src/index.ts
+  s_b17831623899de::t_93d25ae48771c2 221
+server/src/migrate.ts
+  s_b17831623899de::t_2cf22a6b442031 4
+server/README.md
+  s_b17831623899de::t_4c8f99f074a7d7 42
+  s_b17831623899de::t_f0ccbf0ed7e477 77,79,83-86,88
+desktop/ARCHITECTURE.md
+  s_b17831623899de::t_095d4600349b01 211,213,215-222,224
+  s_b17831623899de::t_0f312fc67ad6b2 233
+docs/MAINTAINING.md
+  s_b17831623899de::t_7f3c8511f42571 87-91
+server/src/skills.ts
+  s_b17831623899de::t_e49a8ee87894e9 46
+android/README.md
+  s_b17831623899de::t_7929eeac39ed1a 54,56,60-63,65
+packages/agent/src/skills.ts
+  s_b17831623899de::t_20930ac3b24325 16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "802f5f7c2955284966f8fca826726871572b1cd6",
+  "prompts": {},
+  "sessions": {
+    "s_b17831623899de": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "16cef3a0-1b43-46b5-bdf8-a4fbf2bc847f",
+        "model": "grok-4.7"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
