@@ -1,0 +1,31 @@
+.github/workflows/desktop.yml
+  s_3cfe246c6f6464::t_f0db1ba186d5bf 16
+  s_3cfe246c6f6464::t_fe82f03feb79f9 26,30-31
+  s_3cfe246c6f6464::t_0f84029b5e78eb 51-56
+desktop/README.md
+  s_3cfe246c6f6464::t_11259504ab08f1 16
+docs/MAINTAINING.md
+  s_3cfe246c6f6464::t_6f0867369e1c1b 106
+  s_3cfe246c6f6464::t_548a054c5e1ab5 108
+  s_3cfe246c6f6464::t_bd19e545ace2e3 87-89
+android/README.md
+  s_3cfe246c6f6464::t_9fea67a575737c 33-34
+.github/workflows/android.yml
+  s_3cfe246c6f6464::t_9974e606a1bff8 1-39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "34d8f804f08e264af1c9813fd96a1861e3397f1c",
+  "prompts": {},
+  "sessions": {
+    "s_3cfe246c6f6464": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b40046b4-9798-4bc1-8756-16c4242653a2",
+        "model": "grok-4.7"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
