@@ -31,21 +31,24 @@ async function scriptedProvider(outside: string) {
     const toolDone = isRealToolResult(messages);
     const results = realToolOutputs(messages).map(m => text(m.output));
     let reply: { text?: string; tool?: { name: string; args: object } };
+    const goalId = user.match(/"id":"([0-9a-f-]{36})"/)?.[1];
     if (user === '建立自动检查链路测试') reply = toolDone
-      ? { text: '已建立长期委托，重要结果会告诉你。' }
-      : { tool: { name: 'automation_manage', args: { action: 'create', title: '自动检查链路测试', goal: '把已授权的检查结论保存到自动记录文件，完成后告知', authorization: '用户授权在自己的资料库创建 automation/result.txt', schedule: { type: 'interval', minutes: 10 } } } };
-    else if (user.startsWith('自动工作：自主巡检')) {
-      for (const name of ['write_file', 'edit_file', 'run_command', 'request_outside_access', 'ask_agent', 'skill_manage'])
-        assert.ok(!json.tools.some((t: any) => t.name === name), `readonly patrol exposed ${name}`);
-      assert.ok(json.tools.some((t: any) => t.name === 'read_file'));
-      if (!results.length) reply = { tool: { name: 'memory_manage', args: { action: 'list' } } };
-      else if (results.length === 1) reply = { tool: { name: 'automation_finish', args: { state: 'wait', summary: '没有新的重要变化', notify: false, reason: '已检查自己的记忆' } } };
-      else reply = { text: 'PRIVATE 静默巡检输出' };
+      ? { text: '已建立目标，有进展会告诉你。' }
+      : { tool: { name: 'goal_manage', args: { action: 'create', title: '自动检查链路测试', goal: '把已授权的检查结论保存到自动记录文件，完成后告知', authorization: '用户授权在自己的资料库创建 automation/result.txt' } } };
+    else if (user === '建立一个会保持安静的目标') reply = toolDone
+      ? { text: '已记下这个目标。' }
+      : { tool: { name: 'goal_manage', args: { action: 'create', title: '静默目标', goal: '没有新进展就保持安静', authorization: '没有明确下一步时不要改文件' } } };
+    else if (user.startsWith('目标检查') && user.includes('静默目标')) {
+      assert.ok(json.tools.some((t: any) => t.name === 'write_file'));
+      assert.ok(!json.tools.some((t: any) => t.name === 'ask_agent'), 'goal review exposed ask_agent');
+      reply = results.length
+        ? { text: 'PRIVATE 静默检查输出' }
+        : { tool: { name: 'goal_finish', args: { goals: [{ id: goalId, state: 'continue', progress: '没有新的重要变化', notify: false, reason: '已检查' }] } } };
     }
-    else if (user.startsWith('自动工作：自动检查链路测试')) {
+    else if (user.startsWith('目标检查') && user.includes('自动检查链路测试')) {
       if (!results.length) reply = { tool: { name: 'write_file', args: { path: 'automation/result.txt', content: '自动检查已完成' } } };
       else if (results.length === 1) reply = { tool: { name: 'task_checkpoint', args: { goal: '保存检查结果', completed: ['已保存 automation/result.txt'], findings: [], artifacts: ['automation/result.txt'], blockers: [], next_steps: [] } } };
-      else if (results.length === 2) reply = { tool: { name: 'automation_finish', args: { state: 'complete', summary: '自动检查已完成，文件已保存。', notify: true, reason: '交付了约定成果', category: 'milestone', notification_key: 'automation-test:file-v1' } } };
+      else if (results.length === 2) reply = { tool: { name: 'goal_finish', args: { goals: [{ id: goalId, state: 'continue', progress: '自动检查已完成，文件已保存。', notify: true, reason: '交付了约定成果', notification_key: 'automation-test:file-v1', checkpoint: { completed: ['已保存 automation/result.txt'] } }] } } };
       else reply = { text: 'PRIVATE 自动轮次内部输出' };
     }
     else if (user.startsWith('这是你之前委托给')) reply = { text: user.split('结果：\n').at(-1)! };
@@ -246,11 +249,11 @@ test('the Mac manages its own skills privately and stores them for cloud reuse',
   assert.ok(context.skills.some(skill => skill.name === 'computer-report'));
 });
 
-test('natural-language commission runs on the real Mac agent with durable writes, checkpoints and one public report', { skip }, async () => {
+test('a goal runs on the real computer, writes its result, and reports new progress once', { skip }, async () => {
   const bot = await app.call('botCreate', { name: '自动检查员', persona: '' , avatar: { shape: 'bean', color: 'mint', scheme: 'light' } }) as Bot;
   await app.call('send', { botId: bot.id, text: '建立自动检查链路测试' });
   const automation = await eventually(async () => {
-    const a = await serverDb.tx(tx => tx.one("SELECT * FROM bot_automations WHERE bot_id=$1 AND kind='commission'", [bot.id]));
+    const a = await serverDb.tx(tx => tx.one("SELECT * FROM bot_automations WHERE bot_id=$1 AND kind='review'", [bot.id]));
     const running = await serverDb.tx(tx => tx.one("SELECT 1 FROM bot_runs WHERE bot_id=$1 AND lane='conversation' AND status IN ('queued','running')", [bot.id]));
     return a && !running && a;
   });
@@ -264,9 +267,9 @@ test('natural-language commission runs on the real Mac agent with durable writes
   }, 20000);
   assert.equal(report.status, 'completed');
   assert.equal(readFileSync(join(dir, 'pi-bot', bot.slug, 'automation/result.txt'), 'utf8'), '自动检查已完成');
-  const state = await serverDb.tx(tx => tx.get('bot_automations', automation.automation_id));
-  assert.equal(state.status, 'enabled', 'completing an occurrence preserves the periodic commission');
-  assert.deepEqual(state.checkpoint.completed, ['已保存 automation/result.txt']);
+  const goal = await serverDb.tx(tx => tx.one('SELECT * FROM bot_goals WHERE bot_id=$1', [bot.id]));
+  assert.equal(goal!.status, 'active');
+  assert.deepEqual(goal!.checkpoint.completed, ['已保存 automation/result.txt']);
   const round = await serverDb.tx(tx => tx.one('SELECT r.* FROM bot_runs r JOIN automation_rounds ar ON ar.run_id=r.run_id WHERE ar.automation_id=$1', [automation.automation_id]));
   assert.ok(round!.automation_calls >= 4 && round!.automation_calls <= 20);
   assert.equal(round!.effect_pending, false);
@@ -274,19 +277,24 @@ test('natural-language commission runs on the real Mac agent with durable writes
   assert.deepEqual(effects.map(x => x.status), ['confirmed']);
   const page = await app.call('messages', { botId: bot.id }) as MessagePage;
   assert.equal(page.messages.filter(m => m.content === report.content).length, 1);
-  assert.doesNotMatch(JSON.stringify(page), /PRIVATE|automation_finish|task_checkpoint|用户授权范围/);
+  assert.doesNotMatch(JSON.stringify(page), /PRIVATE|goal_finish|task_checkpoint|用户授权范围/);
 });
 
-test('real Mac patrol only gets read tools and completes without adding a chat message or moving visible activity', { skip }, async () => {
-  const bot = await app.call('botCreate', { name: '静默巡检员', persona: '', avatar: { shape: 'bean', color: 'mint', scheme: 'light' } }) as Bot;
-  const previous = await serverDb.tx(tx => tx.get('bots', bot.id));
+test('a quiet goal review can act but stays silent and does not move visible activity', { skip }, async () => {
+  const bot = await app.call('botCreate', { name: '静默检查员', persona: '', avatar: { shape: 'bean', color: 'mint', scheme: 'light' } }) as Bot;
+  await app.call('send', { botId: bot.id, text: '建立一个会保持安静的目标' });
+  const previous = await eventually(async () => {
+    const goal = await serverDb.tx(tx => tx.one("SELECT 1 FROM bot_goals WHERE bot_id=$1", [bot.id]));
+    const running = await serverDb.tx(tx => tx.one("SELECT 1 FROM bot_runs WHERE bot_id=$1 AND lane='conversation' AND status IN ('queued','running')", [bot.id]));
+    return goal && !running && serverDb.tx(tx => tx.get('bots', bot.id));
+  });
   await serverDb.tx(async tx => {
     await tx.rows('UPDATE bot_automations SET next_wake_at=now() WHERE bot_id=$1', [bot.id]);
     await tx.notify({ user_id: previous.user_id, bot_id: bot.id });
   });
   await eventually(async () => serverDb.tx(tx => tx.one("SELECT ar.* FROM automation_rounds ar JOIN bot_automations a USING(automation_id) WHERE a.bot_id=$1 AND ar.status='completed'", [bot.id])), 20000);
   const page = await app.call('messages', { botId: bot.id }) as MessagePage;
-  assert.deepEqual(page.messages, []);
+  assert.ok(!page.messages.some(m => m.content === '没有新的重要变化'));
   const current = await serverDb.tx(tx => tx.get('bots', bot.id));
   assert.equal(current.last_active_at.getTime(), previous.last_active_at.getTime());
   await app.call('botDelete', { id: bot.id });

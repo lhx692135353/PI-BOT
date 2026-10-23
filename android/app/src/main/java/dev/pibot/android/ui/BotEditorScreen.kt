@@ -207,7 +207,7 @@ fun BotEditorScreen(repository: PiBotRepository, botId: String?, onDone: (String
     if (confirmDeviceChange) AlertDialog(
         onDismissRequest = { confirmDeviceChange = false },
         title = { Text("更换执行电脑？") },
-        text = { Text("使用目标电脑自己的资料库，不会复制原有文件。自动工作将暂停，需要重新确认后恢复。") },
+        text = { Text("使用目标电脑自己的资料库，不会复制原有文件。目标检查将暂停，需要重新确认后恢复。") },
         confirmButton = { TextButton(onClick = { confirmDeviceChange = false; save(true) }) { Text("更换并保存") } },
         dismissButton = { TextButton(onClick = { confirmDeviceChange = false }) { Text("取消") } },
     )

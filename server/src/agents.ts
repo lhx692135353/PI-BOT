@@ -103,8 +103,8 @@ export async function createTask(
   body: { run_id: string; agent?: string; task: string; wait: boolean; kind?: "background" | "delegation"; title?: string; request_id?: string;resumed_from?:string; execution?: "device" | "cloud" },
 ) {
   const parent = await callerRun(tx, userId, claims, body.run_id);
-  if (parent.automation_readonly) fail(403, "自主巡检不能创建任务或委托其他 Bot");
-  if (parent.execution_policy === "device_only" && !body.wait) fail(422, "自动工作中的协作必须同步等待，不能另行向用户回报");
+  if (parent.origin === "automation" || parent.automation_readonly) fail(403, "目标检查不能把工作交给其他智能体");
+  if (parent.execution_policy === "device_only" && !body.wait) fail(422, "目标检查中的协作必须同步等待，不能另行向用户回报");
   const kind = body.kind ?? "delegation";
   if (body.request_id) {
     const old = await tx.one("SELECT t.*, b.name AS bot_name FROM agent_tasks t JOIN bots b ON b.bot_id=t.target_bot_id WHERE t.parent_run_id=$1 AND t.request_id=$2", [parent.run_id, body.request_id]);
@@ -241,7 +241,7 @@ export async function cancelTask(tx: Tx, hub: Hub, userId: string, claims: LlmCl
 export async function reportLater(tx: Tx, userId: string, claims: LlmClaims, taskId: string, s: Settings) {
   const t = await ownTask(tx, userId, claims, taskId, true);
   const parent = await tx.get("bot_runs", t.parent_run_id);
-  if (parent?.execution_policy === "device_only") fail(422, "自动工作中的协作只能返回本轮，不能改为公开回报");
+  if (parent?.execution_policy === "device_only") fail(422, "目标检查中的协作只能返回本轮，不能改为公开回报");
   if (TERMINAL.includes(t.status) || t.mode === "report") {
     if (parent?.waiting_on_task_id && !await resumeExecution(tx, parent, s)) fail(409, "等待执行名额后继续");
     return agentTaskOut(t);

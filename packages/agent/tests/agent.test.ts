@@ -16,7 +16,7 @@ const requests: any[] = [];
 const checkpoints: any[] = [];
 let server: ReturnType<typeof createServer>, url: string, dir: string;
 
-test("readonly patrol activates its finish and checkpoint tools without skill management or execution tools", async () => {
+test("a goal review exposes its finish and checkpoint tools without skill management when read only", async () => {
   const agent = await createBotAgent({
     model: { id: "patrol", name: "巡检", baseUrl: url, modelId: "test", contextWindow: 32000, maxTokens: 1000 },
     apiKey: SECRET, cwd: dir, agentDir: join(dir, "patrol"), systemPrompt: "只读巡检", history: [], readonly: true,
@@ -25,7 +25,7 @@ test("readonly patrol activates its finish and checkpoint tools without skill ma
     memory: { baseUrl: url, token: () => SECRET, runId: "patrol", lane: "task", context: "", readonly: true },
   });
   try {
-    assert.ok(agent.tools.includes("automation_finish"));
+    assert.ok(agent.tools.includes("goal_finish"));
     assert.ok(agent.tools.includes("task_checkpoint"));
     assert.ok(agent.tools.includes("skill_load"));
     for (const name of ["skill_manage", "resume_task", "run_command", "write_file", "edit_file", "ask_agent"])

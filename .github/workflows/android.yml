@@ -1,9 +1,16 @@
 name: Android
 
+# 只在 Android 工程或本工作流有改动时测试并上传 debug APK。
 on:
   pull_request:
+    paths:
+      - "android/**"
+      - ".github/workflows/android.yml"
   push:
     branches: [main]
+    paths:
+      - "android/**"
+      - ".github/workflows/android.yml"
   workflow_dispatch:
 
 permissions:

@@ -1,4 +1,4 @@
-import { StrictMode, useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { StrictMode, useCallback, useEffect, useRef, useState, type FormEvent, type MouseEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import { PiBot } from '@pi-bot/bot-face/react';
 import { DEFAULT_AVATAR, moodFor, sleepLabel, type Mood } from '@pi-bot/bot-face';
@@ -115,6 +115,82 @@ function Settings({ state, onClose, onOpenPhone }: { state: AccountState; onClos
   );
 }
 
+const GOAL_STATUS: Record<string, string> = { active: '进行中', paused: '已暂停', waiting_user: '等你决定', done: '已完成' };
+interface GoalItem { id: string; title: string; goal: string; status: string; progress: string | null }
+interface LibraryEntry { name: string; type: 'dir' | 'file'; size: number }
+interface LibraryFile { kind: 'text' | 'binary' | 'image'; name: string; content?: string; truncated?: boolean }
+
+function Inspector({ bot, local, onClose, onOpenLibrary }: { bot: Bot; local: boolean; onClose(): void; onOpenLibrary(): void }) {
+  const [tab, setTab] = useState<'goals' | 'library'>('goals');
+  const [goals, setGoals] = useState<GoalItem[] | null>(null);
+  const [goalError, setGoalError] = useState('');
+  const [path, setPath] = useState('');
+  const [entries, setEntries] = useState<LibraryEntry[] | null>(null);
+  const [libraryError, setLibraryError] = useState('');
+  const [file, setFile] = useState<LibraryFile | null>(null);
+  const libraryTicket = useRef(0);
+  useEffect(() => {
+    let live = true;
+    const load = () => {
+      void call<{ goals: GoalItem[] }>('goals', { id: bot.id }).then(r => { if (live) { setGoals(r.goals); setGoalError(''); } }).catch(e => { if (live) setGoalError(errorText(e)); });
+    };
+    load();
+    const unsubscribe = bridge.subscribe(event => { if (event.type === 'bot' && event.bot_id === bot.id) load(); });
+    return () => { live = false; unsubscribe(); };
+  }, [bot.id]);
+  const loadLibrary = useCallback((next: string) => {
+    const ticket = ++libraryTicket.current;
+    setPath(next); setFile(null); setEntries(null); setLibraryError('');
+    void call<{ path: string; entries: LibraryEntry[] }>('library', { id: bot.id, path: next })
+      .then(r => { if (ticket !== libraryTicket.current) return; setPath(r.path || ''); setEntries(r.entries); })
+      .catch(e => { if (ticket === libraryTicket.current) setLibraryError(/离线/.test(errorText(e)) ? '绑定电脑离线，资料库暂时看不了' : errorText(e)); });
+  }, [bot.id]);
+  useEffect(() => { if (tab === 'library') loadLibrary(''); }, [tab, loadLibrary]);
+  const parent = path.split('/').slice(0, -1).join('/');
+  return (
+    <aside className="inspector" aria-label={`${bot.name} 的目标和资料库`}>
+      <button type="button" className="ghost inspector-close" onClick={onClose} aria-label="关闭">×</button>
+      <PiBot avatar={bot.avatar} mood="idle" size={72} />
+      <h2>{bot.name}</h2>
+      <div className="inspector-tabs">
+        <button type="button" className={tab === 'goals' ? 'active' : ''} onClick={() => setTab('goals')}>目标</button>
+        <button type="button" className={tab === 'library' ? 'active' : ''} onClick={() => setTab('library')}>资料库</button>
+      </div>
+      {tab === 'goals' ? (
+        <div className="inspector-body">
+          {goalError && <p className="error small">{goalError}</p>}
+          {goals && !goals.length && <p className="muted small">还没有目标</p>}
+          {goals?.map(goal => (
+            <article key={goal.id} className="goal-card">
+              <header><strong>{goal.title}</strong><span>{GOAL_STATUS[goal.status] ?? goal.status}</span></header>
+              <p>{goal.goal}</p>
+              <p className="muted small">{goal.progress || '还没有进展'}</p>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="inspector-body">
+          {libraryError && <p className="error small">{libraryError}</p>}
+          {path && <button type="button" className="link" onClick={() => loadLibrary(parent)}>返回上一级</button>}
+          {entries?.map(entry => (
+            <button type="button" key={entry.name} className="library-entry" onClick={() => {
+              const next = path ? `${path}/${entry.name}` : entry.name;
+              if (entry.type === 'dir') loadLibrary(next);
+              else void call<LibraryFile>('libraryRead', { id: bot.id, path: next }).then(setFile).catch(e => setLibraryError(errorText(e)));
+            }}>
+              <span>{entry.type === 'dir' ? '文件夹' : '文件'}</span>
+              <strong>{entry.name}</strong>
+            </button>
+          ))}
+          {file?.kind === 'text' && <pre className="file-preview">{file.content}{file.truncated ? '\n…' : ''}</pre>}
+          {file && file.kind !== 'text' && <p className="muted small">这个文件不能在这里预览</p>}
+          {local && <button type="button" className="ghost" onClick={onOpenLibrary}>在文件管理器中打开</button>}
+        </div>
+      )}
+    </aside>
+  );
+}
+
 function App() {
   const [service, setService] = useState(false);
   const [account, setAccount] = useState<AccountState | null>(null);
@@ -125,6 +201,8 @@ function App() {
   const [pages, setPages] = useState<Record<string, { messages: Message[]; hasMore: boolean }>>({});
   const [activities, setActivities] = useState<Record<string, LocalActivity>>({});
   const [editor, setEditor] = useState<Bot | 'new' | null>(null);
+  const [menu, setMenu] = useState<{ bot: Bot; x: number; y: number } | null>(null);
+  const [inspector, setInspector] = useState(false);
   const [settings, setSettings] = useState(false);
   const [phoneTarget, setPhoneTarget] = useState<{ botId: string | null; deviceId: string | null } | null>(null);
   const [now, setNow] = useState(Date.now());
@@ -213,6 +291,7 @@ function App() {
                 summary={b.is_main && !b.latest_run && !b.last_message ? '主智能体 · 有什么想做的，告诉我' : statusLine(b, mood, now)}
                 selected={b.id === selected}
                 onSelect={() => setSelected(b.id)}
+                onContextMenu={(event: MouseEvent<HTMLButtonElement>) => setMenu({ bot: b, x: Math.min(event.clientX, window.innerWidth - 160), y: Math.min(event.clientY, window.innerHeight - 88) })}
               />
             );
           })}
@@ -231,13 +310,13 @@ function App() {
         {bot ? (
           <>
             <header className="bot-head">
-              <PiBot avatar={bot.avatar} mood={botMood(bot, activities[bot.id], now)} size={52} followPointer />
-              <div className="bot-title">
-                <h1>{bot.name}</h1>
-                <span className="muted small">{devices.find(d=>d.id===bot.execution_device_id)?.label ?? '未绑定电脑'} · {devices.find(d=>d.id===bot.execution_device_id)?.online ? '在线' : '离线，云端聊天'} · {bot.is_main ? '主智能体 · ' : ''}{models.find(m => m.id === bot.model_id)?.name ?? '默认模型'} · ~/pi-bot/{bot.slug}</span>
-              </div>
-              <button className="ghost" disabled={bot.execution_device_id !== account.deviceId} onClick={() => bridge.openLibrary(bot.id).catch(e => alert(errorText(e)))}>在文件管理器中打开资料库</button>
-              <button className="ghost" disabled={!online} onClick={() => setEditor(bot)}>编辑</button>
+              <button type="button" className="bot-identity" aria-expanded={inspector} onClick={() => setInspector(open => !open)}>
+                <PiBot avatar={bot.avatar} mood={botMood(bot, activities[bot.id], now)} size={52} followPointer />
+                <span className="bot-title">
+                  <h1>{bot.name}</h1>
+                  <span className="muted small">{devices.find(d=>d.id===bot.execution_device_id)?.label ?? '未绑定电脑'} · {devices.find(d=>d.id===bot.execution_device_id)?.online ? '在线' : '离线，云端聊天'} · {bot.is_main ? '主智能体 · ' : ''}{models.find(m => m.id === bot.model_id)?.name ?? '默认模型'} · ~/pi-bot/{bot.slug}</span>
+                </span>
+              </button>
               <button type="button" className="ghost" aria-label="打开手机预览" onClick={() => setPhoneTarget({ botId: bot.id, deviceId: null })}>手机</button>
             </header>
             <Timeline bot={bot} messages={page?.messages ?? []} hasMore={page?.hasMore ?? false} mood={botMood(bot, activities[bot.id], now)} online={online} onLoadMore={() => loadMore(bot.id)} onOpenBot={id => { if (bots.some(b => b.id === id)) setSelected(id); }} onSent={sent => {
@@ -248,6 +327,7 @@ function App() {
                 return { ...p, [bot.id]: { messages: [...byId.values()].sort((a, b) => a.seq - b.seq), hasMore: old?.hasMore ?? sent.has_more } };
               });
             }} />
+            {inspector && <Inspector key={bot.id} bot={bot} local={bot.execution_device_id === account.deviceId} onClose={() => setInspector(false)} onOpenLibrary={() => bridge.openLibrary(bot.id).catch(e => alert(errorText(e)))} />}
           </>
         ) : (
           <div className="empty">
@@ -267,6 +347,17 @@ function App() {
           </div>
         )}
       </main>
+      {menu && <>
+        <button type="button" className="menu-backdrop" aria-label="关闭菜单" onClick={() => setMenu(null)} />
+        <div className="bot-menu" style={{ left: menu.x, top: menu.y }}>
+          <button type="button" onClick={() => { setEditor(menu.bot); setMenu(null); }}>编辑</button>
+          {!menu.bot.is_main && <button type="button" className="danger" onClick={() => {
+            const target = menu.bot; setMenu(null);
+            if (!confirm(`删除「${target.name}」？对话会归档，资料库文件保留。`)) return;
+            void call('botDelete', { id: target.id }).then(() => { if (target.id === selected) setInspector(false); void loadBots(); }).catch(e => alert(errorText(e)));
+          }}>删除</button>}
+        </div>
+      </>}
       {phoneTarget && <PhoneDock botId={phoneTarget.botId ? bot?.id ?? phoneTarget.botId : null} pinnedDeviceId={phoneTarget.deviceId} devices={devices} executionDeviceId={phoneTarget.botId ? bot?.execution_device_id ?? null : null} onClose={() => setPhoneTarget(null)} />}
       {editor && <BotEditor bot={editor === 'new' ? undefined : editor} models={models} devices={devices} currentDeviceId={account.deviceId ?? null} onClose={() => setEditor(null)} onSaved={b => { setEditor(null); setSelected(b.id); void loadBots(); }} />}
       {settings && <Settings state={account} onClose={() => setSettings(false)} onOpenPhone={device => { setSettings(false); setPhoneTarget({ botId: null, deviceId: device.id }); }} />}

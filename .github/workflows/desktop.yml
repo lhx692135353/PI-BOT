@@ -1,8 +1,24 @@
 name: Desktop platforms
+# 只在桌面端、它打进安装包的共享包，或本工作流有改动时构建并上传。
+# 桌面 beta 通过 workflow_call 调用，推送标签时不受下面的路径限制。
 on:
   pull_request:
+    paths:
+      - "desktop/**"
+      - "packages/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.json"
+      - ".github/workflows/desktop.yml"
   push:
     branches: [main, feat/windows-client]
+    paths:
+      - "desktop/**"
+      - "packages/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.json"
+      - ".github/workflows/desktop.yml"
   workflow_dispatch:
   workflow_call:
 permissions:

@@ -9,7 +9,7 @@ import type { Settings } from "./config.js";
 import { searchAvailable } from "./search.js";
 import { directory, privateMemoryContext, forgottenContext, maskForgotten } from "./memory.js";
 import { estimateTokens } from "@earendil-works/pi-coding-agent";
-import { ensurePatrol, wakePatrol, automationForRun, settleAutomation } from "./automations.js";
+import { wakeGoals, automationForRun, settleAutomation } from "./automations.js";
 import { recordRun } from "./observations.js";
 import { checkDevice } from './devices.js';
 
@@ -163,7 +163,7 @@ export async function botOut(tx: Tx, b: Row) {
   const labels: Record<string, string> = { run_command: "正在运行命令", web_search: "正在查找资料", read_file: "正在阅读文件", write_file: "正在整理文件", edit_file: "正在修改文件", ask_agent: "正在等待协作结果" };
   const activity = { status, tool: activeTool?.name ?? null, running_count: running.length + autoRunning.length,
     queued_count: tasks.length - running.length + automatic.length - autoRunning.length,
-    summary: approvals.length ? "等你批准访问请求" : running.length > 1 ? `正在处理 ${running.length} 个任务` : running.length ? labels[activeTool?.name] ?? "正在处理任务" : autoRunning.length ? autoRunning.some(r => r.kind === "commission") ? "正在跟进" : "正在检查" : tasks.length ? `有 ${tasks.length} 个任务排队中` : run?.origin === "voice" && ACTIVE.includes(run.status) ? "语音通话中" : run && ACTIVE.includes(run.status) ? "正在思考" : null };
+    summary: approvals.length ? "等你批准访问请求" : running.length > 1 ? `正在处理 ${running.length} 个任务` : running.length ? labels[activeTool?.name] ?? "正在处理任务" : autoRunning.length ? "正在检查目标" : tasks.length ? `有 ${tasks.length} 个任务排队中` : run?.origin === "voice" && ACTIVE.includes(run.status) ? "语音通话中" : run && ACTIVE.includes(run.status) ? "正在思考" : null };
   return {
     id: b.bot_id,
     name: b.name,
@@ -225,7 +225,6 @@ export async function createBot(
     execution_device_id: target,
     avatar: input.avatar ?? avatarFor(id),
   });
-  await ensurePatrol(tx, id, userId);
   return bot;
 }
 export async function updateBot(
@@ -377,7 +376,7 @@ export async function insertRun(tx: Tx, o: NewRun) {
     executor,
     visibility: o.lane === "task" ? "task" : "public",
   });
-  if (!o.origin || o.origin === "user") await wakePatrol(tx, o.botId);
+  if (!o.origin || o.origin === "user") await wakeGoals(tx, o.botId);
   await tx.notify({ user_id: o.userId, bot_id: o.botId });
   return run;
 }
@@ -400,7 +399,7 @@ export interface RunContext {
   execution_policy?: "any" | "device_only";
   automation_readonly?: boolean;
   deadline_at?: string;
-  automation?: { id: string; kind: "patrol" | "commission"; version: number; checkpoint_version: number; checkpoint: Record<string, unknown> };
+  automation?: { id: string; kind: "review"; version: number; checkpoint_version: number; checkpoint: Record<string, unknown> };
   search_enabled: boolean;
   /** Whether the run may hand work to other bots through `ask_agent`. */
   agents_enabled: boolean;
@@ -530,9 +529,9 @@ export async function buildContext(
   const memoryContext=(privateContext+(run.lane==="task"&&taskRecord?`\n当前任务 ID：${taskRecord.task_id}；检查点版本：${taskRecord.checkpoint_version}\n检查点：${checkpointText.slice(0,4000)}${checkpointText.length>4000?'\n[检查点已截断，需要时用 task_status 读取完整版本]':''}`:'')).slice(0,12500);
   const automation = await automationForRun(tx, run);
   let system=systemPrompt(bot,maskForgotten(memory?.summary??'',forgotten),run.executor,{search,agents,depth,lane:run.lane});
-  if (run.lane === "conversation") system += "\n长期委托和自主巡检：用户说持续关注、定期检查或指定时间继续时，用 automation_manage 建立委托，记录用户的具体授权范围和时间规则；不要用一次性 start_task 代替。查询、调整、暂停、恢复、停止自动工作也使用该工具。全部操作仅在用户明确要求全部时使用 all=true。所有自动工作等待支持此能力的电脑在线，不在云端执行。创建前先查询，避免重复委托。";
-  if (automation) system += `\n你正在执行自动工作，当前时间 ${new Date().toISOString()}。本轮状态、检查点和通知决定必须调用 automation_finish 提交，然后结束；不要只用普通文字结束。没有重要变化时 notify=false。只有可交付成果、重要风险、需要用户决策或约定提醒才 notify=true，并提供根据事实生成的稳定 notification_key（同一事项同一状态不得换 key 重报）。每日/间隔委托的 complete 只完成本次，不停止后续周期；需要用户时 waiting_user。等待时不能睡眠或循环轮询，保存进度并安排至少一分钟后的唤醒。${automation.kind === "patrol" ? '这是默认只读巡检，只能检查和整理，不能执行命令、修改文件、委托其他 Bot 或自行新增目标；有已有授权的未完成工作时提出具体续接建议，不擅自恢复取消的任务。' : '仅执行委托记载的授权目标，不扩大范围。先核实检查点和操作结果，未知副作用不可重放。'}\n委托状态：${JSON.stringify({ id: automation.automation_id, version: automation.version, checkpoint_version: automation.checkpoint_version, checkpoint: automation.checkpoint })}`;
-  if (run.automation_readonly) system += "\n只读巡检中 memory_manage 仅允许 list/search，skill_manage 不可用。";
+  if (run.lane === "conversation") system += "\n目标：用户在追求一件会持续一段时间的事时，你自己用 goal_manage 记下，不要等用户说「建立目标」。记录目标说明和已经允许做的范围。不要用一次性 start_task 代替。查询、修改、暂停、恢复、完成和停止也使用该工具。全部操作仅在用户明确要求全部时使用 all=true。建立前先查询，避免重复。目标检查只在绑定电脑在线时进行，不在云端执行。";
+  if (automation) system += `\n你正在检查自己的目标，当前时间 ${new Date().toISOString()}。发现资料、记忆或未完成工作里有明确且尚未完成的事时，可以用 goal_manage 新建一个目标，本轮最多一个；没有新的授权时 authorization 写「在自己的资料库内推进」。先查询，避免重复。不要修改、暂停或停止已有目标。结束前必须调用 goal_finish，为当时每一个进行中目标提交状态，包括本轮新建的，然后结束。不要只用普通文字结束。没有新进展时 notify=false。只有可交付成果、重要变化或需要用户决定才 notify=true，并提供稳定的 notification_key；同一目标同一状态不得换 key。需要用户决定时 state=waiting_user。不要把工作交给其他智能体。只推进该目标授权范围内、且有明确下一步的事项。先核实检查点和操作结果，未知副作用不可重放。检查点版本：${automation.checkpoint_version}`;
+  if (run.automation_readonly) system += "\n本轮 memory_manage 仅允许 list/search，skill_manage 不可用。";
   const skills=await skillCatalog(tx,bot.bot_id);
   const instructions=run.task_id && run.lane === "task" ? (await tx.rows("SELECT instruction_id AS id, text FROM agent_task_instructions WHERE task_id=$1 AND delivered_at IS NULL ORDER BY created_at, instruction_id", [run.task_id])) as { id: string; text: string }[] : [];
   const tokens=(text:string)=>estimateTokens({role:"user",content:text,timestamp:0});
@@ -593,7 +592,7 @@ export async function buildContext(
     automation_readonly: run.automation_readonly,
     deadline_at: run.deadline_at ? new Date(run.deadline_at).toISOString() : undefined,
     automation: automation ? { id: automation.automation_id, kind: automation.kind, version: automation.version, checkpoint_version: automation.checkpoint_version, checkpoint: automation.checkpoint } : undefined,
-    agents_enabled: !run.automation_readonly && depth<MAX_DELEGATION_DEPTH,
+    agents_enabled: run.origin !== "automation" && !run.automation_readonly && depth<MAX_DELEGATION_DEPTH,
     skills,
   };
 }
@@ -667,7 +666,7 @@ export async function finishRun(
   if (!run || !ACTIVE.includes(run.status)) return null;
   let final = run.cancel_requested ? "cancelled" : state;
   if (run.origin === "automation") {
-    // User input locks the Bot before resetting its patrol. Keep the same order.
+    // User input locks the Bot before waking its goal review. Keep the same order.
     await tx.one("SELECT bot_id FROM bots WHERE bot_id=$1 FOR NO KEY UPDATE", [run.bot_id]);
     const settled = await settleAutomation(tx, run, final, error, now);
     final = settled.state as typeof final; error = settled.error;
@@ -685,7 +684,7 @@ export async function finishRun(
     [runId],
   );
   await tx.rows("UPDATE bots SET last_active_at=CASE WHEN $3 THEN now() ELSE last_active_at END,knowledge_dirty=knowledge_dirty OR $2,knowledge_revision=knowledge_revision+CASE WHEN $2 THEN 1 ELSE 0 END WHERE bot_id=$1", [run.bot_id,run.lane==='task'&&final==='completed'&&!run.automation_readonly,run.execution_policy!=="device_only"||run.origin==="report"]);
-  if (run.lane === "task" && run.execution_policy !== "device_only") await wakePatrol(tx, run.bot_id);
+  if (run.lane === "task" && run.execution_policy !== "device_only") await wakeGoals(tx, run.bot_id);
   if (run.origin === "agent" && run.task_id) {
     const reply = await tx.one("SELECT content FROM bot_messages WHERE message_id=$1", [run.assistant_message_id]);
     await tx.rows(`UPDATE agent_tasks SET checkpoint=checkpoint || jsonb_build_object('final_status',$2::text,'result',$3::text,'saved_at',now()),

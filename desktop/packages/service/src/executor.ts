@@ -14,7 +14,7 @@ export interface RunContext {
   execution_policy?: 'any' | 'device_only';
   automation_readonly?: boolean;
   deadline_at?: string;
-  automation?: { id: string; kind: 'patrol' | 'commission'; version: number; checkpoint_version: number; checkpoint: Record<string, unknown> };
+  automation?: { id: string; kind: 'review'; version: number; checkpoint_version: number; checkpoint: Record<string, unknown> };
   instructions?: { id: string; text: string }[];
   bot: { id: string; name: string; slug: string };
   model: { id: string; name: string; context_window: number; max_tokens: number };

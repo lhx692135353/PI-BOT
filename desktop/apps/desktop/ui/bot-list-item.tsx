@@ -1,14 +1,15 @@
-import { useState, type PointerEvent } from 'react';
+import { useState, type MouseEvent, type PointerEvent } from 'react';
 import { PiBot } from '@pi-bot/bot-face/react';
 import { spec, type Mood } from '@pi-bot/bot-face';
 import type { Bot } from '../../../packages/protocol/src/index.js';
 
-export function BotListItem({ bot, mood, summary, selected, onSelect }: {
+export function BotListItem({ bot, mood, summary, selected, onSelect, onContextMenu }: {
   bot: Bot;
   mood: Mood;
   summary: string;
   selected: boolean;
   onSelect(): void;
+  onContextMenu(event: MouseEvent<HTMLButtonElement>): void;
 }) {
   const [pointer, setPointer] = useState<{ x: number; y: number } | null>(null);
   const [focused, setFocused] = useState(false);
@@ -25,6 +26,7 @@ export function BotListItem({ bot, mood, summary, selected, onSelect }: {
       className={`bot-item ${bot.is_main ? 'main-bot' : ''} ${selected ? 'active' : ''}`}
       aria-pressed={selected}
       onClick={onSelect}
+      onContextMenu={event => { event.preventDefault(); onContextMenu(event); }}
       onPointerEnter={track}
       onPointerMove={track}
       onPointerLeave={() => setPointer(null)}

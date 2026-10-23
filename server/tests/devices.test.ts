@@ -39,7 +39,8 @@ test('multi-device upgrade preserves the original binding, history, memory and q
     assert.equal((await tx.get('bot_messages',message)).content,'Original history');
     assert.equal((await tx.get('bot_messages',message)).executor,'device');
     assert.equal((await tx.get('bot_memories',bot)).summary,'Original memory');
-    assert.equal((await tx.get('bot_automations',automation)).status,'waiting_device');
+    assert.equal(await tx.get('bot_automations',automation), undefined);
+    assert.equal((await tx.one('SELECT count(*) AS n FROM bot_goals WHERE bot_id=$1',[bot]))!.n, 0);
     for (const id of [queued,child]) {
       const task=await tx.get('agent_tasks',id);
       assert.equal(task.device_id,device); assert.equal(task.execution,'device');

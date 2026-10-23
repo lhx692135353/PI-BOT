@@ -24,6 +24,7 @@ const keys: Record<string, string> = {
   agent_tasks: "task_id",
   bot_skills: "skill_id",
   bot_automations: "automation_id",
+  bot_goals: "goal_id",
   automation_rounds: "round_id",
   automation_reports: "report_id",
 };

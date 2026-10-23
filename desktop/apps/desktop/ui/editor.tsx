@@ -16,7 +16,7 @@ export function BotEditor({ bot, models, devices = [], currentDeviceId, onClose,
     e.preventDefault();
     setSaving(true);
     try {
-      if (bot && deviceId !== (bot.execution_device_id ?? '') && !confirm('更换执行电脑后使用目标电脑自己的资料库，不会复制文件；自动工作将暂停，需要重新确认后恢复。')) { setSaving(false); return; }
+      if (bot && deviceId !== (bot.execution_device_id ?? '') && !confirm('更换执行电脑后使用目标电脑自己的资料库，不会复制文件；目标检查将暂停，需要重新确认后恢复。')) { setSaving(false); return; }
       const body = { name, persona, model_id: modelId || null, execution_device_id: deviceId || null, avatar };
       onSaved(bot ? await call<Bot>('botUpdate', { id: bot.id, ...body }) : await call<Bot>('botCreate', body));
     } catch (err) {

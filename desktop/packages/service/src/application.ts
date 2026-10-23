@@ -204,6 +204,9 @@ export class Application {
         if (!this.account || bot.execution_device_id !== this.account.deviceId) throw new Error('资料库位于另一台执行电脑，请在那台电脑上打开或使用手机浏览');
         return { slug: bot.slug };
       }
+      case 'goals': return this.cloud('GET', `/bots/${input.id}/goals`);
+      case 'library': return this.cloud('GET', `/bots/${input.id}/files?path=${encodeURIComponent(input.path ?? '')}`);
+      case 'libraryRead': return this.cloud('GET', `/bots/${input.id}/files/content?path=${encodeURIComponent(input.path)}`);
       case 'bots': return this.cloud<{ bots: Bot[] }>('GET', '/bots');
       case 'botCreate': return this.cloud<Bot>('POST', '/bots', input);
       case 'botUpdate': { const { id, ...patch } = input; return this.cloud<Bot>('PATCH', `/bots/${id}`, patch); }

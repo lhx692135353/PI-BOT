@@ -103,7 +103,7 @@ export async function createRunner(options: { token: string; dir: string; factor
     const parsed = requestSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(422).send({ error: "运行参数无效" });
     const p = parsed.data;
-    if (p.run.execution_policy === "device_only" || p.run.automation) return reply.code(403).send({ error: "自动工作仅允许电脑执行" });
+    if (p.run.execution_policy === "device_only" || p.run.automation) return reply.code(403).send({ error: "目标检查仅允许电脑执行" });
     if (active.has(p.run.run_id)) return reply.code(409).send({ error: "运行已存在" });
     const state: Running = { cancelled: (cancelledBeforeStart.get(p.run.run_id) ?? 0) > Date.now(), prompted: false,
       received: new Set(p.run.instructions.map(i => i.id)), pending: [...p.run.instructions] };

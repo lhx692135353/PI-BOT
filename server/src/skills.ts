@@ -43,7 +43,7 @@ async function saveVersion(tx: Tx, skill: Row, action: string, runId: string) {
 /** No user-facing endpoint: a live run and its bot-scoped token own every operation. */
 export async function manageSkill(tx: Tx, userId: string, claims: LlmClaims, body: z.infer<typeof skillRequest>) {
   const run = await callerRun(tx, userId, claims, body.run_id);
-  if (run.automation_readonly && !["load", "list", "history"].includes(body.action)) fail(403, "自主巡检不能修改技能");
+  if (run.automation_readonly && !["load", "list", "history"].includes(body.action)) fail(403, "当前轮次不能修改技能");
   const bot = await tx.one("SELECT bot_id FROM bots WHERE bot_id=$1 AND user_id=$2 AND archived_at IS NULL FOR UPDATE", [run.bot_id, userId]);
   if (!bot || run.cancel_requested) fail(404, "当前智能体或运行不可用");
   const botId = bot!.bot_id;

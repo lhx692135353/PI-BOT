@@ -1,12 +1,6 @@
 import { Type } from "typebox";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 
-const schedule = Type.Union([
-  Type.Object({ type: Type.Literal("adaptive") }),
-  Type.Object({ type: Type.Literal("once"), at: Type.String({ description: "ISO 8601，包含时区偏移" }) }),
-  Type.Object({ type: Type.Literal("interval"), minutes: Type.Integer({ minimum: 1, maximum: 525600 }) }),
-  Type.Object({ type: Type.Literal("daily"), time: Type.String({ pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$" }) }),
-]);
 export function automationTools(baseUrl: string, token: () => string, runId: string, automatic = false): ToolDefinition[] {
   const call = async (path: string, body: object, signal?: AbortSignal) => {
     const response = await fetch(`${baseUrl.replace(/\/+$/, "")}/agent/automations${path}`, {
@@ -15,35 +9,38 @@ export function automationTools(baseUrl: string, token: () => string, runId: str
       signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000),
     });
     const data = await response.json();
-    if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : "自动工作操作失败");
+    if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : "目标操作失败");
     return { content: [{ type: "text" as const, text: JSON.stringify(data) }], details: {} };
   };
-  if (automatic) return [{
-    name: "automation_finish", label: "保存本轮自动工作结果",
-    description: "自动轮次结束前必须调用一次，然后立即结束本轮。保存进度及下次唤醒；无重要变化 notify=false，重要成果、风险、决策或约定提醒才回报。同一事项同一状态使用相同 notification_key；有新证据或状态才换 key。周期性工作 complete 仅代表完成本次。",
+  const manage = (review: boolean): ToolDefinition => ({
+    name: "goal_manage", label: "管理目标",
+    description: review
+      ? "发现明确且尚未完成的事时可以新建一个目标，本轮最多一个。先 list 避免重复。create 必须给 goal；没有新的授权时 authorization 写「在自己的资料库内推进」。不能修改、暂停或停止已有目标。若本轮新建了目标，goal_finish 必须带上它。"
+      : "用户在追求一件会持续的事时自己记下目标，不要等用户说「建立目标」，立即返回。先 list 避免重复。create 必须给 goal 和已经允许做的范围 authorization。list 可查进度、检查点和 version；修改使用 expected_version。all=true 仅在用户明确要求全部时使用。暂停、完成或停止会使进行中的检查失效。目标检查等待绑定电脑在线，不在云端执行。",
     parameters: Type.Object({
-      state: Type.Union(["continue", "wait", "complete", "waiting_user"].map(x => Type.Literal(x))),
-      summary: Type.String({ minLength: 1, maxLength: 12000 }),
-      next_wake_at: Type.Optional(Type.String({ description: "至少一分钟后的 ISO 8601 时间，包含时区；不传遵循委托的时间规则" })),
-      notify: Type.Boolean(), reason: Type.String({ minLength: 1, maxLength: 1000 }),
-      category: Type.Optional(Type.Union(["milestone", "decision", "risk", "suggestion", "reminder"].map(x => Type.Literal(x)))),
-      notification_key: Type.Optional(Type.String({ minLength: 1, maxLength: 500 })),
-      checkpoint: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
-    }),
-    execute: async (_id, args: any, signal) => call("/finish", { decision: args }, signal),
-  }] as ToolDefinition[];
-  return [{
-    name: "automation_manage", label: "管理长期委托与自主巡检",
-    description: "用户要求持续关注、定期检查或以后继续时建立长期委托，立即返回。先 list 避免重复。create 必须给 goal、用户授权范围 authorization、schedule。list 可查检查点和 version；修改使用 expected_version。patrol=true 操作默认巡检；all=true 仅在用户明确要求全部时使用。暂停不再新建轮次并使旧结果失效，stop 还取消执行。全部自动工作等待绑定电脑在线。",
-    parameters: Type.Object({
-      action: Type.Union(["list", "create", "update", "pause", "resume", "stop"].map(x => Type.Literal(x))),
-      automation_id: Type.Optional(Type.String({ format: "uuid" })), patrol: Type.Optional(Type.Boolean()), all: Type.Optional(Type.Boolean()),
+      action: Type.Union((review ? ["list", "create"] : ["list", "create", "update", "pause", "resume", "complete", "stop"]).map(x => Type.Literal(x))),
+      ...(review ? {} : { goal_id: Type.Optional(Type.String({ format: "uuid" })), all: Type.Optional(Type.Boolean()), expected_version: Type.Optional(Type.Integer({ minimum: 1 })) }),
       title: Type.Optional(Type.String({ minLength: 1, maxLength: 80 })), goal: Type.Optional(Type.String({ minLength: 1, maxLength: 8000 })),
-      authorization: Type.Optional(Type.String({ minLength: 1, maxLength: 4000 })), schedule: Type.Optional(schedule),
-      timezone: Type.Optional(Type.String({ description: "IANA 时区，默认 Asia/Shanghai" })),
-      dependency_task_id: Type.Optional(Type.Union([Type.String({ format: "uuid" }), Type.Null()])),
-      expected_version: Type.Optional(Type.Integer({ minimum: 1 })),
+      authorization: Type.Optional(Type.String({ minLength: 1, maxLength: 4000 })),
     }),
     execute: async (id, args: any, signal) => call("", { ...args, request_id: id }, signal),
-  }] as ToolDefinition[];
+  });
+  if (automatic) return [{
+    name: "goal_finish", label: "提交本轮目标检查",
+    description: "目标检查结束前必须调用一次，然后立即结束本轮。goals 必须包含每一个进行中的目标，包括本轮新建的。没有新进展 notify=false；可交付成果、重要变化或需要用户决定才 notify=true，并使用稳定的 notification_key。同一目标同一状态不得换 key。waiting_user 必须回报。",
+    parameters: Type.Object({
+      goals: Type.Array(Type.Object({
+        id: Type.String({ format: "uuid" }),
+        state: Type.Union(["continue", "done", "waiting_user"].map(x => Type.Literal(x))),
+        progress: Type.String({ minLength: 1, maxLength: 12000 }),
+        notify: Type.Boolean(),
+        reason: Type.String({ minLength: 1, maxLength: 1000 }),
+        notification_key: Type.Optional(Type.String({ minLength: 1, maxLength: 500 })),
+        checkpoint: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
+      }), { minItems: 1, maxItems: 30 }),
+      next_wake_at: Type.Optional(Type.String({ description: "至少一分钟后的 ISO 8601 时间，包含时区；不传则按空闲情况拉长间隔" })),
+    }),
+    execute: async (_id, args: any, signal) => call("/finish", { decision: args }, signal),
+  }, manage(true)] as ToolDefinition[];
+  return [manage(false)];
 }

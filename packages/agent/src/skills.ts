@@ -13,7 +13,7 @@ export interface SkillOptions {
   catalog: SkillSummary[];
 }
 export const SKILL_TOOLS = ["skill_manage", "skill_load"] as const;
-export const isInternalTool = (name: string) => SKILL_TOOLS.some(tool => tool === name)||["memory_manage","history_search","agent_directory","task_checkpoint","automation_manage","automation_finish"].includes(name);
+export const isInternalTool = (name: string) => SKILL_TOOLS.some(tool => tool === name)||["memory_manage","history_search","agent_directory","task_checkpoint","goal_manage","goal_finish"].includes(name);
 
 /** Platform-owned extension: the API derives ownership from the run token. */
 export function skillsExtension(options: SkillOptions): ExtensionFactory {

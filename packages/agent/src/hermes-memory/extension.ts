@@ -89,7 +89,7 @@ export function memoryExtension(o: MemoryOptions): ExtensionFactory {
         expected_revision: Type.Optional(Type.Integer({ minimum: 1 })),
       }),
       execute: async (_id, args: any, signal) => {
-        if (o.readonly && !["list", "search"].includes(args.action)) throw new Error("自主巡检只能读取记忆");
+        if (o.readonly && !["list", "search"].includes(args.action)) throw new Error("当前轮次只能读取记忆");
         return result(await call("memory", args, signal));
       },
     });

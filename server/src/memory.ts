@@ -95,7 +95,7 @@ export async function manageMemory(
   body: z.infer<typeof memoryRequest>,
 ) {
   const run = await callerRun(tx, userId, claims, body.run_id);
-  if (run.automation_readonly && !["list", "search"].includes(body.action)) fail(403, "自主巡检只能读取记忆");
+  if (run.automation_readonly && !["list", "search"].includes(body.action)) fail(403, "当前轮次只能读取记忆");
   await tx.one("SELECT bot_id FROM bots WHERE bot_id=$1 FOR NO KEY UPDATE", [
     run.bot_id,
   ]);

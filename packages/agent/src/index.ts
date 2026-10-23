@@ -218,7 +218,7 @@ export class PiAgent implements AgentHandle {
 }
 
 export const createBotAgent: AgentFactory = async (o) => {
-  if (o.tools.some(tool => isInternalTool(tool.name) && !["automation_manage", "automation_finish"].includes(tool.name))) throw new Error("内部工具名称不能由外部工具覆盖");
+  if (o.tools.some(tool => isInternalTool(tool.name) && !["goal_manage", "goal_finish"].includes(tool.name))) throw new Error("内部工具名称不能由外部工具覆盖");
   mkdirSync(o.agentDir, { recursive: true, mode: 0o700 });
   const runtime = await ModelRuntime.create({
     credentials: new InMemoryCredentialStore(),

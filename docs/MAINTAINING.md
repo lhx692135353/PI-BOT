@@ -84,10 +84,11 @@ gh pr create --base main
 
 ## CI 与镜像发布
 
-- `ci.yml` 对所有指向 main 的 PR 和 main 推送运行，权限只读，不使用部署密钥；包括类型检查、PostgreSQL 集成测试、构建和 Ubuntu 脚本测试。
-- `desktop.yml` 的 macOS 作业执行 `pack:mac`，上传未公证的 arm64 DMG（`pi-bot-macos-arm64-UNSIGNED-TEST`）。这是临时签名的测试包，没有 Apple Developer ID，也没有公证。
-- `android.yml` 在 PR 和 main 推送上执行 `:app:testDebugUnitTest` 与 `:app:assembleDebug`，上传 debug APK。不制作签名发布包。
-- `server-image.yml` 是维护者的镜像发布工作流，在匹配路径的 main 推送或手动触发后验证并发布。`ALIYUN_REGISTRY_USER` 和 `ALIYUN_REGISTRY_PASSWORD` 只放 GitHub Actions Secrets。
+- `ci.yml` 对所有指向 main 的 PR 和 main 推送运行，权限只读，不使用部署密钥；包括类型检查、PostgreSQL 集成测试、构建和 Ubuntu 脚本测试。它不按目录跳过。
+- 打包和发布按改动的端触发，手动运行不受路径限制。只改文档或其他端时，不会给没改的端上传安装包或镜像。
+- `desktop.yml` 在 `desktop/`、`packages/`、根目录依赖清单或本工作流有改动时运行。macOS 作业执行 `pack:mac`，上传未公证的 arm64 DMG（`pi-bot-macos-arm64-UNSIGNED-TEST`）。这是临时签名的测试包，没有 Apple Developer ID，也没有公证。
+- `android.yml` 在 `android/` 或本工作流有改动时执行 `:app:testDebugUnitTest` 与 `:app:assembleDebug`，上传 debug APK。不制作签名发布包。
+- `server-image.yml` 是维护者的镜像发布工作流，在 `server/`、`admin/`、`packages/`、根目录依赖清单或本工作流有改动的 main 推送，或手动触发后验证并发布。`ALIYUN_REGISTRY_USER` 和 `ALIYUN_REGISTRY_PASSWORD` 只放 GitHub Actions Secrets。
 - Fork 发布自己的镜像前，应修改 registry、image tags 和部署清单，配置自己的凭据。
 - 不把镜像发布作为 PR 的必需检查，以免外部贡献被部署凭据阻塞。
 

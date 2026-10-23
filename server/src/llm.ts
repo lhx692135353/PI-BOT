@@ -114,7 +114,7 @@ export async function proxyResponses(
       return !!await tx.one(`UPDATE bot_runs SET automation_calls=automation_calls+1
         WHERE run_id=$1 AND status='running' AND NOT cancel_requested AND automation_calls<$2 AND deadline_at>now() RETURNING run_id`, [root.run_id, s.automationModelCalls]);
     });
-    if (!admitted) return openAiError(reply, 429, "自动工作已停止或达到本轮模型调用上限");
+    if (!admitted) return openAiError(reply, 429, "目标检查已停止或达到本轮模型调用上限");
   }
   const key = new Vault(s.vaultFile).open(model.secret, model.model_id);
   const payload: Row = {

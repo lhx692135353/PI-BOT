@@ -6,7 +6,7 @@ import type { Settings } from "./config.js";
 import type { Hub } from "./hub.js";
 import type { VoiceAnnouncer } from "./agents.js";
 import { cancelTask, createTask, listTasks, messageTask, readTask, type AgentDispatcher } from "./agents.js";
-import { automationRequest, manageAutomation, wakePatrol } from "./automations.js";
+import { goalRequest, manageGoals, wakeGoals } from "./automations.js";
 import { ACTIVE, collaborators, finishRun, ownBot, resolveModel, systemPrompt } from "./bots.js";
 import { forgottenContext, maskForgotten } from "./memory.js";
 import { complete } from "./llm.js";
@@ -47,11 +47,11 @@ const VOICE_TOOLS = [
   fn("ask_agent", "把任务交给同一用户的另一个智能体，立即返回，不要等待。", {
     agent: { type: "string" }, task: { type: "string" }, execution: { type: "string", enum: ["device", "cloud"] },
   }, ["agent", "task"]),
-  fn("automation_manage", "用户明确要求持续关注、定期检查或定时继续时管理长期委托。先 list 避免重复。", {
-    action: { type: "string", enum: ["list", "create", "update", "pause", "resume", "stop"] },
-    automation_id: { type: "string" }, patrol: { type: "boolean" }, all: { type: "boolean" },
+  fn("goal_manage", "用户在追求一件会持续的事时，自己记下目标，不要等用户说建立目标。也可查询、修改、暂停、恢复、完成或停止。先 list 避免重复。create 必须给 goal 和 authorization。", {
+    action: { type: "string", enum: ["list", "create", "update", "pause", "resume", "complete", "stop"] },
+    goal_id: { type: "string" }, all: { type: "boolean" },
     title: { type: "string" }, goal: { type: "string" }, authorization: { type: "string" },
-    schedule: { type: "object" }, timezone: { type: "string" }, expected_version: { type: "number" },
+    expected_version: { type: "number" },
   }, ["action"]),
 ];
 
@@ -174,7 +174,7 @@ export class VoiceHub implements VoiceAnnouncer {
         message_id: assistantMessageId, bot_id: botId, run_id: runId, seq: seq!.next_seq - 1,
         role: "assistant", content: "", status: "running", executor: "cloud", visibility: "internal", progress: [],
       });
-      await wakePatrol(tx, botId);
+      await wakeGoals(tx, botId);
       await tx.notify({ user_id: userId, bot_id: botId });
       const key = new Vault(this.s.vaultFile).open(model.secret, model.model_id);
       return { runId, assistantMessageId, endpoint, instructions, key, model, aborts };
@@ -476,10 +476,10 @@ class VoiceSession {
         for (const notify of notifies) notify.send({ type: "cancel", run_id: notify.runId });
         return JSON.stringify({ tasks });
       }
-      if (tool.name === "automation_manage") {
-        const parsed = automationRequest.safeParse({ ...args, run_id: this.call.runId, request_id: tool.call_id || randomUUID() });
+      if (tool.name === "goal_manage") {
+        const parsed = goalRequest.safeParse({ ...args, run_id: this.call.runId, request_id: tool.call_id || randomUUID() });
         if (!parsed.success) return JSON.stringify({ error: "参数无效" });
-        const managed = await this.db.tx((tx) => manageAutomation(tx, this.userId, claims, parsed.data));
+        const managed = await this.db.tx((tx) => manageGoals(tx, this.userId, claims, parsed.data));
         return JSON.stringify(managed);
       }
       return JSON.stringify({ error: "没有这个操作" });
