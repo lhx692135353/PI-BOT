@@ -15,6 +15,7 @@ import { sockets } from "./sockets.js";
 import { failOrphanedDeviceRuns } from "./runs.js";
 import { WebSearch } from "./search.js";
 import { AgentDispatcher } from "./agents.js";
+import { VoiceHub } from "./voice.js";
 
 export async function bootstrapAdmin(db: Database, s: Settings) {
   await db.tx(async (tx) => {
@@ -175,7 +176,10 @@ export async function createApp(
   app.get("/admin/*", serveAdmin);
 
   await app.register(websocket, { options: { maxPayload: 8 * 1024 * 1024 } });
-  await sockets(app, db, s, hub, new AgentDispatcher(db, s, hub));
+  const dispatcher = new AgentDispatcher(db, s, hub);
+  const voice = new VoiceHub(db, s, hub, dispatcher);
+  dispatcher.setAnnouncer(voice);
+  await sockets(app, db, s, hub, dispatcher, voice);
   return Object.assign(app, { hub, db });
 }
 

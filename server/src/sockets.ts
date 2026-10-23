@@ -6,6 +6,7 @@ import { user, device } from "./security.js";
 import type { DeviceConnection, Hub } from "./hub.js";
 import { failDeviceRuns, handleRunEvent } from "./runs.js";
 import type { AgentDispatcher } from "./agents.js";
+import type { VoiceHub } from "./voice.js";
 
 const send = (ws: WebSocket, value: Row) => {
   if (ws.readyState !== 1) return;
@@ -24,6 +25,7 @@ export async function sockets(
   s: Settings,
   hub: Hub,
   dispatcher?: AgentDispatcher,
+  voice?: VoiceHub,
 ) {
   // Serialize reconnect and disconnect cleanup for each identity. A replacement
   // must not receive work until interrupted runs from its old socket are closed.
@@ -142,6 +144,14 @@ export async function sockets(
             await failDeviceRuns(db, disconnected.deviceId);
         });
       }).catch(() => {});
+    });
+  });
+
+  app.get("/ws/voice", { websocket: true }, (ws, req) => {
+    if (!voice) return ws.close(1011);
+    void voice.attach(ws, req).catch((error) => {
+      send(ws, { type: "error", detail: error instanceof Error ? error.message : "语音通话没有接通" });
+      try { ws.close(1011); } catch { /* already closed */ }
     });
   });
 

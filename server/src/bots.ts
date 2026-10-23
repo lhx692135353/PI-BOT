@@ -163,7 +163,7 @@ export async function botOut(tx: Tx, b: Row) {
   const labels: Record<string, string> = { run_command: "正在运行命令", web_search: "正在查找资料", read_file: "正在阅读文件", write_file: "正在整理文件", edit_file: "正在修改文件", ask_agent: "正在等待协作结果" };
   const activity = { status, tool: activeTool?.name ?? null, running_count: running.length + autoRunning.length,
     queued_count: tasks.length - running.length + automatic.length - autoRunning.length,
-    summary: approvals.length ? "等你批准访问请求" : running.length > 1 ? `正在处理 ${running.length} 个任务` : running.length ? labels[activeTool?.name] ?? "正在处理任务" : autoRunning.length ? autoRunning.some(r => r.kind === "commission") ? "正在跟进" : "正在检查" : tasks.length ? `有 ${tasks.length} 个任务排队中` : run && ACTIVE.includes(run.status) ? "正在思考" : null };
+    summary: approvals.length ? "等你批准访问请求" : running.length > 1 ? `正在处理 ${running.length} 个任务` : running.length ? labels[activeTool?.name] ?? "正在处理任务" : autoRunning.length ? autoRunning.some(r => r.kind === "commission") ? "正在跟进" : "正在检查" : tasks.length ? `有 ${tasks.length} 个任务排队中` : run?.origin === "voice" && ACTIVE.includes(run.status) ? "语音通话中" : run && ACTIVE.includes(run.status) ? "正在思考" : null };
   return {
     id: b.bot_id,
     name: b.name,
@@ -298,6 +298,8 @@ export async function postMessage(
     [botId, requestId],
   );
   if (existing) return { run: existing, bot, created: false };
+  if (await tx.one("SELECT 1 FROM bot_runs WHERE bot_id=$1 AND origin='voice' AND status = ANY($2)", [botId, ACTIVE]))
+    fail(409, "正在语音通话，请直接说或挂断后再发文字");
   if (!(await resolveModel(tx, bot))) fail(503, "管理员尚未配置可用模型");
   const run = await insertRun(tx, { userId, botId, requestId, text, computer, images });
   return { run, bot, created: true };

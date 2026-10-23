@@ -37,6 +37,10 @@ export function settings(env = process.env) {
     /** Cloud runs one worker executes at once; delegating runs wait on their children. */
     workerConcurrency: integer(env.PI_BOT_WORKER_CONCURRENCY, 4, 1, 64),
     conversationConcurrency: integer(env.PI_BOT_CONVERSATION_CONCURRENCY, 4, 1, 64),
+    /** How long a dropped voice socket keeps the Grok session before the call ends. */
+    voiceGraceMs: integer(env.PI_BOT_VOICE_GRACE_MS, 15000, 200, 120000),
+    /** Test override. Production calls follow an xAI model base URL. */
+    voiceRealtimeUrl: env.PI_BOT_VOICE_REALTIME_URL?.trim() || undefined,
     automationRoundSeconds: integer(env.PI_BOT_AUTOMATION_ROUND_SECONDS, 300, 10, 1800),
     automationModelCalls: integer(env.PI_BOT_AUTOMATION_MODEL_CALLS, 20, 1, 200),
     automationDailyRounds: integer(env.PI_BOT_AUTOMATION_DAILY_ROUNDS, 96, 1, 10000),

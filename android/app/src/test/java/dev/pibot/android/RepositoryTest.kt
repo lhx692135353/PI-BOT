@@ -4,6 +4,7 @@ import dev.pibot.android.data.ApiException
 import dev.pibot.android.data.BotInput
 import dev.pibot.android.data.ChatImage
 import kotlinx.serialization.json.jsonArray
+import dev.pibot.android.data.LiveCall
 import dev.pibot.android.data.PiBotApi
 import dev.pibot.android.data.PiBotRepository
 import dev.pibot.android.data.Session
@@ -234,6 +235,24 @@ class RepositoryTest {
         assertThrows(ApiException::class.java) { runBlocking { repo.refreshBots() } }
         assertNull(repo.session.first())
         assertNull(storage.session)
+    }
+
+    @Test
+    fun callEventsTrackARemoteCallAndLeaveALocalOneAlone() {
+        repo.handleEvent(Json.parseToJsonElement("""{"type":"call","bot_id":"b1","call_id":"c1","phase":"listening"}""") as JsonObject)
+        assertEquals("listening", repo.liveCall.value?.phase)
+        assertFalse(repo.liveCall.value!!.local)
+        repo.handleEvent(Json.parseToJsonElement("""{"type":"call","bot_id":"b1","call_id":"c1","phase":"ended"}""") as JsonObject)
+        assertNull(repo.liveCall.value)
+
+        repo.updateLiveCall(LiveCall(botId = "b1", phase = "connecting", local = true))
+        repo.handleEvent(Json.parseToJsonElement("""{"type":"call","bot_id":"b1","call_id":"other","phase":"ended"}""") as JsonObject)
+        assertEquals("connecting", repo.liveCall.value?.phase)
+        repo.handleEvent(Json.parseToJsonElement("""{"type":"call","bot_id":"b1","call_id":"c2","phase":"speaking"}""") as JsonObject)
+        assertEquals("c2", repo.liveCall.value?.callId)
+        assertTrue(repo.liveCall.value!!.local)
+        repo.handleEvent(Json.parseToJsonElement("""{"type":"call","bot_id":"b1","call_id":"c2","phase":"ended"}""") as JsonObject)
+        assertNull(repo.liveCall.value)
     }
 
     @Test

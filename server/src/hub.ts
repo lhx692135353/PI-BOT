@@ -8,11 +8,13 @@ export interface DeviceConnection {
   send(message: Row): void;
   close(code: number): void;
 }
+export type CallPhase = "connecting" | "listening" | "speaking" | "thinking" | "ended";
 export type UserEvent =
   | { type: "bot"; bot_id: string }
   | { type: "delta"; bot_id: string; message_id: string; content: string }
   | { type: "presence"; online: boolean; device_id: string; device_online: boolean }
-  | { type: "bots" };
+  | { type: "bots" }
+  | { type: "call"; bot_id: string; call_id: string; phase: CallPhase; reason?: string };
 type Pending = {
   resolve(value: unknown): void;
   reject(error: Error): void;

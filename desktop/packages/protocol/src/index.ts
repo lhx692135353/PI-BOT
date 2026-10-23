@@ -23,6 +23,7 @@ export const schemas = {
   messages: z.object({ botId: id, before: z.number().int().positive().optional() }),
   send: z.object({ botId: id, text: z.string().trim().max(100000).default(''), images: imagesSchema.default([]), request_id: id.optional() }).refine(body => body.text.length > 0 || body.images.length > 0, '请填写消息或选择图片'),
   image: z.object({ botId: id, messageId: id, imageId: id }),
+  voiceTicket: z.object({ botId: id }),
   uiState: z.object({ botId: id, messageId: id, revision: z.number().int().positive(), states: z.unknown() }),
   uiAction: z.object({ botId: id, messageId: id, revision: z.number().int().positive(), states: z.unknown(), action: z.unknown(), request_id: id }),
   cancel: z.object({ runId: id }),

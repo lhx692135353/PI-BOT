@@ -40,9 +40,14 @@ export class Worker {
   async claim(): Promise<RunContext | undefined> {
     return this.db.tx(async (tx) => {
       const stale = await tx.rows(
-        "SELECT run_id FROM bot_runs WHERE executor='cloud' AND status='running' AND lease_until < now() FOR UPDATE SKIP LOCKED",
+        "SELECT run_id, origin, assistant_message_id FROM bot_runs WHERE executor='cloud' AND status='running' AND lease_until < now() FOR UPDATE SKIP LOCKED",
       );
-      for (const r of stale) await finishRun(tx, r.run_id, "failed", "云端执行中断，请重新发送");
+      for (const r of stale) {
+        if (r.origin === "voice") {
+          await finishRun(tx, r.run_id, "failed", "语音通话已中断", "语音通话已中断");
+          await tx.rows("UPDATE bot_messages SET visibility='public' WHERE message_id=$1", [r.assistant_message_id]);
+        } else await finishRun(tx, r.run_id, "failed", "云端执行中断，请重新发送");
+      }
       const candidates = await tx.rows("SELECT run_id FROM bot_runs WHERE executor='cloud' AND execution_policy='any' AND status='queued' AND NOT cancel_requested ORDER BY (lane='task'), (origin='report'), created_at LIMIT 100");
       let run: Row | null = null;
       for (const candidate of candidates) {

@@ -896,6 +896,41 @@
         }
       }
     },
+    "/bots/{id}/voice/ticket": {
+      "post": {
+        "tags": [
+          "bots"
+        ],
+        "summary": "签发一分钟语音通话票据，桌面端用它连接 /ws/voice",
+        "security": [
+          {
+            "UserBearer": []
+          },
+          {
+            "DeviceSignature": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "{ detail }"
+          }
+        }
+      }
+    },
     "/bots/{id}/messages": {
       "get": {
         "tags": [

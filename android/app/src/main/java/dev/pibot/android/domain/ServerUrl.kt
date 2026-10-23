@@ -13,6 +13,26 @@ data class ServerUrl(val base: String) {
         }
         return "$socket/ws/events?token=${URLEncoder.encode(token, "UTF-8")}"
     }
+
+    /** User-token voice socket. `callId` resumes the same call after a short disconnect. */
+    fun voiceSocket(token: String, botId: String, callId: String? = null): String {
+        val socket = when {
+            base.startsWith("https://") -> "wss://" + base.removePrefix("https://")
+            base.startsWith("http://") -> "ws://" + base.removePrefix("http://")
+            else -> error("服务器地址无效")
+        }
+        val query = buildString {
+            append("token=")
+            append(URLEncoder.encode(token, "UTF-8"))
+            append("&bot=")
+            append(URLEncoder.encode(botId, "UTF-8"))
+            if (!callId.isNullOrBlank()) {
+                append("&call_id=")
+                append(URLEncoder.encode(callId, "UTF-8"))
+            }
+        }
+        return "$socket/ws/voice?$query"
+    }
 }
 
 fun parseServerUrl(raw: String): ServerUrl {

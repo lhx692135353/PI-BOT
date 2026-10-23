@@ -55,7 +55,7 @@ async function dependency(tx: Tx, userId: string, botId: string, id?: string | n
 }
 export async function manageAutomation(tx: Tx, userId: string, claims: LlmClaims, body: z.infer<typeof automationRequest>, now = new Date()) {
   const run = await callerRun(tx, userId, claims, body.run_id);
-  if (run.lane !== "conversation" || run.execution_policy === "device_only" || run.origin !== "user")
+  if (run.lane !== "conversation" || run.execution_policy === "device_only" || (run.origin !== "user" && run.origin !== "voice"))
     fail(403, "只有用户对话可以管理自动工作");
   await ensurePatrol(tx, run.bot_id, userId, now);
   if (body.action === "list") return { automations: (await tx.rows("SELECT * FROM bot_automations WHERE bot_id=$1 ORDER BY kind DESC,created_at", [run.bot_id])).map(automationOut) };

@@ -10,6 +10,7 @@ import {
   decodeBase64,
   issueLlmToken,
   issueToken,
+  issueVoiceTicket,
   passwordHash,
   passwordMatches,
   Vault,
@@ -378,6 +379,13 @@ export const routes: Route[] = [
       await tx.update("bots", params.id, { archived_at: new Date() });
       await tx.notify({ user_id: user.user_id, bot_id: params.id });
       return { ok: true };
+    },
+  },
+  {
+    method: "POST", path: "/bots/:id/voice/ticket", auth: "actor", tag: "bots", summary: "签发一分钟语音通话票据，桌面端用它连接 /ws/voice",
+    handler: async ({ tx, s, user, params }) => {
+      const bot = await ownBot(tx, user.user_id, params.id);
+      return { ticket: await issueVoiceTicket(user.user_id, bot.bot_id, s), expires_in: 60 };
     },
   },
   {

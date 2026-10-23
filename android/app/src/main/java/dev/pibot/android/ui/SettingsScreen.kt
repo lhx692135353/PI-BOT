@@ -33,6 +33,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import dev.pibot.android.voice.VoiceCallService
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -50,6 +52,8 @@ fun SettingsScreen(repository: PiBotRepository, onBack: () -> Unit) {
     val computer by repository.computer.collectAsStateWithLifecycle()
     val live by repository.live.collectAsStateWithLifecycle()
     val devices by repository.devices.collectAsStateWithLifecycle()
+    val call by repository.liveCall.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var removing by remember { mutableStateOf<Device?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -84,7 +88,10 @@ fun SettingsScreen(repository: PiBotRepository, onBack: () -> Unit) {
             Spacer(Modifier.height(20.dp))
             OutlinedButton(onClick = { changing = true }, modifier = Modifier.fillMaxWidth()) { Text("修改密码") }
             Spacer(Modifier.height(10.dp))
-            OutlinedButton(onClick = { repository.logout() }, modifier = Modifier.fillMaxWidth()) { Text("退出登录", color = Danger) }
+            OutlinedButton(onClick = {
+                if (call?.local == true) VoiceCallService.hangup(context)
+                repository.logout()
+            }, modifier = Modifier.fillMaxWidth()) { Text("退出登录", color = Danger) }
             Spacer(Modifier.height(20.dp))
             Text("Pi Bot ${BuildConfig.VERSION_NAME}", color = Muted, fontSize = 12.sp, modifier = Modifier.fillMaxWidth())
         }

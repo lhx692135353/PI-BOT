@@ -9,7 +9,7 @@ import {
 import { readFileSync } from "node:fs";
 import { SignJWT, jwtVerify, type JWTPayload } from "jose";
 import { hash, verify as verifyPassword, argon2id } from "argon2";
-import { fail, type Tx, type Row } from "./db.js";
+import { HttpError, fail, type Tx, type Row } from "./db.js";
 import type { Settings } from "./config.js";
 export const sha256 = (value: string | Buffer) =>
   createHash("sha256").update(value).digest("hex");
@@ -28,6 +28,21 @@ export async function passwordMatches(hashed: string, password: string) {
   }
 }
 const secret = (s: Settings) => new TextEncoder().encode(s.jwtSecret);
+/** One-minute credential so a desktop renderer can open `/ws/voice` without the provider key. */
+export const issueVoiceTicket = (userId: string, botId: string, s: Settings) =>
+  new SignJWT({ typ: "voice", bot: botId })
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject(userId)
+    .setIssuedAt()
+    .setExpirationTime(Math.floor(Date.now() / 1000) + 60)
+    .sign(secret(s));
+export async function readVoiceTicket(token: string, s: Settings) {
+  const payload = await verifyToken(token, s, "voice");
+  const botId = payload.bot;
+  const userId = payload.sub;
+  if (typeof botId !== "string" || typeof userId !== "string") throw new HttpError(401, "认证失败");
+  return { userId, botId };
+}
 export const issueToken = (u: Row, s: Settings) =>
   new SignJWT({ typ: "user", role: u.role })
     .setProtectedHeader({ alg: "HS256" })

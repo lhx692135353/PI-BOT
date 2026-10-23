@@ -29,12 +29,20 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Phone
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.content.ContextCompat
+import dev.pibot.android.data.LiveCall
+import dev.pibot.android.voice.VoiceCallService
 import dev.pibot.android.data.ChatImage
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -102,6 +110,28 @@ fun TimelineScreen(
     var error by remember(botId) { mutableStateOf<String?>(null) }
     var loadingMore by remember(botId) { mutableStateOf(false) }
     var menuOpen by remember(botId) { mutableStateOf(false) }
+    val call by repository.liveCall.collectAsStateWithLifecycle()
+    val notice by repository.voiceNotice.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
+        if (granted[Manifest.permission.RECORD_AUDIO] == true) VoiceCallService.start(context, botId)
+        else error = "需要麦克风权限才能语音通话"
+    }
+    LaunchedEffect(notice) {
+        if (!notice.isNullOrBlank()) {
+            error = notice
+            repository.clearVoiceNotice()
+        }
+    }
+    val startCall = {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            VoiceCallService.start(context, botId)
+        } else {
+            val perms = mutableListOf(Manifest.permission.RECORD_AUDIO)
+            if (Build.VERSION.SDK_INT >= 33) perms.add(Manifest.permission.POST_NOTIFICATIONS)
+            micPermission.launch(perms.toTypedArray())
+        }
+    }
     val now = rememberNow()
 
     LaunchedEffect(botId) {
@@ -156,6 +186,11 @@ fun TimelineScreen(
         containerColor = Paper,
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).imePadding()) {
+            val activeCall = call
+            if (activeCall?.local == true && activeCall.botId == botId) {
+                CallOverlay(current, activeCall, { VoiceCallService.setMuted(context, it) }) { VoiceCallService.hangup(context) }
+                return@Column
+            }
             val list = androidx.compose.runtime.key(botId) { rememberLazyListState() }
             val reversed = remember(timeline.messages) { timeline.messages.asReversed() }
             val atTop by remember(list) { derivedStateOf { list.layoutInfo.visibleItemsInfo.lastOrNull()?.index == list.layoutInfo.totalItemsCount - 1 } }
@@ -195,7 +230,13 @@ fun TimelineScreen(
             error?.let {
                 Text(it, color = Danger, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
             }
-            Composer(botId, current.name, draft, onDraftChange) { text, requestId, images ->
+            if (call != null && call?.botId != botId) {
+                Text("语音通话在另一个对话里", color = Muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+            } else if (call != null && call?.local != true) {
+                Text("正在其他设备通话", color = Muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+            }
+            val callBlocked = call?.local == true || call?.botId == botId
+            Composer(botId, current.name, draft, onDraftChange, onCall = startCall, callEnabled = !callBlocked) { text, requestId, images ->
                 error = null
                 try { repository.send(botId, text, requestId, images); true }
                 catch (e: Exception) { error = errorText(e); false }
@@ -331,7 +372,45 @@ private fun ApprovalCard(approval: Approval, onDecide: (Boolean) -> Unit) {
 }
 
 @Composable
-private fun Composer(botId: String, botName: String, text: String, onTextChange: (String) -> Unit, onSend: suspend (String, String, List<ChatImage>) -> Boolean) {
+private fun CallOverlay(bot: Bot, call: LiveCall, onMute: (Boolean) -> Unit, onHangup: () -> Unit) {
+    val now = rememberNow(1_000)
+    val phase = when (call.phase) {
+        "connecting" -> "接通中"
+        "listening" -> "正在听"
+        "speaking" -> "正在说"
+        "thinking" -> "想一下"
+        else -> "通话中"
+    }
+    val mood = when (call.phase) {
+        "speaking" -> "working"
+        "thinking", "connecting" -> "thinking"
+        else -> "happy"
+    }
+    val elapsed = if (call.startedAt > 0) now - call.startedAt else 0L
+    val seconds = (elapsed / 1000).coerceAtLeast(0)
+    val clock = "%02d:%02d".format(seconds / 60, seconds % 60)
+    Column(
+        Modifier.fillMaxSize().navigationBarsPadding().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        PiBotFace(bot.avatar, mood, 180.dp, seed = seedOf(bot.id))
+        Spacer(Modifier.height(16.dp))
+        Text(bot.name, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(6.dp))
+        Text(call.error ?: phase, color = if (call.error != null) Danger else Muted)
+        Spacer(Modifier.height(8.dp))
+        Text(clock, fontSize = 28.sp, fontWeight = FontWeight.Medium)
+        Spacer(Modifier.height(28.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            OutlinedButton(onClick = { onMute(!call.muted) }) { Text(if (call.muted) "取消静音" else "静音") }
+            Button(onClick = onHangup, colors = ButtonDefaults.buttonColors(containerColor = Danger, contentColor = Color.White)) { Text("挂断") }
+        }
+    }
+}
+
+@Composable
+private fun Composer(botId: String, botName: String, text: String, onTextChange: (String) -> Unit, onCall: () -> Unit, callEnabled: Boolean, onSend: suspend (String, String, List<ChatImage>) -> Boolean) {
     val currentText by rememberUpdatedState(text)
     var sending by remember(botId) { mutableStateOf(false) }
     var retryText by rememberSaveable(botId) { mutableStateOf("") }
@@ -373,6 +452,7 @@ private fun Composer(botId: String, botName: String, text: String, onTextChange:
                 .background(Card, RoundedCornerShape(28.dp)).border(1.dp, Line, RoundedCornerShape(28.dp)).padding(start = 4.dp, end = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            IconButton(enabled = callEnabled && !sending, onClick = onCall) { Icon(Icons.Filled.Phone, "语音通话") }
             IconButton(enabled = !sending && !reading && images.size < 4, onClick = { pickingFor = botId; picker.launch(arrayOf("image/jpeg", "image/png", "image/webp", "image/gif")) }) {
                 Icon(Icons.Filled.Add, "上传图片")
             }

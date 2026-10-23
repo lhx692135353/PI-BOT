@@ -11,6 +11,10 @@ import { TASK_CONCURRENCY, resumeExecution } from "./scheduling.js";
 
 export const MAX_TASKS_PER_RUN = 5;
 export const TERMINAL = ["completed", "failed", "cancelled"];
+/** The live voice call speaks a finished task instead of posting a text report. */
+export interface VoiceAnnouncer {
+  announce(botId: string, task: Row): boolean;
+}
 
 export const agentTaskOut = (t: Row) => ({
   id: t.task_id,
@@ -268,12 +272,14 @@ export class AgentDispatcher {
   private again = false;
   private stopped = false;
   private cancelSent = new Set<string>();
+  private announcer?: VoiceAnnouncer;
   constructor(
     private db: Database,
     private s: Settings,
     private hub: Hub,
     private intervalMs = 5000,
   ) {}
+  setAnnouncer(announcer: VoiceAnnouncer) { this.announcer = announcer; }
   start() {
     this.timer = setInterval(() => this.kick(), this.intervalMs);
     this.kick();
@@ -340,7 +346,7 @@ export class AgentDispatcher {
         `SELECT t.task_id FROM agent_tasks t
          WHERE t.mode='report' AND t.delivered_at IS NULL AND t.status IN ('completed','failed','cancelled')
            AND NOT EXISTS (SELECT 1 FROM bot_runs p WHERE p.run_id=t.parent_run_id AND p.execution_policy='device_only')
-           AND NOT EXISTS (SELECT 1 FROM bot_runs r WHERE r.bot_id=t.parent_bot_id AND r.lane='conversation' AND r.status = ANY($1))
+           AND NOT EXISTS (SELECT 1 FROM bot_runs r WHERE r.bot_id=t.parent_bot_id AND r.lane='conversation' AND r.status = ANY($1) AND r.origin<>'voice')
          ORDER BY t.finished_at LIMIT 20`,
         [ACTIVE],
       ),
@@ -356,12 +362,16 @@ export class AgentDispatcher {
           );
           if (!t) return null;
           const bot = await tx.one("SELECT * FROM bots WHERE bot_id=$1 FOR NO KEY UPDATE", [t.parent_bot_id]);
-          if (bot && !bot.archived_at && (await tx.one("SELECT 1 FROM bot_runs WHERE bot_id=$1 AND lane='conversation' AND status = ANY($2)", [bot.bot_id, ACTIVE])))
-            return null;
           if (!bot || bot.archived_at) {
             await tx.rows("UPDATE agent_tasks SET delivered_at=now() WHERE task_id=$1", [task_id]);
             return null;
           }
+          const activeConversation = await tx.one("SELECT origin FROM bot_runs WHERE bot_id=$1 AND lane='conversation' AND status = ANY($2)", [bot.bot_id, ACTIVE]);
+          if (activeConversation?.origin === "voice") {
+            this.announcer?.announce(bot.bot_id, t);
+            return null;
+          }
+          if (activeConversation) return null;
           if (!(await resolveModel(tx, bot))) return null;
           await tx.rows("UPDATE agent_tasks SET delivered_at=now() WHERE task_id=$1", [task_id]);
           const conn = await botConnection(tx,this.hub,t.user_id,bot.bot_id);

@@ -32,6 +32,17 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
+/** One live voice call. `local` means this phone holds the microphone. */
+data class LiveCall(
+    val botId: String,
+    val callId: String? = null,
+    val phase: String = "connecting",
+    val muted: Boolean = false,
+    val startedAt: Long = 0L,
+    val error: String? = null,
+    val local: Boolean = false,
+)
+
 /**
  * Single source of truth for the signed-in user's bots. REST for reads and actions;
  * `/ws/events` while the app is in the foreground for live updates.
@@ -48,6 +59,8 @@ class PiBotRepository(
     private val _bots = MutableStateFlow<List<Bot>?>(null)
     private val _computer = MutableStateFlow(ComputerStatus())
     private val _live = MutableStateFlow(false)
+    private val _liveCall = MutableStateFlow<LiveCall?>(null)
+    private val _voiceNotice = MutableStateFlow<String?>(null)
     private val _timelines = MutableStateFlow<Map<String, Timeline>>(emptyMap())
     private val dirty = ConcurrentHashMap<String, AtomicBoolean>()
     private var socket: WebSocket? = null
@@ -63,6 +76,10 @@ class PiBotRepository(
     val computer: StateFlow<ComputerStatus> = _computer.asStateFlow()
     /** Whether the live events socket is connected. */
     val live: StateFlow<Boolean> = _live.asStateFlow()
+    /** The user's current voice call, on this phone or another device. */
+    val liveCall: StateFlow<LiveCall?> = _liveCall.asStateFlow()
+    /** A call failure to show once, after the call itself has gone. */
+    val voiceNotice: StateFlow<String?> = _voiceNotice.asStateFlow()
 
     fun lastServerUrl(): String? = storage.lastServerUrl()
 
@@ -86,6 +103,25 @@ class PiBotRepository(
         _timelines.value = emptyMap()
         _computer.value = ComputerStatus()
         _devices.value = emptyList()
+        _liveCall.value = null
+        _voiceNotice.value = null
+    }
+
+    fun updateLiveCall(call: LiveCall?) {
+        _liveCall.value = call
+    }
+
+    fun clearVoiceNotice() {
+        _voiceNotice.value = null
+    }
+
+    /** Drops the call indicator. A signed-out session does not keep a notice. */
+    fun endLiveCall(botId: String, error: String?) {
+        if (_session.value != null) {
+            val notice = error?.takeIf { it.isNotBlank() && it != "hangup" && it != "ended" }
+            if (notice != null) _voiceNotice.value = notice
+        }
+        _liveCall.update { current -> if (current?.botId == botId) null else current }
     }
 
     private suspend fun <T> authed(block: (ServerUrl, String) -> T): T {
@@ -223,6 +259,37 @@ class PiBotRepository(
                 scope.launch { runCatching { refreshMe() } }
             }
             "bots" -> scope.launch { runCatching { refreshBots() } }
+            "call" -> applyCall(event)
+        }
+    }
+
+    private fun applyCall(event: JsonObject) {
+        val botId = event["bot_id"]?.jsonPrimitive?.contentOrNull ?: return
+        val phase = event["phase"]?.jsonPrimitive?.contentOrNull ?: return
+        val callId = event["call_id"]?.jsonPrimitive?.contentOrNull
+        if (phase == "ended") {
+            _liveCall.update { current ->
+                if (current == null || current.botId != botId) return@update current
+                if (current.local && (current.callId == null || current.callId != callId)) return@update current
+                if (!current.local && current.callId != null && current.callId != callId) return@update current
+                null
+            }
+            requestBotRefresh(botId)
+            return
+        }
+        _liveCall.update { current ->
+            if (current?.local == true && current.botId == botId) {
+                current.copy(callId = callId ?: current.callId, phase = phase)
+            } else if (current?.local == true) {
+                current
+            } else {
+                LiveCall(
+                    botId = botId,
+                    callId = callId,
+                    phase = phase,
+                    startedAt = if (current?.botId == botId && current.startedAt > 0) current.startedAt else System.currentTimeMillis(),
+                )
+            }
         }
     }
 
