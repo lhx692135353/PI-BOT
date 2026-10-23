@@ -84,7 +84,9 @@ gh pr create --base main
 
 ## CI 与镜像发布
 
-- `ci.yml` 对所有指向 main 的 PR 和 main 推送运行，权限只读，不使用部署密钥；包括类型检查、PostgreSQL 集成测试、构建和 Ubuntu 脚本测试，不覆盖 Android 和 macOS 安装包签名。
+- `ci.yml` 对所有指向 main 的 PR 和 main 推送运行，权限只读，不使用部署密钥；包括类型检查、PostgreSQL 集成测试、构建和 Ubuntu 脚本测试。
+- `desktop.yml` 的 macOS 作业执行 `pack:mac`，上传未公证的 arm64 DMG（`pi-bot-macos-arm64-UNSIGNED-TEST`）。这是临时签名的测试包，没有 Apple Developer ID，也没有公证。
+- `android.yml` 在 PR 和 main 推送上执行 `:app:testDebugUnitTest` 与 `:app:assembleDebug`，上传 debug APK。不制作签名发布包。
 - `server-image.yml` 是维护者的镜像发布工作流，在匹配路径的 main 推送或手动触发后验证并发布。`ALIYUN_REGISTRY_USER` 和 `ALIYUN_REGISTRY_PASSWORD` 只放 GitHub Actions Secrets。
 - Fork 发布自己的镜像前，应修改 registry、image tags 和部署清单，配置自己的凭据。
 - 不把镜像发布作为 PR 的必需检查，以免外部贡献被部署凭据阻塞。
@@ -101,9 +103,9 @@ git tag -a desktop-v0.2.0-beta.1 origin/main -m "Desktop 0.2.0 beta 1"
 git push origin refs/tags/desktop-v0.2.0-beta.1
 ```
 
-[`desktop-release.yml`](../.github/workflows/desktop-release.yml) 验证标签版本后复用 CI 与桌面构建工作流，包括 PostgreSQL 测试、Windows 原生测试、独立 runtime smoke 和 Linux 打包检查。全部通过才创建 Release 草稿、上传附件并发布为预发布版，不标记为 Latest。PR 与普通分支推送不触发发布。
+[`desktop-release.yml`](../.github/workflows/desktop-release.yml) 验证标签版本后复用 CI 与桌面构建工作流，包括 PostgreSQL 测试、Windows 原生测试、独立 runtime smoke、Linux 打包检查和未公证的 macOS DMG 构建。全部通过才创建 Release 草稿、上传附件并发布为预发布版，不标记为 Latest。PR 与普通分支推送不触发发布。
 
-附件包括 Windows Setup.exe、ZIP、Linux x64 桌面/服务压缩包及统一的 `SHA256SUMS.txt`；校验和使用附件文件名，不引用 CI 内部目录。macOS 此流程只做构建验证，不发布安装包。自动更新不在本轮范围内。
+附件包括 Windows Setup.exe、ZIP、Linux x64 桌面/服务压缩包及统一的 `SHA256SUMS.txt`；校验和使用附件文件名，不引用 CI 内部目录。macOS 作业会构建未公证 DMG 作为 Actions artifact，此 Release 不附带该安装包，也不附带 Android APK。自动更新不在本轮范围内。
 
 若检查失败，不会创建 Release；上传中断时可能留下未公开草稿，维护者应检查并清理草稿后再重跑。不要覆盖已发布附件或移动已发布标签，修复后使用新的 beta 序号。发布需要目标仓库的写权限；Fork 的安装包不会自动出现在原项目 Releases。
 

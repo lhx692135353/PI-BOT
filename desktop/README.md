@@ -13,7 +13,7 @@ Pi Bot 的电脑端是 Bot 们的 **harness**：登录后这台电脑注册到�
 
 ## 启动
 
-安装包入口：[GitHub Releases](https://github.com/lhx692135353/PI-BOT/releases)。桌面 beta 发布流程提供 Windows x64 未签名测试安装器、ZIP、Linux x64 桌面/服务压缩包和 SHA256 校验和；维护者发布版本后才会出现在该页。尚未发布的提交可从 `Desktop platforms` 的 Actions artifacts 下载，属于有保留期限的测试产物。macOS 目前按下文从源码构建。
+安装包入口：[GitHub Releases](https://github.com/lhx692135353/PI-BOT/releases)。桌面 beta 发布流程提供 Windows x64 未签名测试安装器、ZIP、Linux x64 桌面/服务压缩包和 SHA256 校验和；维护者发布版本后才会出现在该页。尚未发布的提交可从 `Desktop platforms` 的 Actions artifacts 下载 Linux、Windows 和未公证的 macOS arm64 DMG，属于有保留期限的测试产物。该 DMG 使用临时签名，下载后会被系统拦截；日常开发仍按下文从源码构建。正式 Release 不附带该 DMG。
 
 Windows beta 的安装与验收说明见 [Windows 指南](../docs/windows-client.md)。
 

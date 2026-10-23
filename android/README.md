@@ -30,6 +30,8 @@ cd android
 ./gradlew :app:assembleDebug       # app/build/outputs/apk/debug/app-debug.apk
 ```
 
+GitHub Actions 的 `Android` 工作流在 pull request 和 `main` 推送上执行同样的两条任务，并上传 debug APK。
+
 构建会把 `packages/bot-face/spec.json` 复制进 APK 的 `assets/bot-face/`，角色规格只维护那一份。
 
 ## 使用
