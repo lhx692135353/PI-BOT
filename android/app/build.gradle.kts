@@ -63,8 +63,10 @@ val copyBotFaceSpec = tasks.register<CopyBotFaceSpec>("copyBotFaceSpec") {
 // Both clients ship the same A2UI renderer; no UI code is downloaded from the agent.
 val buildA2ui = tasks.register<Exec>("buildA2ui") {
     workingDir(rootProject.projectDir.parentFile)
-    val nodePath = rootProject.projectDir.resolve("../desktop/node_modules/node/bin/node").absolutePath
-    commandLine(nodePath, "packages/a2ui/scripts/build.mjs")
+    // npm ci --ignore-scripts skips the vendored Node download. Fall back to the Node already on PATH.
+    val vendoredNode = rootProject.projectDir.resolve("../desktop/node_modules/node/bin/node")
+    val nodeCommand = if (vendoredNode.isFile) vendoredNode.absolutePath else "node"
+    commandLine(nodeCommand, "packages/a2ui/scripts/build.mjs")
     inputs.dir(rootProject.projectDir.resolve("../packages/a2ui/src"))
     inputs.dir(rootProject.projectDir.resolve("../packages/a2ui/web"))
     inputs.file(rootProject.projectDir.resolve("../package-lock.json"))
