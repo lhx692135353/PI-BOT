@@ -1,0 +1,19 @@
+android/app/build.gradle.kts
+  s_3cfe246c6f6464::t_b471b2ecc0485b 66-69
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b52bc026d7a6fe4f2ee0d1c63c5d6e195fcb9558",
+  "prompts": {},
+  "sessions": {
+    "s_3cfe246c6f6464": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b40046b4-9798-4bc1-8756-16c4242653a2",
+        "model": "grok-4.7"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
