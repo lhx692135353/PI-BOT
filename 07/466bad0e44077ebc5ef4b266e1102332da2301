@@ -1,0 +1,128 @@
+desktop/packages/service/src/application.ts
+  s_aaca1adb34d872::t_7037411ca3b185 203
+android/app/src/test/java/dev/pibot/android/RepositoryTest.kt
+  s_aaca1adb34d872::t_8af4a2691d1b57 241-257
+  s_aaca1adb34d872::t_0a7526e3caa8fa 7
+  s_aaca1adb34d872::t_ce6a0bcc78d7bf 240
+server/openapi.json
+  s_aaca1adb34d872::t_9d883f17f3a97a 899-933
+android/app/src/main/java/dev/pibot/android/domain/ServerUrl.kt
+  s_aaca1adb34d872::t_706fb7370ece78 16-35
+server/migrations/0012-voice.sql
+  s_aaca1adb34d872::t_ddf7a2255d925c 1-3
+server/src/sockets.ts
+  s_aaca1adb34d872::t_94241194b19f80 28
+  s_aaca1adb34d872::t_3f3d79f7b61cc2 9
+  s_aaca1adb34d872::t_12ed3debd7e838 150-157
+android/app/src/main/AndroidManifest.xml
+  s_aaca1adb34d872::t_15f54f80028764 7-11
+  s_aaca1adb34d872::t_d44664adfab873 30-33
+server/src/config.ts
+  s_aaca1adb34d872::t_7d115951053cd5 40-43
+android/app/src/main/java/dev/pibot/android/ui/SettingsScreen.kt
+  s_aaca1adb34d872::t_6c74375f40a7ea 91-94
+  s_aaca1adb34d872::t_3ec003781cb58e 55-56
+  s_aaca1adb34d872::t_ed2b1cd6249c70 36-37
+android/app/src/main/java/dev/pibot/android/data/PiBotRepository.kt
+  s_aaca1adb34d872::t_f981a7f0158b16 35-45
+  s_aaca1adb34d872::t_c87fa85740a4da 262-292
+  s_aaca1adb34d872::t_954f839a939264 62-63
+  s_aaca1adb34d872::t_771886a95d3790 106-124
+  s_aaca1adb34d872::t_59bb9c04c1363e 79-82
+server/src/app.ts
+  s_aaca1adb34d872::t_54b616968cd80c 179-182
+  s_aaca1adb34d872::t_8ea2b6189717f4 18
+server/src/worker.ts
+  s_aaca1adb34d872::t_395aa58fec6b8e 43,45-50
+server/src/security.ts
+  s_aaca1adb34d872::t_3515db73331929 31-40,45
+  s_aaca1adb34d872::t_efc55e8651370d 41
+  s_aaca1adb34d872::t_5bcb01f02bf934 12
+  s_aaca1adb34d872::t_743774bc84753f 42-44
+server/src/bots.ts
+  s_aaca1adb34d872::t_04161d13d50a9e 166
+  s_aaca1adb34d872::t_87a7b305eda987 301-302
+desktop/packages/protocol/src/index.ts
+  s_aaca1adb34d872::t_26d65e00ed4c3a 26
+server/tests/voice.test.ts
+  s_aaca1adb34d872::t_981c5bc35acf0d 1-10,12-21,23-128,130-149,151-182,184-190,192-194,196-215,217-225,227-230,232-233,235-250,252,254-265,270-277,279-296,299-303
+  s_aaca1adb34d872::t_4e57b476aade5c 129
+  s_aaca1adb34d872::t_afdb47c3fdcf02 183,191,195,216,226,231,234,251,253,267,278,297-298
+  s_aaca1adb34d872::t_75a2b61cc5f274 22
+  s_aaca1adb34d872::t_b09438218256f0 150
+  s_aaca1adb34d872::t_d344340a445a1c 11
+  s_aaca1adb34d872::t_3e2c2ed37a376a 266,268-269
+server/src/hub.ts
+  s_aaca1adb34d872::t_2b6278951b851c 11,16-17
+server/src/routes.ts
+  s_aaca1adb34d872::t_d0e2e7646c91e8 13
+  s_aaca1adb34d872::t_b15cbcb093e3b5 385-390
+  s_aaca1adb34d872::t_110f06184387de 384
+server/src/voice.ts
+  s_aaca1adb34d872::t_8d563409075b15 1-3,5-9,11-85,87-93,115-133,135-136,138-142,144,146-179,181-226,228-320,322-547,549-564
+  s_aaca1adb34d872::t_caf6dc61cddc47 4
+  s_aaca1adb34d872::t_8df766b05e2829 10
+  s_aaca1adb34d872::t_f718ffa6d9d24a 143,145
+  s_aaca1adb34d872::t_353b9eb35dc506 86,94-114
+  s_aaca1adb34d872::t_2b1ccc6cc23412 134
+  s_aaca1adb34d872::t_fbb3c3c7c1befd 227
+  s_aaca1adb34d872::t_0eb48dc3726372 137
+  s_aaca1adb34d872::t_6f253925b65ca3 180
+  s_aaca1adb34d872::t_ab6c2b24311846 321
+  s_aaca1adb34d872::t_fdfa704212adf1 548
+desktop/apps/desktop/ui/call.tsx
+  s_aaca1adb34d872::t_abd92a867dd4d7 62
+  s_aaca1adb34d872::t_1c6b6bb236d524 1-61,63-277
+android/app/src/test/java/dev/pibot/android/DomainTest.kt
+  s_aaca1adb34d872::t_e887dd8b8f9799 126-130
+server/src/automations.ts
+  s_aaca1adb34d872::t_ab2e87ff1dda7c 58
+android/app/src/main/java/dev/pibot/android/voice/VoiceCallService.kt
+  s_aaca1adb34d872::t_063e6b3896faf1 97-99
+  s_aaca1adb34d872::t_25bb0670887c78 35
+  s_aaca1adb34d872::t_64a95c529acdd2 244
+  s_aaca1adb34d872::t_8443ecfc65c144 62
+  s_aaca1adb34d872::t_85c504c5213da6 252-256
+  s_aaca1adb34d872::t_5d7e3ca8af4b52 319
+  s_aaca1adb34d872::t_2532a7ee9aeb44 8,11
+  s_aaca1adb34d872::t_5df629126d2758 191-197,201-209
+  s_aaca1adb34d872::t_eaf01b764a682a 330-342
+  s_aaca1adb34d872::t_d7d7891709d6e1 290,292-293
+  s_aaca1adb34d872::t_127e47648391d0 128-133
+  s_aaca1adb34d872::t_38a5c7cc4e811c 1-7,9-10,12-34,36-61,63-96,100-127,134-157,159-190,198-200,210-243,245-251,257-289,291,294-318,320-329,343-361
+  s_aaca1adb34d872::t_03a244f1a29583 158
+android/app/src/main/java/dev/pibot/android/ui/TimelineScreen.kt
+  s_aaca1adb34d872::t_c0c50ced12d1c5 375-413
+  s_aaca1adb34d872::t_8876ceef35c0ca 455
+  s_aaca1adb34d872::t_31d16420279b14 32,36-41
+  s_aaca1adb34d872::t_9f5c6c80f12dea 45
+  s_aaca1adb34d872::t_c3cde5872674a5 233-239
+  s_aaca1adb34d872::t_3afcc804f2f192 189-191
+  s_aaca1adb34d872::t_04d7d7112c4f5e 113-134
+  s_aaca1adb34d872::t_743528f03e50c2 192-193
+server/src/agents.ts
+  s_aaca1adb34d872::t_ecc72f79c1dfa9 14-17
+  s_aaca1adb34d872::t_7979b170b6b3d1 282
+  s_aaca1adb34d872::t_8634d5750ed575 370-374
+  s_aaca1adb34d872::t_7390e0dd0d35e2 275
+  s_aaca1adb34d872::t_8c14cd8c019075 349
+  s_aaca1adb34d872::t_8b20e2d818c7ea 369
+server/src/migrate.ts
+  s_aaca1adb34d872::t_2a1dd968587f0f 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "07466bad0e44077ebc5ef4b266e1102332da2301",
+  "prompts": {},
+  "sessions": {
+    "s_aaca1adb34d872": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b0d765cc-d043-48fa-bfb5-1a3d1aa4a154",
+        "model": "grok-4.7"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
