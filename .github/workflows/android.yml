@@ -23,7 +23,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
       - name: Install Android SDK 37
         run: |
           yes | sdkmanager --licenses >/dev/null || true

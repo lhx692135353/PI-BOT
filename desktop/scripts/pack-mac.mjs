@@ -6,16 +6,17 @@ import { createRequire } from 'node:module';
 import { prepareRuntime } from './prepare-runtime.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const node = resolve(root, 'node_modules/node/bin/node');
 const runtime = resolve(root, 'apps/desktop/runtime');
 const require = createRequire(resolve(root, 'package.json'));
 
 function run(command, args, cwd) {
   const result = spawnSync(command, args, { cwd, stdio: 'inherit' });
+  if (result.error) throw result.error;
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
-run(node, ['scripts/build.mjs'], root);
+// CI installs with --ignore-scripts, so the vendored `node` package has no binary. Use the Node that invoked this script; the packaged runtime copies the same executable.
+run(process.execPath, ['scripts/build.mjs'], root);
 
 prepareRuntime(root, runtime);
 run(resolve(root, 'node_modules/.bin/electron-forge'), ['package', '--platform', 'darwin'], resolve(root, 'apps/desktop'));
