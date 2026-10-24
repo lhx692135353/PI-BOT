@@ -1,0 +1,65 @@
+server/migrations/0014-model-provider.sql
+  s_6d545ceacf0165::t_165104707f9b99 1-10
+server/tests/providers.test.ts
+  s_6d545ceacf0165::t_310d10de92be5d 1-28
+server/src/voice.ts
+  s_6d545ceacf0165::t_e2e2d3cd54a028 401-403
+  s_6d545ceacf0165::t_2f263f006c325b 15
+  s_6d545ceacf0165::t_8e727040bdeabf 21-34,36,38,40
+  s_6d545ceacf0165::t_b5b1d34d34d226 298-299,304-316,331
+  s_6d545ceacf0165::t_a1be7af7dc7195 355-362,366
+  s_6d545ceacf0165::t_75c9bb8f240ad3 154-155
+server/tests/voice.test.ts
+  s_6d545ceacf0165::t_36a931cfa926b9 164
+  s_6d545ceacf0165::t_ebe27688532bcf 178
+  s_6d545ceacf0165::t_8148df1cff1a87 13-18
+desktop/ARCHITECTURE.md
+  s_6d545ceacf0165::t_99c1b966bd4dfb 38
+admin/src/api.ts
+  s_6d545ceacf0165::t_0b171558f988b0 137-138
+  s_6d545ceacf0165::t_847580a864caf3 61-66,70,73
+server/ARCHITECTURE.md
+  s_6d545ceacf0165::t_94e280c96e4bd1 38
+server/openapi.json
+  s_6d545ceacf0165::t_a63b190193b718 1346-1380,2341-2348,2358-2368,2414-2467,2503-2510,2520-2530
+server/src/routes.ts
+  s_6d545ceacf0165::t_83e7dffe330284 91,95,97
+  s_6d545ceacf0165::t_214a961a425017 37
+  s_6d545ceacf0165::t_975aad3d42a032 618,620,622-624
+  s_6d545ceacf0165::t_2d0e5cab080c5a 117,120,128-139
+  s_6d545ceacf0165::t_3625fbcbb8c5b0 584-595,600,603-604
+  s_6d545ceacf0165::t_b4cf28a4566826 619
+  s_6d545ceacf0165::t_4ff8d62db50826 94
+  s_6d545ceacf0165::t_50d5a37bcbdfa1 583
+android/ARCHITECTURE.md
+  s_6d545ceacf0165::t_5455790406159c 38
+server/src/migrate.ts
+  s_6d545ceacf0165::t_3e47d118b1f328 4
+admin/src/main.tsx
+  s_6d545ceacf0165::t_e1e8f96dfb8c85 5
+  s_6d545ceacf0165::t_6fd656e6d65e22 294-298
+  s_6d545ceacf0165::t_2c32fb9d9d42ff 258-259,263-265,268,270,272-290,317-322,324-329,334-340,343-350,352-358,360-364,366-381,396
+  s_6d545ceacf0165::t_1f30249bbfaf7f 433-434,437-440
+  s_6d545ceacf0165::t_dccc8551fca445 269,271
+  s_6d545ceacf0165::t_bc7a7db2ffb7f4 341-342,351
+server/src/providers.ts
+  s_6d545ceacf0165::t_fccffe715ba7af 1-30,36-87,93-99
+  s_6d545ceacf0165::t_cc58fa0ebadaab 31-35
+  s_6d545ceacf0165::t_702543ec928b08 88-92
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "49b9ba0c0e3e712952f02d6e04e7db8dd8527bc4",
+  "prompts": {},
+  "sessions": {
+    "s_6d545ceacf0165": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "1114481b-c945-43e8-8f52-89b09e1e791a",
+        "model": "grok-4.7"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
