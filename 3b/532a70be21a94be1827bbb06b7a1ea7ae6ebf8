@@ -1,0 +1,23 @@
+desktop/scripts/pack-linux.mjs
+  s_b17831623899de::t_3c12fe1719fc19 20
+desktop/scripts/pack-mac.mjs
+  s_b17831623899de::t_a7d8d960aea9fe 61-64
+  s_b17831623899de::t_2d361b0eec63f3 12-26
+  s_b17831623899de::t_c27bf91ebd1aaa 2-3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3b532a70be21a94be1827bbb06b7a1ea7ae6ebf8",
+  "prompts": {},
+  "sessions": {
+    "s_b17831623899de": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "16cef3a0-1b43-46b5-bdf8-a4fbf2bc847f",
+        "model": "grok-4.7"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
