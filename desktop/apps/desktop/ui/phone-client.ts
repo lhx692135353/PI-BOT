@@ -1,6 +1,9 @@
 /** Client-only phone association and frame checks. This does not talk to a device. */
 
-export const PHONE_ASSOC_KEY = 'pi-bot.phone.device.v1';
+export const PHONE_ASSOC_KEY = 'pi-bot.phone.device.v2';
+export function phoneAssociationKey(serverUrl: string | null, userId: string | null) {
+  return `${PHONE_ASSOC_KEY}.${JSON.stringify([serverUrl?.replace(/\/+$/, '') ?? '', userId ?? ''])}`;
+}
 export const TAKEOVER_ABSOLUTE_MS = 10 * 60 * 1000;
 export const TAKEOVER_IDLE_MS = 45 * 1000;
 export const FRAME_WIDTH = 720;
@@ -38,12 +41,13 @@ export function resolvePhoneDevice(input: {
   savedDeviceId?: string | null;
   executionDeviceId?: string | null;
   devices: PhoneDeviceRef[];
-}): { deviceId: string | null; source: 'saved' | 'execution' | 'only' | 'none' } {
+}): { deviceId: string | null; source: 'saved' | 'execution' | 'missing' | 'none' } {
   const live = input.devices.filter(device => !device.revoked_at);
   const has = (id?: string | null) => !!id && live.some(device => device.id === id);
-  if (has(input.savedDeviceId)) return { deviceId: input.savedDeviceId ?? null, source: 'saved' };
-  if (has(input.executionDeviceId)) return { deviceId: input.executionDeviceId ?? null, source: 'execution' };
-  if (live.length === 1) return { deviceId: live[0].id, source: 'only' };
+  if (input.savedDeviceId) return has(input.savedDeviceId)
+    ? { deviceId: input.savedDeviceId, source: 'saved' } : { deviceId: null, source: 'missing' };
+  if (input.executionDeviceId) return has(input.executionDeviceId)
+    ? { deviceId: input.executionDeviceId, source: 'execution' } : { deviceId: null, source: 'missing' };
   return { deviceId: null, source: 'none' };
 }
 

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { parseInput } from '../packages/protocol/src/index.js';
 import {
   initialIdleEnd, isPhoneSessionId, mayApplyPhoneResponse, phoneModeLabel, readAcquire, readFrame, readPhoneMap, readStatus,
-  resolvePhoneDevice, takeoverHardEnd, textProblem, touchLease, writePhoneMap,
+  phoneAssociationKey, resolvePhoneDevice, takeoverHardEnd, textProblem, touchLease, writePhoneMap,
 } from '../apps/desktop/ui/phone-client.js';
 
 const device = '00000000-0000-4000-8000-000000000001';
@@ -22,10 +22,15 @@ test('phone association stays on real authorized computers and does not invent d
     { id: other, revoked_at: null },
   ];
   assert.equal(resolvePhoneDevice({ savedDeviceId: other, executionDeviceId: device, devices }).deviceId, other);
-  assert.equal(resolvePhoneDevice({ savedDeviceId: 'missing', executionDeviceId: device, devices }).source, 'execution');
-  assert.equal(resolvePhoneDevice({ savedDeviceId: device, devices: [{ id: device, revoked_at: '2026-10-23T00:00:00Z' }, { id: other, revoked_at: null }] }).deviceId, other);
+  assert.equal(resolvePhoneDevice({ savedDeviceId: 'missing', executionDeviceId: device, devices }).deviceId, null);
+  assert.equal(resolvePhoneDevice({ savedDeviceId: device, devices: [{ id: device, revoked_at: '2026-10-23T00:00:00Z' }, { id: other, revoked_at: null }] }).deviceId, null);
   assert.equal(resolvePhoneDevice({ devices }).source, 'none');
   assert.equal(resolvePhoneDevice({ devices: [] }).deviceId, null);
+  assert.equal(resolvePhoneDevice({ devices: [devices[0]] }).deviceId, null);
+  assert.equal(resolvePhoneDevice({ executionDeviceId: 'missing', devices: [devices[0]] }).deviceId, null);
+  assert.notEqual(phoneAssociationKey('https://a.example', 'u'), phoneAssociationKey('https://b.example', 'u'));
+  assert.notEqual(phoneAssociationKey('https://a.example', 'u'), phoneAssociationKey('https://a.example', 'v'));
+  assert.equal(phoneAssociationKey('https://a.example/', 'u'), phoneAssociationKey('https://a.example', 'u'));
   const stored = writePhoneMap(readPhoneMap('{"bad":1}'), bot, device);
   assert.deepEqual(stored, { [bot]: device });
   assert.deepEqual(readPhoneMap(JSON.stringify(stored)), stored);

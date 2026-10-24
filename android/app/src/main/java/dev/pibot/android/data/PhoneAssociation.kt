@@ -14,16 +14,19 @@ data class PhoneChoice(val deviceId: String?, val source: String)
 fun resolvePhoneDevice(savedDeviceId: String?, executionDeviceId: String?, devices: List<Device>): PhoneChoice {
     val live = devices.filter { it.revokedAt == null }
     fun has(id: String?) = id != null && live.any { it.id == id }
-    if (has(savedDeviceId)) return PhoneChoice(savedDeviceId, "saved")
-    if (has(executionDeviceId)) return PhoneChoice(executionDeviceId, "execution")
-    if (live.size == 1) return PhoneChoice(live[0].id, "only")
+    // A stale explicit binding is not permission to silently select another computer.
+    if (!savedDeviceId.isNullOrBlank()) return if (has(savedDeviceId)) PhoneChoice(savedDeviceId, "saved") else PhoneChoice(null, "missing")
+    if (!executionDeviceId.isNullOrBlank()) return if (has(executionDeviceId)) PhoneChoice(executionDeviceId, "execution") else PhoneChoice(null, "missing")
     return PhoneChoice(null, "none")
 }
 
 /** Namespaced key for SharedPreferences mapping per account. */
-fun phoneAssociationKey(userId: String?): String {
+fun phoneAssociationKey(userId: String?, serverUrl: String? = null): String {
     val trimmed = userId?.trim().orEmpty()
-    return if (trimmed.isEmpty()) "map.v1.default" else "map.v1.user.$trimmed"
+    val server = serverUrl?.trim()?.trimEnd('/').orEmpty()
+    // Length prefix avoids separator collisions. Legacy user-only maps are not migrated:
+    // their server identity is unknown, so users must explicitly select again.
+    return "map.v2.${server.length}:$server.${trimmed.length}:$trimmed"
 }
 
 fun readPhoneMap(raw: String?): Map<String, String> {

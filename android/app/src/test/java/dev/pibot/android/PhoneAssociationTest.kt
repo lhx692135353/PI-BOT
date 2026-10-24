@@ -26,11 +26,13 @@ class PhoneAssociationTest {
     fun choosesARealAuthorizedComputerAndDoesNotInventOne() {
         val both = listOf(first, second)
         assertEquals(second.id, resolvePhoneDevice(second.id, first.id, both).deviceId)
-        assertEquals("execution", resolvePhoneDevice("missing", first.id, both).source)
-        assertEquals(second.id, resolvePhoneDevice(first.id, null, listOf(first.copy(revokedAt = "2026-10-23T00:00:00Z"), second)).deviceId)
+        assertNull(resolvePhoneDevice("missing", first.id, both).deviceId)
+        assertEquals("execution", resolvePhoneDevice(null, first.id, both).source)
+        assertNull(resolvePhoneDevice(first.id, null, listOf(first.copy(revokedAt = "2026-10-23T00:00:00Z"), second)).deviceId)
+        assertNull(resolvePhoneDevice(null, "missing", listOf(first)).deviceId)
         assertEquals("none", resolvePhoneDevice(null, null, both).source)
         assertNull(resolvePhoneDevice(null, null, emptyList()).deviceId)
-        assertEquals("only", resolvePhoneDevice(null, null, listOf(first)).source)
+        assertNull(resolvePhoneDevice(null, null, listOf(first)).deviceId)
     }
 
     @Test
@@ -42,11 +44,11 @@ class PhoneAssociationTest {
 
     @Test
     fun namespacedAccountKeySeparatesUsersAndProvidesSafeDefault() {
-        assertEquals("map.v1.default", phoneAssociationKey(null))
-        assertEquals("map.v1.default", phoneAssociationKey(""))
-        assertEquals("map.v1.default", phoneAssociationKey("   "))
-        assertEquals("map.v1.user.alice", phoneAssociationKey("alice"))
-        assertEquals("map.v1.user.bob", phoneAssociationKey(" bob  "))
+        assertEquals(phoneAssociationKey(null), phoneAssociationKey("   "))
+        assertFalse(phoneAssociationKey("alice") == phoneAssociationKey("bob"))
+        assertEquals(phoneAssociationKey("bob"), phoneAssociationKey(" bob  "))
+        assertFalse(phoneAssociationKey("alice", "https://a.example") == phoneAssociationKey("alice", "https://b.example"))
+        assertEquals(phoneAssociationKey("alice", "https://a.example"), phoneAssociationKey("alice", "https://a.example/"))
     }
 
     @Test

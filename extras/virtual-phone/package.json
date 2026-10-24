@@ -1,0 +1,38 @@
+{
+  "name": "@pi-bot/virtual-phone",
+  "version": "0.1.0",
+  "description": "Opt-in Linux ADB phone controller for an authenticated Pi Bot execution node",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "NOTICE",
+    "phone.example.json",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "export": "npm run build && node scripts/export.mjs"
+  },
+  "dependencies": {
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.6",
+    "typescript": "7.0.2",
+    "tsx": "4.23.15"
+  },
+  "license": "Apache-2.0"
+}

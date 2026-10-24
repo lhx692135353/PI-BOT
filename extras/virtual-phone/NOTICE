@@ -1,0 +1,5 @@
+Pi Bot Virtual Phone Addon
+Derived from PI-BOT desktop/packages/service/src/phone.ts.
+Copyright 2026 lhx692135353 and contributors.
+Licensed under the Apache License, Version 2.0.
+This package does not include Android images, Google services or Pi Bot credentials.

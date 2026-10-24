@@ -39,7 +39,10 @@ export function settings(env = process.env) {
     conversationConcurrency: integer(env.PI_BOT_CONVERSATION_CONCURRENCY, 4, 1, 64),
     /** How long a dropped voice socket keeps the Grok session before the call ends. */
     voiceGraceMs: integer(env.PI_BOT_VOICE_GRACE_MS, 15000, 200, 120000),
-    /** Test override. Production calls follow an xAI model base URL. */
+    /** Dedicated voice model leaves the Bot text/summary model unchanged. */
+    voiceModelId: z.string().uuid().optional().parse(env.PI_BOT_VOICE_MODEL_ID || undefined),
+    voiceProtocol: z.enum(["grok", "openai"]).parse(env.PI_BOT_VOICE_PROTOCOL ?? "grok"),
+    /** Same-host realtime endpoint override, including proxy deployments. */
     voiceRealtimeUrl: env.PI_BOT_VOICE_REALTIME_URL?.trim() || undefined,
     automationRoundSeconds: integer(env.PI_BOT_AUTOMATION_ROUND_SECONDS, 300, 10, 1800),
     automationModelCalls: integer(env.PI_BOT_AUTOMATION_MODEL_CALLS, 20, 1, 200),

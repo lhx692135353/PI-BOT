@@ -15,6 +15,8 @@ import dev.pibot.android.data.validateAcquireResponse
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestCoroutineScheduler
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -104,14 +106,14 @@ class PhoneControlFlowTest {
         assertNull(choice2.deviceId)
         assertEquals("none", choice2.source)
 
-        // 仅有一台可用电脑时自动作为唯一默认
+        // 无绑定时即使仅有一台电脑也要求用户明确选择
         val choice3 = resolvePhoneDevice(savedDeviceId = null, executionDeviceId = null, devices = listOf(devices[0]))
-        assertEquals(devA, choice3.deviceId)
-        assertEquals("only", choice3.source)
+        assertNull(choice3.deviceId)
+        assertEquals("none", choice3.source)
 
         // 用户命名空间隔离：不同用户不串手机绑定字典
-        assertEquals("map.v1.user.u1", phoneAssociationKey("u1"))
-        assertEquals("map.v1.user.u2", phoneAssociationKey("u2"))
+        assertFalse(phoneAssociationKey("u1") == phoneAssociationKey("u2"))
+        assertFalse(phoneAssociationKey("u1", "https://a.example") == phoneAssociationKey("u1", "https://b.example"))
     }
 
     /**
@@ -154,6 +156,24 @@ class PhoneControlFlowTest {
         assertEquals("/pibot/devices/$devA/phone/release", releaseReq!!.requestUrl!!.encodedPath)
         val body = Json.parseToJsonElement(releaseReq.body.readUtf8()).jsonObject
         assertEquals(oldSession, body["sessionId"]?.jsonPrimitive?.content)
+    }
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test
+    fun queuedReleaseUsesOriginalAccountEvenAfterLogout() {
+        val scheduler = TestCoroutineScheduler()
+        val dispatcher = StandardTestDispatcher(scheduler)
+        val client = OkHttpClient.Builder().proxy(Proxy.NO_PROXY).build()
+        val queued = PiBotRepository(PiBotApi(client), client, storage, repoScope, dispatcher)
+        respond(200, """{"released":true}""")
+        queued.releasePhoneSessionAsync(devA, UUID.randomUUID().toString())
+        queued.logout()
+        scheduler.advanceUntilIdle()
+        val request = server.takeRequest(2, TimeUnit.SECONDS)
+        assertNotNull(request)
+        assertEquals("Bearer test-token", request!!.getHeader("Authorization"))
+        assertEquals("/pibot/devices/$devA/phone/release", request.requestUrl!!.encodedPath)
+        assertNull(queued.session.value)
     }
 
     /**

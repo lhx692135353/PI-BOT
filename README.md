@@ -164,3 +164,7 @@ Android 的构建和单元测试单独执行：
 请先阅读 [贡献指南](CONTRIBUTING.md)。普通贡献者通过 Fork → 功能分支 → PR 提交；由维护者决定是否合并。`main` 的规则和开源发布步骤记录在 [维护指南](docs/MAINTAINING.md)。安全问题请按 [安全政策](SECURITY.md) 私下报告。
 
 本项目的原创代码按 [Apache License 2.0](LICENSE) 提供；第三方代码保留其原有许可，详见 [NOTICE](NOTICE) 和 [第三方声明](THIRD_PARTY_NOTICES.md)。仓库各 npm workspace 保留 `private: true`，用于防止误发布到 npm，不影响 GitHub 开源。
+
+## 可选：虚拟手机
+
+Bot 内可只读预览并显式接管已授权电脑上的 Android 手机。Android 入口位于 Bot 对话的「更多选项」→「虚拟手机」，与资料库、编辑 Bot 同级。部署、安全边界和排障见 [虚拟手机说明](docs/virtual-phone.md)。此能力独立于语音模型配置，当前不是通用多机云手机管理平台。

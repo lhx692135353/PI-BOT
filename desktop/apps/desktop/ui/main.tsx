@@ -7,6 +7,7 @@ import { bridge, call, errorText } from './bridge.js';
 import { BotEditor } from './editor.js';
 import { Timeline } from './timeline.js';
 import { BotListItem } from './bot-list-item.js';
+import { phoneAssociationKey } from './phone-client.js';
 import { DevicePhoneButton, PhoneDock } from './phone-control.js';
 import './style.css';
 
@@ -358,7 +359,7 @@ function App() {
           }}>删除</button>}
         </div>
       </>}
-      {phoneTarget && <PhoneDock botId={phoneTarget.botId ? bot?.id ?? phoneTarget.botId : null} pinnedDeviceId={phoneTarget.deviceId} devices={devices} executionDeviceId={phoneTarget.botId ? bot?.execution_device_id ?? null : null} onClose={() => setPhoneTarget(null)} />}
+      {phoneTarget && <PhoneDock key={phoneAssociationKey(account.serverUrl, account.user?.id ?? null)} associationKey={phoneAssociationKey(account.serverUrl, account.user?.id ?? null)} botId={phoneTarget.botId ? bot?.id ?? phoneTarget.botId : null} pinnedDeviceId={phoneTarget.deviceId} devices={devices} executionDeviceId={phoneTarget.botId ? bot?.execution_device_id ?? null : null} onClose={() => setPhoneTarget(null)} />}
       {editor && <BotEditor bot={editor === 'new' ? undefined : editor} models={models} devices={devices} currentDeviceId={account.deviceId ?? null} onClose={() => setEditor(null)} onSaved={b => { setEditor(null); setSelected(b.id); void loadBots(); }} />}
       {settings && <Settings state={account} onClose={() => setSettings(false)} onOpenPhone={device => { setSettings(false); setPhoneTarget({ botId: null, deviceId: device.id }); }} />}
     </div>

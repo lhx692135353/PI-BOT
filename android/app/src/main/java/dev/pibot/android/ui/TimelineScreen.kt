@@ -175,11 +175,11 @@ fun TimelineScreen(
                         Text("${target?.label ?: "未绑定电脑"} · ${if (targetOnline) "在线" else "云端聊天 · 本地任务等待"}", fontSize = 11.sp, lineHeight = 14.sp, color = Muted)
                     }
                 }
-                CircleAction("手机", onPhone) { Text("手机", fontSize = 12.sp) }
                 Box {
                     CircleAction("更多选项", { menuOpen = true }) { Icon(Icons.Filled.MoreVert, null) }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                         DropdownMenuItem(text = { Text("资料库") }, enabled = targetOnline, onClick = { menuOpen = false; onFiles() })
+                        DropdownMenuItem(text = { Text("虚拟手机") }, onClick = { menuOpen = false; onPhone() })
                         DropdownMenuItem(text = { Text("编辑 Bot") }, onClick = { menuOpen = false; onEdit() }, leadingIcon = { Icon(Icons.Filled.Edit, null) })
                     }
                 }

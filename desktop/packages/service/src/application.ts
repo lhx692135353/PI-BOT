@@ -35,6 +35,7 @@ export class Application {
   private account: Account | null = null;
   private sign: Signer | null = null;
   private socket: CloudSocket | null = null;
+  private connectionGeneration = 0;
   private executor: Executor | null = null;
   private connection: Connection = 'signed_out';
   private activities = new Map<string, LocalActivity>();
@@ -64,6 +65,7 @@ export class Application {
   }
   private connect(account: Account, privateKey: string) {
     checkServerUrl(account.serverUrl);
+    const generation = ++this.connectionGeneration;
     this.account = account;
     this.sign = signer(account.deviceId, privateKey);
     this.executor = new Executor({
@@ -76,15 +78,16 @@ export class Application {
       factory: this.o.factory,
     });
     this.socket = new CloudSocket(account.serverUrl, this.sign, {
-      open: () => { this.o.log?.('cloud.online'); this.setConnection('online'); this.o.emit({ type: 'bots' }); },
+      open: () => { if (generation !== this.connectionGeneration) return; this.o.log?.('cloud.online'); this.setConnection('online'); this.o.emit({ type: 'bots' }); },
       close: authFailed => {
+        if (generation !== this.connectionGeneration) return;
         this.o.log?.(authFailed ? 'cloud.revoked' : 'cloud.offline');
         this.phone.release();
         this.executor?.stopAll();
         if (authFailed) { this.socket?.stop(); this.setConnection('revoked'); }
         else this.setConnection('offline');
       },
-      message: m => { void this.onMessage(m).catch(() => {}); },
+      message: m => { if (generation === this.connectionGeneration) void this.onMessage(m, generation).catch(() => {}); },
     }, this.o.backoff);
     this.setConnection('connecting');
     this.socket.start();
@@ -105,7 +108,9 @@ export class Application {
       this.o.emit({ type: 'bot.mood', bot_id: run.bot.id, name: run.bot.name, mood: 'idle' });
     }, 6000));
   }
-  private async onMessage(m: Record<string, any>) {
+  private async onMessage(m: Record<string, any>, generation = this.connectionGeneration) {
+    if (generation !== this.connectionGeneration) return;
+    const socket = this.socket;
     const executor = this.executor;
     if (!executor) return;
     switch (m.type) {
@@ -128,10 +133,10 @@ export class Application {
             : m.method === 'files.list' ? await previewList(this.o.libraryRoot, String(p.slug), String(p.path ?? ''))
             : m.method === 'files.read' ? await previewRead(this.o.libraryRoot, String(p.slug), String(p.path ?? ''))
             : (() => { throw new Error('不支持的请求'); })();
-          this.socket?.send({ type: 'rpc_result', id: m.id, ok: true, result });
+          if (generation === this.connectionGeneration && socket === this.socket) socket?.send({ type: 'rpc_result', id: m.id, ok: true, result });
         } catch (e) {
           const missing = (e as NodeJS.ErrnoException).code === 'ENOENT';
-          this.socket?.send({ type: 'rpc_result', id: m.id, ok: false, error: missing ? '文件不存在' : e instanceof Error ? e.message : '读取失败' });
+          if (generation === this.connectionGeneration && socket === this.socket) socket?.send({ type: 'rpc_result', id: m.id, ok: false, error: missing ? '文件不存在' : e instanceof Error ? e.message : '读取失败' });
         }
         return;
       }
@@ -173,6 +178,7 @@ export class Application {
       try { await this.cloud('POST', `/devices/${this.account.deviceId}/revoke`); }
       catch (error) { if (!(error instanceof CloudHttpError && error.status === 401)) throw error; }
     }
+    this.connectionGeneration++;
     this.phone.release();
     this.executor?.stopAll();
     this.socket?.stop();
@@ -222,5 +228,5 @@ export class Application {
     }
     throw new Error('未知方法');
   }
-  async shutdown() { this.phone.close(); this.executor?.stopAll(); this.socket?.stop(); for (const timer of this.afterglow.values()) clearTimeout(timer); this.afterglow.clear(); }
+  async shutdown() { this.connectionGeneration++; this.phone.close(); this.executor?.stopAll(); this.socket?.stop(); for (const timer of this.afterglow.values()) clearTimeout(timer); this.afterglow.clear(); }
 }

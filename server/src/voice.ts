@@ -13,6 +13,8 @@ import { complete } from "./llm.js";
 import { cancelRun, dispatchDevice } from "./runs.js";
 import { readVoiceTicket, user, Vault, type LlmClaims } from "./security.js";
 
+import { PcmResampler } from "./voice-audio.js";
+
 const SAMPLE_RATE = 16000;
 const MAX_CALL_MS = 120 * 60 * 1000;
 const PLAYBACK_WAIT_MS = 8000;
@@ -141,7 +143,9 @@ export class VoiceHub implements VoiceAnnouncer {
       const bot = await ownBot(tx, userId, botId, true);
       const model = await resolveModel(tx, bot);
       if (!model) throw new HttpError(503, "管理员尚未配置可用模型");
-      const endpoint = voiceEndpoint(model.base_url, this.s.voiceRealtimeUrl);
+      const voiceModel = this.s.voiceModelId ? await tx.get("models", this.s.voiceModelId) : model;
+      if (!voiceModel?.enabled) throw new HttpError(503, "语音模型尚未启用");
+      const endpoint = voiceEndpoint(voiceModel.base_url, this.s.voiceRealtimeUrl);
       if (!endpoint) throw new HttpError(422, "当前模型不支持语音通话");
       const aborts = await cancelTextTurns(tx, this.hub, userId, botId);
       const orphans = await tx.rows("SELECT * FROM bot_runs WHERE bot_id=$1 AND origin='voice' AND status = ANY($2)", [botId, ACTIVE]);
@@ -176,8 +180,10 @@ export class VoiceHub implements VoiceAnnouncer {
       });
       await wakeGoals(tx, botId);
       await tx.notify({ user_id: userId, bot_id: botId });
-      const key = new Vault(this.s.vaultFile).open(model.secret, model.model_id);
-      return { runId, assistantMessageId, endpoint, instructions, key, model, aborts };
+      const vault = new Vault(this.s.vaultFile);
+      const key = vault.open(voiceModel.secret, voiceModel.model_id);
+      const summaryKey = vault.open(model.secret, model.model_id);
+      return { runId, assistantMessageId, endpoint, instructions, key, summaryKey, model, aborts };
     });
     for (const abort of opened.aborts) {
       if (abort.kind === "device") abort.send({ type: "cancel", run_id: abort.runId });
@@ -189,7 +195,7 @@ export class VoiceHub implements VoiceAnnouncer {
     }
     const session = new VoiceSession(this.db, this.s, this.hub, this.dispatcher, {
       userId, botId, runId: opened.runId, assistantMessageId: opened.assistantMessageId,
-      endpoint: opened.endpoint, instructions: opened.instructions, key: opened.key, model: opened.model,
+      endpoint: opened.endpoint, instructions: opened.instructions, key: opened.key, summaryKey: opened.summaryKey, model: opened.model,
     }, () => {
       this.byBot.delete(botId);
       this.byRun.delete(opened.runId);
@@ -245,6 +251,8 @@ class VoiceSession {
   private assistant = "";
   private earlyAudio: Buffer[] = [];
   private replacing = false;
+  private inputPcm = new PcmResampler(16000, 24000);
+  private outputPcm = new PcmResampler(24000, 16000);
   constructor(
     private db: Database,
     private s: Settings,
@@ -252,7 +260,7 @@ class VoiceSession {
     private dispatcher: AgentDispatcher,
     private call: {
       userId: string; botId: string; runId: string; assistantMessageId: string;
-      endpoint: string; instructions: string; key: string; model: Row;
+      endpoint: string; instructions: string; key: string; summaryKey: string; model: Row;
     },
     private onGone: () => void,
   ) {
@@ -292,7 +300,17 @@ class VoiceSession {
       this.resumeTried = false;
       upstream.send(JSON.stringify({
         type: "session.update",
-        session: {
+        session: this.s.voiceProtocol === "openai" ? {
+          type: "realtime",
+          model: new URL(this.call.endpoint).searchParams.get("model") || "gpt-realtime",
+          output_modalities: ["audio"],
+          instructions: this.call.instructions,
+          tools: VOICE_TOOLS,
+          audio: {
+            input: { format: { type: "audio/pcm", rate: 24000 }, turn_detection: { type: "server_vad" }, transcription: { model: "gpt-4o-mini-transcribe" } },
+            output: { format: { type: "audio/pcm", rate: 24000 }, voice: "marin" },
+          },
+        } : {
           voice: "eve",
           instructions: this.call.instructions,
           turn_detection: { type: "server_vad" },
@@ -305,7 +323,7 @@ class VoiceSession {
           },
         },
       }));
-      for (const chunk of this.earlyAudio) if (upstream.readyState === 1) upstream.send(chunk);
+      for (const chunk of this.earlyAudio) if (upstream.readyState === 1) this.sendAudio(upstream, chunk);
       this.earlyAudio = [];
     });
     upstream.on("message", (data, isBinary) => this.onUpstream(data, isBinary));
@@ -313,7 +331,7 @@ class VoiceSession {
     upstream.on("close", () => {
       if (this.upstream !== upstream || this.ending) return;
       this.upstream = undefined;
-      if (this.resumeTried) void this.finish("failed", "upstream");
+      if (this.resumeTried || this.s.voiceProtocol === "openai") void this.finish("failed", "upstream");
       else { this.resumeTried = true; this.openUpstream(); }
     });
   }
@@ -329,10 +347,15 @@ class VoiceSession {
     this.pump();
     return true;
   }
+  private sendAudio(upstream: WebSocket, chunk: Buffer) {
+    if (this.s.voiceProtocol === "grok") { upstream.send(chunk); return; }
+    const pcm = this.inputPcm.convert(chunk);
+    if (pcm.length) upstream.send(JSON.stringify({ type: "input_audio_buffer.append", audio: pcm.toString("base64") }));
+  }
   private audioFromClient(chunk: Buffer) {
     if (this.muted || !chunk.length) return;
     const upstream = this.upstream;
-    if (upstream?.readyState === 1) upstream.send(chunk);
+    if (upstream?.readyState === 1) this.sendAudio(upstream, chunk);
     else {
       this.earlyAudio.push(chunk);
       let bytes = this.earlyAudio.reduce((n, part) => n + part.length, 0);
@@ -367,10 +390,11 @@ class VoiceSession {
     else if (type === "input_audio_buffer.speech_started") this.barge();
     else if (type === "conversation.item.input_audio_transcription.completed" && event.transcript) this.transcript.push(`用户：${String(event.transcript).slice(0, 2000)}`);
     else if (type === "response.created") { this.responseOpen = true; this.setPhase(this.tools.length ? "thinking" : "speaking"); }
-    else if (type === "response.output_text.delta" && event.delta) this.assistant = (this.assistant + String(event.delta)).slice(0, 8000);
+    else if ((type === "response.output_text.delta" || type === "response.output_audio_transcript.delta") && event.delta) this.assistant = (this.assistant + String(event.delta)).slice(0, 8000);
     else if (type === "response.output_audio.delta" && typeof event.delta === "string" && this.client?.readyState === 1) {
-      const chunk = Buffer.from(event.delta, "base64");
-      this.client.send(chunk);
+      const raw = Buffer.from(event.delta, "base64");
+      const chunk = this.s.voiceProtocol === "openai" ? this.outputPcm.convert(raw) : raw;
+      if (chunk.length) this.client.send(chunk);
       this.playbackIdle = false;
       this.setPhase("speaking");
     } else if (type === "response.function_call_arguments.done") {
@@ -552,7 +576,7 @@ class VoiceSession {
     const lines = this.transcript.filter(Boolean);
     if (!lines.length) return "语音通话已结束。";
     try {
-      const { text } = await complete(this.call.model, this.call.key, [
+      const { text } = await complete(this.call.model, this.call.summaryKey, [
         { role: "system", content: "把这段语音通话整理成给聊天时间线的简短中文总结。不要逐字稿，不要编造没有发生的事，两三句话即可。" },
         { role: "user", content: lines.join("\n").slice(0, 12000) },
       ], 400, 20000);

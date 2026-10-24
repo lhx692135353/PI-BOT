@@ -1,0 +1,8 @@
+{
+  "enabled": true,
+  "adbPath": "/absolute/path/to/android-sdk/platform-tools/adb",
+  "lockPath": "/absolute/path/to/private-runtime/phone.lock",
+  "serial": "your-device-serial",
+  "adbPort": 5038,
+  "ffmpegPath": "/absolute/path/to/ffmpeg"
+}

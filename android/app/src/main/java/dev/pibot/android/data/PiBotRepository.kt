@@ -173,10 +173,12 @@ class PiBotRepository(
 
     fun releasePhoneSessionAsync(deviceId: String, sessionId: String) {
         if (deviceId.isBlank() || sessionId.isBlank()) return
+        // Capture credentials now; a queued cleanup must not use the next account.
+        val original = _session.value ?: return
         scope.launch(NonCancellable + io) {
             withTimeoutOrNull(15_000) {
                 runCatching {
-                    phone(deviceId, "release", buildJsonObject {
+                    api.phone(ServerUrl(original.serverUrl), original.token, deviceId, "release", buildJsonObject {
                         put("sessionId", JsonPrimitive(sessionId))
                     })
                 }

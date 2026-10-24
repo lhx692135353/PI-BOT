@@ -6,6 +6,7 @@ on:
     paths:
       - "desktop/**"
       - "packages/**"
+      - "extras/virtual-phone/**"
       - "package.json"
       - "package-lock.json"
       - "tsconfig.json"
@@ -15,6 +16,7 @@ on:
     paths:
       - "desktop/**"
       - "packages/**"
+      - "extras/virtual-phone/**"
       - "package.json"
       - "package-lock.json"
       - "tsconfig.json"

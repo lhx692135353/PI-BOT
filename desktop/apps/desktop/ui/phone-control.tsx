@@ -51,9 +51,9 @@ function releaseSession(deviceId: string, sessionId: string) {
   if (!isPhoneSessionId(sessionId)) return;
   void call('phoneRelease', { deviceId, sessionId }).catch(() => {});
 }
-function rememberDevice(botId: string, deviceId: string) {
-  const next = writePhoneMap(readPhoneMap(localStorage.getItem(PHONE_ASSOC_KEY)), botId, deviceId);
-  localStorage.setItem(PHONE_ASSOC_KEY, JSON.stringify(next));
+function rememberDevice(associationKey: string, botId: string, deviceId: string) {
+  const next = writePhoneMap(readPhoneMap(localStorage.getItem(associationKey)), botId, deviceId);
+  localStorage.setItem(associationKey, JSON.stringify(next));
 }
 function rawSessionId(value: unknown) {
   if (!value || typeof value !== 'object') return null;
@@ -85,8 +85,9 @@ export function DevicePhoneButton({ device, onOpen }: { device: Device; onOpen()
 }
 
 export function PhoneDock({
-  botId, pinnedDeviceId, devices, executionDeviceId, onClose,
+  botId, pinnedDeviceId, devices, executionDeviceId, onClose, associationKey = PHONE_ASSOC_KEY,
 }: {
+  associationKey?: string;
   botId: string | null;
   pinnedDeviceId: string | null;
   devices: Device[];
@@ -203,7 +204,7 @@ export function PhoneDock({
     seenBotRef.current = botId;
     if (botChanged) pickedRef.current = false;
     let saved: string | null = null;
-    try { saved = botId ? readPhoneMap(localStorage.getItem(PHONE_ASSOC_KEY))[botId] ?? null : null; }
+    try { saved = botId ? readPhoneMap(localStorage.getItem(associationKey))[botId] ?? null : null; }
     catch { saved = null; }
     const pinnedOk = !!pinnedDeviceId && live.some(device => device.id === pinnedDeviceId);
     const keepPick = !botChanged && !pinnedDeviceId && pickedRef.current && !!deviceId && live.some(device => device.id === deviceId);
@@ -215,7 +216,7 @@ export function PhoneDock({
     if (!botChanged && nextId === deviceId) return;
     dropControl(undefined, true);
     if (nextId !== deviceId) setDeviceId(nextId);
-  }, [botId, pinnedDeviceId, executionDeviceId, devices, deviceId]);
+  }, [botId, pinnedDeviceId, executionDeviceId, devices, deviceId, associationKey]);
   useEffect(() => {
     const selectedOnline = live.some(device => device.id === deviceId && device.online);
     if (!deviceId || selectedOnline) return;
@@ -319,7 +320,7 @@ export function PhoneDock({
     dropControl(undefined, true);
     setDeviceId(next);
     if (botId) {
-      try { rememberDevice(botId, next); }
+      try { rememberDevice(associationKey, botId, next); }
       catch { setActionNotice('这台电脑不允许保存关联'); }
     }
   };

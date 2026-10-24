@@ -12,12 +12,14 @@
   ],
   "scripts": {
     "typecheck": "tsc --noEmit && npm run typecheck --workspace=pi-bot-desktop && npm run typecheck --workspace=@pi-bot/admin && npm run typecheck --workspace=@pi-bot/a2ui",
-    "test": "node --import tsx --test --test-concurrency=1 --test-timeout=120000 server/tests/*.test.ts packages/agent/tests/*.test.ts packages/a2ui/tests/*.test.ts packages/bot-face/tests/*.test.ts desktop/tests/*.test.ts",
+    "test": "node --import tsx --test --test-concurrency=1 --test-timeout=120000 server/tests/*.test.ts packages/agent/tests/*.test.ts packages/a2ui/tests/*.test.ts packages/bot-face/tests/*.test.ts desktop/tests/*.test.ts extras/virtual-phone/tests/*.test.ts",
     "build": "npm run build --workspace=@pi-bot/admin && npm run build --workspace=@pi-bot/server",
     "start": "npm run start --workspace=@pi-bot/server",
     "admin:dev": "npm run dev --workspace=@pi-bot/admin",
     "desktop:dev": "npm run dev --workspace=pi-bot-desktop",
-    "a2ui:build": "npm run build --workspace=@pi-bot/a2ui"
+    "a2ui:build": "npm run build --workspace=@pi-bot/a2ui",
+    "virtual-phone:build": "tsc -p extras/virtual-phone/tsconfig.json",
+    "virtual-phone:test": "node --import tsx --test extras/virtual-phone/tests/*.test.ts"
   },
   "devDependencies": {
     "typescript": "7.0.2",

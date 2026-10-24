@@ -1,6 +1,7 @@
 /** Mounts the real phone panel in Electron. The bridge is a local mock; nothing talks to a phone or server. */
 import { useState, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { PHONE_ASSOC_KEY } from '../apps/desktop/ui/phone-client.js';
 import { DevicePhoneButton, PhoneDock } from '../apps/desktop/ui/phone-control.js';
 import type { Device } from '../packages/protocol/src/index.js';
 
@@ -262,11 +263,27 @@ async function closeAndBackgroundRelease() {
   check((page.input as { sessionId?: string }).sessionId === SESSION, 'pagehide 没有释放当前会话');
 }
 
+async function missingBindingDoesNotRetarget() {
+  localStorage.setItem(PHONE_ASSOC_KEY, JSON.stringify({ [BOT]: A }));
+  const remaining = devices().filter(device => device.id === B);
+  respond = method => method === 'phoneStatus' ? { available: true, occupied: false } : frame(JPEG_B);
+  await render(<PhoneDock botId={BOT} pinnedDeviceId={null} devices={remaining} executionDeviceId={B} onClose={() => {}} />);
+  await delay(150);
+  check(methods('phonePreview').length === 0, '失效绑定静默切到另一台电脑预览');
+  check(methods('phoneAcquire').length === 0, '失效绑定触发接管');
+  const select = document.querySelector('select[aria-label="选择已授权的执行电脑"]') as HTMLSelectElement;
+  check(select?.value === '', '失效绑定未要求明确选择');
+  select.value = B; select.dispatchEvent(new Event('change', { bubbles: true }));
+  const preview = await waitFor(() => methods('phonePreview')[0], '明确选择后的预览');
+  check((preview.input as { deviceId?: string }).deviceId === B, '明确选择后的目标不一致');
+}
+
 const scenarios = [
   ['入口与默认预览不接管', entryAndDefaultPreview],
   ['切换设备或 Bot 清掉旧画面', switchClearsOldFrame],
   ['迟到的接管会被释放', lateAcquireReleases],
   ['关闭和后台会释放接管', closeAndBackgroundRelease],
+  ['失效绑定不静默换设备', missingBindingDoesNotRetarget],
 ] as const;
 
 async function main() {
