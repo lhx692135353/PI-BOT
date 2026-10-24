@@ -1343,6 +1343,41 @@
         }
       }
     },
+    "/bots/{id}/goals": {
+      "get": {
+        "tags": [
+          "bots"
+        ],
+        "summary": "这个 Bot 自己记下的目标",
+        "security": [
+          {
+            "UserBearer": []
+          },
+          {
+            "DeviceSignature": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "{ detail }"
+          }
+        }
+      }
+    },
     "/bots/{id}/voice/ticket": {
       "post": {
         "tags": [
@@ -2303,6 +2338,14 @@
                     "minLength": 1,
                     "maxLength": 80
                   },
+                  "provider": {
+                    "type": "string",
+                    "enum": [
+                      "xai",
+                      "bailian",
+                      "custom"
+                    ]
+                  },
                   "base_url": {
                     "type": "string",
                     "format": "uri"
@@ -2311,6 +2354,17 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 200
+                  },
+                  "voice_model": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 200
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   },
                   "api_key": {
                     "type": "string",
@@ -2338,11 +2392,64 @@
                 },
                 "required": [
                   "name",
-                  "base_url",
                   "provider_model",
                   "api_key",
                   "context_window",
                   "max_tokens"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "{ detail }"
+          }
+        }
+      }
+    },
+    "/admin/api/model-catalog": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "按服务商密钥拉取可选的对话模型和语音模型",
+        "security": [
+          {
+            "UserBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "provider": {
+                    "type": "string",
+                    "enum": [
+                      "xai",
+                      "bailian"
+                    ]
+                  },
+                  "api_key": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 8192
+                  },
+                  "model_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  }
+                },
+                "required": [
+                  "provider"
                 ]
               }
             }
@@ -2393,6 +2500,14 @@
                     "minLength": 1,
                     "maxLength": 80
                   },
+                  "provider": {
+                    "type": "string",
+                    "enum": [
+                      "xai",
+                      "bailian",
+                      "custom"
+                    ]
+                  },
                   "base_url": {
                     "type": "string",
                     "format": "uri"
@@ -2401,6 +2516,17 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 200
+                  },
+                  "voice_model": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 200
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   },
                   "api_key": {
                     "type": "string",

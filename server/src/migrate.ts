@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { Database } from "./db.js";
 import { settings } from "./config.js";
-const versions = ["0001-baseline", "0002-message-progress", "0003-main-bot", "0004-agent-tasks", "0005-bot-skills", "0006-message-ui", "0007-async-tasks", "0008-memory-observability", "0009-always-on", "0010-multi-device", "0011-windows-devices", "0011-message-images", "0012-voice", "0013-goals"];
+const versions = ["0001-baseline", "0002-message-progress", "0003-main-bot", "0004-agent-tasks", "0005-bot-skills", "0006-message-ui", "0007-async-tasks", "0008-memory-observability", "0009-always-on", "0010-multi-device", "0011-windows-devices", "0011-message-images", "0012-voice", "0013-goals", "0014-model-provider"];
 export async function migrate(db: Database) {
   await db.tx(async (tx) => {
     await tx.rows("SELECT pg_advisory_xact_lock(7420261011)");

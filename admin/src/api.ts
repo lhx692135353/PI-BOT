@@ -58,11 +58,19 @@ export interface User {
   devices?: Device[];
   computer?: { label: string; last_seen_at: string | null; online: boolean } | null;
 }
+export type ProviderName = "xai" | "bailian" | "custom";
+export interface CatalogModel {
+  id: string;
+  context_window: number | null;
+  max_tokens: number | null;
+}
 export interface Model {
   id: string;
   name: string;
+  provider: ProviderName;
   base_url: string;
   provider_model: string;
+  voice_model: string | null;
   context_window: number;
   max_tokens: number;
   enabled: boolean;
@@ -126,6 +134,8 @@ export const api = {
     request<User>(adminApi, `users/${id}`, "PATCH", body),
   deleteUser: (id: string) => request(adminApi, `users/${id}`, "DELETE"),
   models: () => request<Model[]>(adminApi, "models"),
+  modelCatalog: (body: { provider: "xai" | "bailian"; api_key?: string; model_id?: string }) =>
+    request<{ chat: CatalogModel[]; voice: CatalogModel[] }>(adminApi, "model-catalog", "POST", body),
   createModel: (body: ModelInput) => request<Model>(adminApi, "models", "POST", body),
   updateModel: (id: string, body: Partial<ModelInput>) => request<Model>(adminApi, `models/${id}`, "PATCH", body),
   deleteModel: (id: string) => request(adminApi, `models/${id}`, "DELETE"),

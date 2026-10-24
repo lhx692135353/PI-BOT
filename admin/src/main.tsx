@@ -2,7 +2,7 @@ import { StrictMode, useCallback, useEffect, useState, type FormEvent, type Reac
 import { createRoot } from "react-dom/client";
 import { PiBot } from "@pi-bot/bot-face/react";
 import type { Mood } from "@pi-bot/bot-face";
-import { api, ApiError, session, type Device, type Model, type ModelInput, type Overview, type Usage, type User } from "./api.js";
+import { api, ApiError, session, type CatalogModel, type Device, type Model, type ModelInput, type Overview, type ProviderName, type Usage, type User } from "./api.js";
 import "./style.css";
 
 type Page = "overview" | "users" | "models" | "devices" | "usage";
@@ -255,16 +255,47 @@ function UsersPage({ me }: { me: User }) {
   );
 }
 
-const EMPTY_MODEL: ModelInput = { name: "", base_url: "", provider_model: "", api_key: "", context_window: 128000, max_tokens: 8192, enabled: true, is_default: false };
+const EMPTY_MODEL: ModelInput = { name: "", provider: "xai", base_url: "", provider_model: "", voice_model: null, api_key: "", context_window: 128000, max_tokens: 8192, enabled: true, is_default: false };
+const PROVIDER_LABEL: Record<ProviderName, string> = { xai: "xAI", bailian: "百炼", custom: "自定义" };
 
 function ModelForm({ model, onClose, onSaved }: { model?: Model; onClose: () => void; onSaved: () => void }) {
   const [form, setForm] = useState<ModelInput>(model ? { ...model, api_key: "" } : EMPTY_MODEL);
+  const [catalog, setCatalog] = useState<{ chat: CatalogModel[]; voice: CatalogModel[] } | null>(null);
+  const [manual, setManual] = useState(form.provider === "custom");
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const set = (patch: Partial<ModelInput>) => setForm({ ...form, ...patch });
+  const known = form.provider === "xai" || form.provider === "bailian";
+  const chat = [...(catalog?.chat ?? [])];
+  if (form.provider_model && !chat.some((item) => item.id === form.provider_model)) chat.unshift({ id: form.provider_model, context_window: form.context_window, max_tokens: form.max_tokens });
+  const voice = [...(catalog?.voice ?? [])];
+  if (form.voice_model && !voice.some((item) => item.id === form.voice_model)) voice.unshift({ id: form.voice_model, context_window: null, max_tokens: null });
+  const picked = chat.find((item) => item.id === form.provider_model);
+  const locked = Boolean(catalog && picked?.context_window && picked.max_tokens);
+  const pull = async () => {
+    if (!known) return;
+    if (!form.api_key && !model) { setError("请先填写 API Key"); return; }
+    setLoading(true);
+    setError("");
+    try {
+      const result = await api.modelCatalog({ provider: form.provider as "xai" | "bailian", api_key: form.api_key || undefined, model_id: model?.id });
+      setCatalog(result);
+      setManual(false);
+    } catch (err) {
+      setManual(true);
+      setError(message(err));
+    } finally {
+      setLoading(false);
+    }
+  };
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      const body = { ...form, base_url: form.base_url.trim().replace(/\/+$/, "") };
+      const body: ModelInput = {
+        ...form,
+        voice_model: form.voice_model || null,
+        base_url: known ? (form.provider === "xai" ? "https://api.x.ai/v1" : "https://dashscope.aliyuncs.com/compatible-mode/v1") : form.base_url.trim().replace(/\/+$/, ""),
+      };
       if (model) {
         if (!body.api_key) delete body.api_key;
         await api.updateModel(model.id, body);
@@ -283,27 +314,71 @@ function ModelForm({ model, onClose, onSaved }: { model?: Model; onClose: () => 
           <input value={form.name} onChange={(e) => set({ name: e.target.value })} placeholder="例如：Grok" />
         </label>
         <label>
-          接口地址（Responses API Base URL）
-          <input value={form.base_url} onChange={(e) => set({ base_url: e.target.value })} placeholder="https://api.x.ai/v1" />
+          服务商
+          <select value={form.provider} onChange={(e) => { setCatalog(null); setManual(e.target.value === "custom"); set({ provider: e.target.value as ProviderName, provider_model: "", voice_model: null }); }}>
+            <option value="xai">xAI</option>
+            <option value="bailian">百炼</option>
+            <option value="custom">自定义</option>
+          </select>
         </label>
-        <label>
-          服务商模型名
-          <input value={form.provider_model} onChange={(e) => set({ provider_model: e.target.value })} placeholder="填写服务商模型 ID" />
-        </label>
+        {known ? <p className="muted small">{form.provider === "xai" ? "接口使用 https://api.x.ai/v1，不用填写域名。" : "接口使用百炼兼容地址，不用填写域名。"}</p> : (
+          <label>
+            接口地址（Responses API Base URL）
+            <input value={form.base_url} onChange={(e) => set({ base_url: e.target.value })} placeholder="https://example.com/v1" />
+          </label>
+        )}
         <label>
           API Key{model && "（留空则保持不变）"}
           <input type="password" value={form.api_key} onChange={(e) => set({ api_key: e.target.value })} autoComplete="off" />
         </label>
-        <div className="row">
+        {known && (
+          <button type="button" className="ghost" disabled={loading} onClick={pull}>
+            {loading ? "拉取中…" : "拉取模型"}
+          </button>
+        )}
+        <label>
+          对话模型
+          {known && !manual ? (
+            <select value={form.provider_model} disabled={!catalog} onChange={(e) => {
+              const item = chat.find((option) => option.id === e.target.value);
+              set({
+                provider_model: e.target.value,
+                ...(item?.context_window ? { context_window: item.context_window } : {}),
+                ...(item?.max_tokens ? { max_tokens: item.max_tokens } : {}),
+                name: !form.name || form.name === form.provider_model ? e.target.value : form.name,
+              });
+            }}>
+              <option value="">{catalog ? "选择模型" : "先拉取模型"}</option>
+              {chat.map((item) => <option key={item.id} value={item.id}>{item.id}</option>)}
+            </select>
+          ) : (
+            <input value={form.provider_model} onChange={(e) => set({ provider_model: e.target.value })} placeholder={known ? "拉取失败时可手填模型 ID" : "填写服务商模型 ID"} />
+          )}
+        </label>
+        {known && (
           <label>
-            上下文长度
-            <input type="number" value={form.context_window} onChange={(e) => set({ context_window: Number(e.target.value) })} />
+            语音模型
+            <select value={form.voice_model ?? ""} onChange={(e) => set({ voice_model: e.target.value || null })}>
+              <option value="">不开通语音</option>
+              {voice.map((item) => <option key={item.id} value={item.id}>{item.id}</option>)}
+            </select>
           </label>
-          <label>
-            单次输出上限
-            <input type="number" value={form.max_tokens} onChange={(e) => set({ max_tokens: Number(e.target.value) })} />
-          </label>
-        </div>
+        )}
+        {known && <p className="muted small">语音模型可以不选。不选则这个模型不能打电话。</p>}
+        {locked ? (
+          <p className="muted small">上下文 {fmt(form.context_window)}，单次输出上限 {fmt(form.max_tokens)}。这两项来自所选模型。</p>
+        ) : (
+          <div className="row">
+            <label>
+              上下文长度
+              <input type="number" value={form.context_window} onChange={(e) => set({ context_window: Number(e.target.value) })} />
+            </label>
+            <label>
+              单次输出上限
+              <input type="number" value={form.max_tokens} onChange={(e) => set({ max_tokens: Number(e.target.value) })} />
+            </label>
+          </div>
+        )}
         <div className="row checks">
           <label className="check">
             <input type="checkbox" checked={form.enabled} onChange={(e) => set({ enabled: e.target.checked })} /> 启用
@@ -318,7 +393,7 @@ function ModelForm({ model, onClose, onSaved }: { model?: Model; onClose: () => 
           <button type="button" className="ghost" onClick={onClose}>
             取消
           </button>
-          <button className="primary" disabled={!form.name || !form.base_url || !form.provider_model || (!model && !form.api_key)}>
+          <button className="primary" disabled={!form.name || !form.provider_model || (!known && !form.base_url) || (!model && !form.api_key)}>
             保存
           </button>
         </footer>
@@ -355,10 +430,14 @@ function ModelsPage() {
               {!m.enabled && <span className="badge">已停用</span>}
             </div>
             <dl>
+              <dt>服务商</dt>
+              <dd>{PROVIDER_LABEL[m.provider] ?? m.provider}</dd>
               <dt>模型</dt>
               <dd>{m.provider_model}</dd>
-              <dt>接口</dt>
-              <dd className="mono">{m.base_url}</dd>
+              <dt>语音</dt>
+              <dd>{m.voice_model || "未开通"}</dd>
+              {m.provider === "custom" && <><dt>接口</dt>
+              <dd className="mono">{m.base_url}</dd></>}
               <dt>上下文</dt>
               <dd>
                 {fmt(m.context_window)} / 输出 {fmt(m.max_tokens)}

@@ -34,6 +34,7 @@ import { cancelRun, decideApproval, dispatchDevice, failDeviceRuns } from "./run
 import { cancelTask, createTask, readTask, reportLater, TERMINAL, listTasks, messageTask, callerRun } from "./agents.js";
 import { deviceOut, deviceList, botConnection } from './devices.js';
 import { complete, findModel, proxyResponses, recordUsage } from "./llm.js";
+import { listCatalog, providerBase } from "./providers.js";
 import type { WebSearch } from "./search.js";
 import { manageSkill, skillRequest } from "./skills.js";
 
@@ -87,10 +88,13 @@ const httpUrl = z
     const u = new URL(v);
     return ["https:", "http:"].includes(u.protocol) && !u.username && !u.password && !u.search && !u.hash;
   }, "需要 HTTP(S) 根地址，不包含账号、查询参数或片段");
+const providerName = z.enum(["xai", "bailian", "custom"]);
 const modelFields = z.object({
   name: z.string().trim().min(1).max(80),
-  base_url: httpUrl,
+  provider: providerName.optional(),
+  base_url: httpUrl.optional(),
   provider_model: z.string().trim().min(1).max(200),
+  voice_model: z.string().trim().max(200).nullable().optional(),
   api_key: z.string().min(1).max(8192),
   context_window: z.number().int().min(1024).max(4000000),
   max_tokens: z.number().int().min(16).max(1000000),
@@ -110,8 +114,10 @@ export const userOut = (u: Row) => ({
 const modelOut = (m: Row) => ({
   id: m.model_id,
   name: m.name,
+  provider: m.provider ?? "custom",
   base_url: m.base_url,
   provider_model: m.provider_model,
+  voice_model: m.voice_model ?? null,
   context_window: m.context_window,
   max_tokens: m.max_tokens,
   enabled: m.enabled,
@@ -119,6 +125,18 @@ const modelOut = (m: Row) => ({
   created_at: m.created_at,
   updated_at: m.updated_at,
 });
+function normalizeModel(body: { provider?: string; base_url?: string; voice_model?: string | null }, current?: Row) {
+  const provider = body.provider ?? current?.provider ?? "custom";
+  if (provider !== "xai" && provider !== "bailian" && provider !== "custom") fail(422, "不支持的服务商");
+  const fixed = providerBase(provider);
+  const raw = fixed ?? String(body.base_url ?? current?.base_url ?? "").trim().replace(/\/+$/, "");
+  if (!fixed) {
+    const parsed = httpUrl.safeParse(raw);
+    if (!parsed.success) fail(422, "需要 HTTP(S) 接口地址");
+  }
+  const voice = body.voice_model === undefined ? current?.voice_model ?? null : body.voice_model;
+  return { provider, base_url: fixed ?? raw, voice_model: typeof voice === "string" && voice.trim() ? voice.trim() : null };
+}
 async function computerStatus(tx: Tx, hub: Hub, userId: string) {
   const devices = await deviceList(tx, hub, userId);
   return { online: devices.some(d => d.online), device: devices.find(d => !d.revoked_at) ?? null };
@@ -563,12 +581,27 @@ export const routes: Route[] = [
     handler: async ({ tx }) => (await tx.rows("SELECT * FROM models ORDER BY created_at")).map(modelOut),
   },
   {
+    method: "POST", path: "/admin/api/model-catalog", auth: "admin", tag: "admin", summary: "按服务商密钥拉取可选的对话模型和语音模型", tx: false,
+    body: z.object({ provider: z.enum(["xai", "bailian"]), api_key: z.string().min(1).max(8192).optional(), model_id: uuid.optional() }).refine((body) => body.api_key || body.model_id, "需要 API Key"),
+    handler: async ({ db, s, body }) => {
+      let key = body.api_key?.trim();
+      if (!key && body.model_id) {
+        const saved = await db.tx((tx) => tx.get("models", body.model_id!, true));
+        key = new Vault(s.vaultFile).open(saved!.secret, saved!.model_id);
+      }
+      if (!key) fail(422, "请先填写 API Key");
+      return listCatalog(body.provider, key);
+    },
+  },
+  {
     method: "POST", path: "/admin/api/models", auth: "admin", tag: "admin", summary: "添加模型", body: modelFields,
     handler: async ({ tx, s, body }) => {
       if (body.max_tokens >= body.context_window) fail(422, "输出上限必须小于上下文长度");
+      const normalized = normalizeModel(body);
       const id = randomUUID();
       const m = await tx.insert("models", {
-        model_id: id, name: body.name, base_url: body.base_url, provider_model: body.provider_model,
+        model_id: id, name: body.name, provider: normalized.provider, base_url: normalized.base_url, provider_model: body.provider_model,
+        voice_model: normalized.voice_model,
         context_window: body.context_window, max_tokens: body.max_tokens, secret: new Vault(s.vaultFile).seal(body.api_key, id),
         enabled: body.enabled, is_default: false,
       });
@@ -582,10 +615,13 @@ export const routes: Route[] = [
     body: modelFields.partial(),
     handler: async ({ tx, s, params, body }) => {
       const m = await tx.get("models", params.id, true);
-      const next = { ...m, ...Object.fromEntries(Object.entries(body).filter(([, v]) => v !== undefined)) };
-      if (next.max_tokens >= next.context_window) fail(422, "输出上限必须小于上下文长度");
+      const normalized = normalizeModel(body, m);
+      if ((body.max_tokens ?? m!.max_tokens) >= (body.context_window ?? m!.context_window)) fail(422, "输出上限必须小于上下文长度");
+      const placed = body.provider !== undefined || body.base_url !== undefined || body.voice_model !== undefined;
       await tx.update("models", params.id, {
-        name: body.name, base_url: body.base_url, provider_model: body.provider_model, context_window: body.context_window,
+        name: body.name, provider: placed ? normalized.provider : undefined, base_url: placed ? normalized.base_url : undefined,
+        provider_model: body.provider_model, voice_model: body.voice_model === undefined ? undefined : normalized.voice_model,
+        context_window: body.context_window,
         max_tokens: body.max_tokens, enabled: body.enabled, updated_at: new Date(),
         secret: body.api_key ? new Vault(s.vaultFile).seal(body.api_key, params.id) : undefined,
         is_default: body.enabled === false ? false : undefined,

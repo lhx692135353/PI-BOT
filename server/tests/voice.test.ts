@@ -10,11 +10,12 @@ import { Worker } from "../src/worker.js";
 import { voiceEndpoint } from "../src/voice.js";
 import { eventually, resetDatabase, TEST_DB, tempDir, vaultFile } from "./helpers.js";
 
-test("voice endpoint follows xAI and a same-host override", () => {
-  assert.equal(voiceEndpoint("https://api.x.ai/v1"), "wss://api.x.ai/v1/realtime?model=grok-voice-latest");
-  assert.equal(voiceEndpoint("https://example.com/v1"), null);
-  assert.equal(voiceEndpoint("http://127.0.0.1:9/v1", "ws://127.0.0.1:9/v1/realtime"), "ws://127.0.0.1:9/v1/realtime?model=grok-voice-latest");
-  assert.equal(voiceEndpoint("https://example.com/v1", "ws://127.0.0.1:9/v1/realtime"), null);
+test("voice endpoint follows the selected model and stays off when none is chosen", () => {
+  assert.equal(voiceEndpoint({ base_url: "https://api.x.ai/v1", provider: "xai", voice_model: "grok-voice-3.0" }), "wss://api.x.ai/v1/realtime?model=grok-voice-3.0");
+  assert.equal(voiceEndpoint({ base_url: "https://api.x.ai/v1", provider: "xai" }), null);
+  assert.equal(voiceEndpoint({ base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1", provider: "bailian", voice_model: "qwen3.5-omni-flash-realtime" }), "wss://dashscope.aliyuncs.com/api-ws/v1/realtime?model=qwen3.5-omni-flash-realtime");
+  assert.equal(voiceEndpoint({ base_url: "http://127.0.0.1:9/v1", voice_model: "grok-voice-latest" }, "ws://127.0.0.1:9/v1/realtime"), "ws://127.0.0.1:9/v1/realtime?model=grok-voice-latest");
+  assert.equal(voiceEndpoint({ base_url: "https://example.com/v1", voice_model: "grok-voice-latest" }, "ws://127.0.0.1:9/v1/realtime"), null);
 });
 
 const skip = !TEST_DB && "需要 PI_BOT_TEST_DATABASE_URL";
@@ -160,7 +161,7 @@ test("a voice call replaces the text turn, speaks task results, and falls back t
   const token = user.json.access_token as string;
   const model = await api("POST", "/admin/api/models", {
     token: admin.json.access_token,
-    body: { name: "语音模型", base_url: realtime.baseUrl, provider_model: "grok-voice-latest", api_key: "sk-voice", context_window: 32000, max_tokens: 1000 },
+    body: { name: "语音模型", base_url: realtime.baseUrl, provider_model: "grok-voice-latest", voice_model: "grok-voice-latest", api_key: "sk-voice", context_window: 32000, max_tokens: 1000 },
   });
   const other = await api("POST", "/admin/api/models", {
     token: admin.json.access_token,
@@ -174,7 +175,7 @@ test("a voice call replaces the text turn, speaks task results, and falls back t
   const denied = clientSocket(`${base.replace(/^http/, "ws")}/ws/voice?token=${token}&bot=${botId}`);
   await denied.opened;
   const denial = await denied.next((frame) => frame.type === "error");
-  assert.match(denial.detail, /不支持语音通话/);
+  assert.match(denial.detail, /未开通语音/);
   assert.equal(await denied.closed, 4403);
   assert.equal((await api("PATCH", `/bots/${botId}`, { token, body: { model_id: model.json.id } })).status, 200);
 

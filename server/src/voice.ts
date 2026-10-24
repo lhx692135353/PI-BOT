@@ -12,22 +12,32 @@ import { forgottenContext, maskForgotten } from "./memory.js";
 import { complete } from "./llm.js";
 import { cancelRun, dispatchDevice } from "./runs.js";
 import { readVoiceTicket, user, Vault, type LlmClaims } from "./security.js";
+import { inferProvider } from "./providers.js";
 
 const SAMPLE_RATE = 16000;
 const MAX_CALL_MS = 120 * 60 * 1000;
 const PLAYBACK_WAIT_MS = 8000;
 
-/** Grok speech-to-speech only. A same-host override exists so tests can stand in for xAI. */
-export function voiceEndpoint(baseUrl: string, override?: string): string | null {
-  let base: URL;
-  try { base = new URL(baseUrl); } catch { return null; }
-  const host = base.hostname.toLowerCase();
-  if (host === "api.x.ai" || host.endsWith(".x.ai")) return "wss://api.x.ai/v1/realtime?model=grok-voice-latest";
+/** Voice stays off until a voice model is chosen. A same-host override lets tests stand in for the provider. */
+export function voiceEndpoint(model: { base_url: string; provider?: string | null; voice_model?: string | null }, override?: string): string | null {
+  const voice = model.voice_model?.trim();
+  if (!voice) return null;
+  const provider = model.provider || inferProvider(model.base_url);
+  if (provider === "xai") return `wss://api.x.ai/v1/realtime?model=${encodeURIComponent(voice)}`;
+  if (provider === "bailian") {
+    let host = "dashscope.aliyuncs.com";
+    try {
+      const name = new URL(model.base_url).hostname.toLowerCase();
+      if (name.includes("intl") || name.includes("ap-southeast")) host = "dashscope-intl.aliyuncs.com";
+    } catch { /* the Beijing endpoint is the default */ }
+    return `wss://${host}/api-ws/v1/realtime?model=${encodeURIComponent(voice)}`;
+  }
   if (!override) return null;
+  let base: URL;
   let target: URL;
-  try { target = new URL(override); } catch { return null; }
+  try { base = new URL(model.base_url); target = new URL(override); } catch { return null; }
   if (target.host !== base.host) return null;
-  if (!target.searchParams.has("model")) target.searchParams.set("model", "grok-voice-latest");
+  target.searchParams.set("model", voice);
   return target.toString();
 }
 
@@ -141,8 +151,8 @@ export class VoiceHub implements VoiceAnnouncer {
       const bot = await ownBot(tx, userId, botId, true);
       const model = await resolveModel(tx, bot);
       if (!model) throw new HttpError(503, "管理员尚未配置可用模型");
-      const endpoint = voiceEndpoint(model.base_url, this.s.voiceRealtimeUrl);
-      if (!endpoint) throw new HttpError(422, "当前模型不支持语音通话");
+      const endpoint = voiceEndpoint(model, this.s.voiceRealtimeUrl);
+      if (!endpoint) throw new HttpError(422, "当前模型未开通语音");
       const aborts = await cancelTextTurns(tx, this.hub, userId, botId);
       const orphans = await tx.rows("SELECT * FROM bot_runs WHERE bot_id=$1 AND origin='voice' AND status = ANY($2)", [botId, ACTIVE]);
       for (const run of orphans) {
@@ -285,12 +295,25 @@ class VoiceSession {
     });
   }
   openUpstream() {
-    const url = this.conversationId ? `${this.call.endpoint}&conversation_id=${encodeURIComponent(this.conversationId)}` : this.call.endpoint;
+    const bailian = this.provider() === "bailian";
+    const url = !bailian && this.conversationId ? `${this.call.endpoint}&conversation_id=${encodeURIComponent(this.conversationId)}` : this.call.endpoint;
     const upstream = new WebSocket(url, { headers: { Authorization: `Bearer ${this.call.key}` } });
     this.upstream = upstream;
     upstream.on("open", () => {
       this.resumeTried = false;
-      upstream.send(JSON.stringify({
+      upstream.send(JSON.stringify(bailian ? {
+        type: "session.update",
+        session: {
+          modalities: ["text", "audio"],
+          voice: "Tina",
+          instructions: this.call.instructions,
+          input_audio_format: "pcm",
+          output_audio_format: "pcm",
+          turn_detection: { type: "server_vad", threshold: 0.5, silence_duration_ms: 800 },
+          input_audio_transcription: { model: "qwen3-asr-flash-realtime" },
+          tools: VOICE_TOOLS,
+        },
+      } : {
         type: "session.update",
         session: {
           voice: "eve",
@@ -305,7 +328,7 @@ class VoiceSession {
           },
         },
       }));
-      for (const chunk of this.earlyAudio) if (upstream.readyState === 1) upstream.send(chunk);
+      for (const chunk of this.earlyAudio) this.sendAudio(upstream, chunk);
       this.earlyAudio = [];
     });
     upstream.on("message", (data, isBinary) => this.onUpstream(data, isBinary));
@@ -329,10 +352,18 @@ class VoiceSession {
     this.pump();
     return true;
   }
+  private provider() {
+    return String(this.call.model.provider || inferProvider(String(this.call.model.base_url ?? "")));
+  }
+  private sendAudio(upstream: WebSocket, chunk: Buffer) {
+    if (upstream.readyState !== 1 || !chunk.length) return;
+    if (this.provider() === "bailian") upstream.send(JSON.stringify({ type: "input_audio_buffer.append", audio: chunk.toString("base64") }));
+    else upstream.send(chunk);
+  }
   private audioFromClient(chunk: Buffer) {
     if (this.muted || !chunk.length) return;
     const upstream = this.upstream;
-    if (upstream?.readyState === 1) upstream.send(chunk);
+    if (upstream?.readyState === 1) this.sendAudio(upstream, chunk);
     else {
       this.earlyAudio.push(chunk);
       let bytes = this.earlyAudio.reduce((n, part) => n + part.length, 0);
@@ -367,8 +398,9 @@ class VoiceSession {
     else if (type === "input_audio_buffer.speech_started") this.barge();
     else if (type === "conversation.item.input_audio_transcription.completed" && event.transcript) this.transcript.push(`用户：${String(event.transcript).slice(0, 2000)}`);
     else if (type === "response.created") { this.responseOpen = true; this.setPhase(this.tools.length ? "thinking" : "speaking"); }
-    else if (type === "response.output_text.delta" && event.delta) this.assistant = (this.assistant + String(event.delta)).slice(0, 8000);
-    else if (type === "response.output_audio.delta" && typeof event.delta === "string" && this.client?.readyState === 1) {
+    else if ((type === "response.output_text.delta" || type === "response.text.delta" || type === "response.output_audio_transcript.delta" || type === "response.audio_transcript.delta") && event.delta) this.assistant = (this.assistant + String(event.delta)).slice(0, 8000);
+    else if ((type === "response.output_audio_transcript.done" || type === "response.audio_transcript.done") && !this.assistant.trim() && event.transcript) this.assistant = String(event.transcript).slice(0, 8000);
+    else if ((type === "response.output_audio.delta" || type === "response.audio.delta") && typeof event.delta === "string" && this.client?.readyState === 1) {
       const chunk = Buffer.from(event.delta, "base64");
       this.client.send(chunk);
       this.playbackIdle = false;
