@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
-import { cpSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { cpSync, lstatSync, mkdirSync, readdirSync, readlinkSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { prepareRuntime } from './prepare-runtime.mjs';
@@ -8,6 +8,21 @@ import { prepareRuntime } from './prepare-runtime.mjs';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const runtime = resolve(root, 'apps/desktop/runtime');
 const require = createRequire(resolve(root, 'package.json'));
+
+function assertPortableSymlinks(root) {
+  const pending = [root];
+  while (pending.length) {
+    const dir = pending.pop();
+    for (const name of readdirSync(dir)) {
+      const file = join(dir, name);
+      const stat = lstatSync(file);
+      if (stat.isSymbolicLink()) {
+        const target = readlinkSync(file);
+        if (isAbsolute(target)) throw new Error(`安装包里的符号链接不能指向构建机器：${file} -> ${target}`);
+      } else if (stat.isDirectory()) pending.push(file);
+    }
+  }
+}
 
 function run(command, args, cwd) {
   const result = spawnSync(command, args, { cwd, stdio: 'inherit' });
@@ -43,7 +58,10 @@ const dmg = resolve(root, 'apps/desktop/out/make/Pi-Bot-arm64.dmg');
 rmSync(stage, { recursive: true, force: true });
 mkdirSync(resolve(root, 'apps/desktop/out/make'), { recursive: true });
 mkdirSync(stage);
-cpSync(app, resolve(stage, 'Pi Bot.app'), { recursive: true });
+const staged = resolve(stage, 'Pi Bot.app');
+// Node 的 cp 默认会把相对符号链接改写成源机器上的绝对路径，装到别的电脑后 Electron Framework 就找不到。
+cpSync(app, staged, { recursive: true, verbatimSymlinks: true });
+assertPortableSymlinks(staged);
 run('ln', ['-s', '/Applications', resolve(stage, 'Applications')], root);
 rmSync(dmg, { force: true });
 run('hdiutil', ['create', '-volname', 'Pi Bot', '-srcfolder', stage, '-ov', '-format', 'ULFO', dmg], root);
