@@ -1,0 +1,19 @@
+desktop/tests/multi-device.test.ts
+  s_6d545ceacf0165::t_9cf3ff74c286f0 99
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "bd0574be0b92fce1d91e04f82bcd9cfeb5b0059f",
+  "prompts": {},
+  "sessions": {
+    "s_6d545ceacf0165": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "1114481b-c945-43e8-8f52-89b09e1e791a",
+        "model": "grok-4.7"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
