@@ -1,0 +1,40 @@
+admin/src/main.tsx
+  s_8f3836e5cedd6c::t_5a245154d0a261 318
+  s_8f3836e5cedd6c::t_1fbece5e592973 324
+  s_8f3836e5cedd6c::t_56a1b5ce1f9608 297
+server/src/voice.ts
+  s_8f3836e5cedd6c::t_bcebef92a7f668 28,31-34
+  s_8f3836e5cedd6c::t_83b0a369af3753 229-245
+  s_8f3836e5cedd6c::t_c14b46a239f374 276
+  s_8f3836e5cedd6c::t_24cec10f43688b 328
+  s_8f3836e5cedd6c::t_3c1d8895ec8b77 377-390
+  s_8f3836e5cedd6c::t_04957247bde71a 431-432
+  s_8f3836e5cedd6c::t_66597c84a6f725 418
+server/tests/providers.test.ts
+  s_8f3836e5cedd6c::t_2b41530d0b9a3c 7,11
+  s_8f3836e5cedd6c::t_f310894fcecee4 3
+  s_8f3836e5cedd6c::t_d7580be4974e72 47,49-50,52-55
+server/tests/voice.test.ts
+  s_8f3836e5cedd6c::t_ae56ae85c8357f 18
+  s_8f3836e5cedd6c::t_d71d2078ce1180 17,19-28
+  s_8f3836e5cedd6c::t_31b5dd49158242 10
+server/src/providers.ts
+  s_8f3836e5cedd6c::t_7841167828a013 35-62,65,74
+  s_8f3836e5cedd6c::t_c77872adf108cd 130
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "aff489ac8c3ecdef7fbb659d80872932de4460b1",
+  "prompts": {},
+  "sessions": {
+    "s_8f3836e5cedd6c": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "61bd8377-a95b-4cb1-b389-44b8c30460c8",
+        "model": "grok-4.7"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
