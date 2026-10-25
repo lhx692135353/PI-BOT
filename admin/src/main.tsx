@@ -294,7 +294,7 @@ function ModelForm({ model, onClose, onSaved }: { model?: Model; onClose: () => 
       const body: ModelInput = {
         ...form,
         voice_model: form.voice_model || null,
-        base_url: known ? (form.provider === "xai" ? "https://api.x.ai/v1" : "https://dashscope.aliyuncs.com/compatible-mode/v1") : form.base_url.trim().replace(/\/+$/, ""),
+        base_url: known ? (form.provider === "xai" ? "https://api.x.ai/v1" : "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1") : form.base_url.trim().replace(/\/+$/, ""),
       };
       if (model) {
         if (!body.api_key) delete body.api_key;
@@ -315,13 +315,13 @@ function ModelForm({ model, onClose, onSaved }: { model?: Model; onClose: () => 
         </label>
         <label>
           服务商
-          <select value={form.provider} onChange={(e) => { setCatalog(null); setManual(e.target.value === "custom"); set({ provider: e.target.value as ProviderName, provider_model: "", voice_model: null, provider_search: false }); }}>
+          <select value={form.provider} onChange={(e) => { const provider = e.target.value as ProviderName; setCatalog(null); setManual(provider === "custom"); set({ provider, provider_model: "", voice_model: provider === "bailian" ? "qwen-audio-3.0-realtime-plus" : null, provider_search: false }); }}>
             <option value="xai">xAI</option>
             <option value="bailian">百炼</option>
             <option value="custom">自定义</option>
           </select>
         </label>
-        {known ? <p className="muted small">{form.provider === "xai" ? "接口使用 https://api.x.ai/v1，不用填写域名。" : "接口使用百炼兼容地址，不用填写域名。"}</p> : (
+        {known ? <p className="muted small">{form.provider === "xai" ? "接口使用 https://api.x.ai/v1，不用填写域名。" : "接口使用 https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1，不用填写域名。"}</p> : (
           <label>
             接口地址（Responses API Base URL）
             <input value={form.base_url} onChange={(e) => set({ base_url: e.target.value })} placeholder="https://example.com/v1" />

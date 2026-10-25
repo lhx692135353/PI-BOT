@@ -32,9 +32,37 @@ export function applyProviderSearch(body: Record<string, unknown>, model: { prov
   return { ...body, tools };
 }
 
+export const TOKEN_PLAN_BASE = "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1";
+export const BAILIAN_VOICE_MODEL = "qwen-audio-3.0-realtime-plus";
+
+/** Token Plan has no model-list API. These are the text and realtime models on that plan. */
+const TOKEN_PLAN_MODELS = [
+  "auto",
+  "qwen3.8-max",
+  "qwen3.8-flash",
+  "qwen3.7-max",
+  "qwen3.7-plus",
+  "qwen3.6-plus",
+  "qwen3.6-flash",
+  "deepseek-v4.1-flash",
+  "deepseek-v4.1-flash-1017",
+  "deepseek-v4-pro",
+  "deepseek-v4-pro-0813",
+  "deepseek-v4-flash-0731",
+  "kimi-k2.7-code",
+  "kimi-k2.6",
+  "kimi-k2.5",
+  "glm-5.3",
+  "glm-5.2",
+  "glm-5.1",
+  "glm-5",
+  "MiniMax-M2.5",
+  BAILIAN_VOICE_MODEL,
+];
+
 export function providerBase(provider: string): string | null {
   if (provider === "xai") return "https://api.x.ai/v1";
-  if (provider === "bailian") return "https://dashscope.aliyuncs.com/compatible-mode/v1";
+  if (provider === "bailian") return TOKEN_PLAN_BASE;
   return null;
 }
 
@@ -43,6 +71,7 @@ export function inferProvider(baseUrl: string): Provider {
     const host = new URL(baseUrl).hostname.toLowerCase();
     if (host === "api.x.ai" || host.endsWith(".x.ai")) return "xai";
     if (host === "dashscope.aliyuncs.com" || host === "dashscope-intl.aliyuncs.com" || host.endsWith(".dashscope.aliyuncs.com")) return "bailian";
+    if (host === "token-plan.cn-beijing.maas.aliyuncs.com" || host.startsWith("token-plan.")) return "bailian";
   } catch { /* not a URL */ }
   return "custom";
 }
@@ -89,8 +118,6 @@ export function classifyModels(models: CatalogModel[]) {
   return { chat, voice };
 }
 
-const BAILIAN_CAPABILITIES = ["TG", "VU", "Reasoning", "Multimodal-Omni", "Realtime-Omni", "Realtime-Chatting"];
-
 export async function listCatalog(provider: "xai" | "bailian", key: string) {
   if (provider === "xai") {
     const language = await readJson("https://api.x.ai/v1/language-models", key).catch((error: unknown) => {
@@ -100,29 +127,7 @@ export async function listCatalog(provider: "xai" | "bailian", key: string) {
     const all = await readJson("https://api.x.ai/v1/models", key);
     return classifyModels([...parseCatalog(language), ...parseCatalog(all)]);
   }
-  return classifyModels(await listBailian(key));
-}
-
-/** Bailian's OpenAI-compatible `/models` answers 401. The admin console treats that as a signed-out session. */
-async function listBailian(key: string) {
-  const pageSize = 100;
-  const models: unknown[] = [];
-  let total = Infinity;
-  for (let page = 1; page <= 10 && models.length < total; page++) {
-    const params = new URLSearchParams({ page_no: String(page), page_size: String(pageSize), supports: "inference", language: "zh-CN" });
-    for (const capability of BAILIAN_CAPABILITIES) params.append("capabilities", capability);
-    const payload = await readJson(`https://dashscope.aliyuncs.com/api/v1/models?${params}`, key);
-    const root = payload && typeof payload === "object" && !Array.isArray(payload) ? payload as Record<string, unknown> : null;
-    if (root?.success === false) fail(502, text(root.message) || "无法拉取模型列表");
-    const output = root?.output && typeof root.output === "object" && !Array.isArray(root.output) ? root.output as Record<string, unknown> : null;
-    const rows = Array.isArray(output?.models) ? output.models : null;
-    if (!rows) return page === 1 ? parseCatalog(payload) : parseCatalog({ output: { models } });
-    const reported = Number(output?.total);
-    if (Number.isFinite(reported) && reported >= 0) total = reported;
-    models.push(...rows);
-    if (rows.length === 0) break;
-  }
-  return parseCatalog({ output: { models } });
+  return classifyModels(TOKEN_PLAN_MODELS.map((id) => ({ id, context_window: null, max_tokens: null })));
 }
 
 function text(value: unknown) {

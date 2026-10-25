@@ -7,13 +7,25 @@ import { createApp } from "../src/app.js";
 import { settings, type Settings } from "../src/config.js";
 import { Database } from "../src/db.js";
 import { Worker } from "../src/worker.js";
-import { voiceEndpoint } from "../src/voice.js";
+import { pcm24kTo16k, voiceEndpoint } from "../src/voice.js";
 import { eventually, resetDatabase, TEST_DB, tempDir, vaultFile } from "./helpers.js";
 
 test("voice endpoint follows the selected model and stays off when none is chosen", () => {
   assert.equal(voiceEndpoint({ base_url: "https://api.x.ai/v1", provider: "xai", voice_model: "grok-voice-3.0" }), "wss://api.x.ai/v1/realtime?model=grok-voice-3.0");
   assert.equal(voiceEndpoint({ base_url: "https://api.x.ai/v1", provider: "xai" }), null);
   assert.equal(voiceEndpoint({ base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1", provider: "bailian", voice_model: "qwen3.5-omni-flash-realtime" }), "wss://dashscope.aliyuncs.com/api-ws/v1/realtime?model=qwen3.5-omni-flash-realtime");
+  assert.equal(voiceEndpoint({ base_url: "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1", provider: "bailian", voice_model: "qwen-audio-3.0-realtime-plus" }), "wss://token-plan.cn-beijing.maas.aliyuncs.com/api-ws/v1/realtime?model=qwen-audio-3.0-realtime-plus");
+  const pcm = Buffer.alloc(8);
+  pcm.writeInt16LE(0, 0);
+  pcm.writeInt16LE(300, 2);
+  pcm.writeInt16LE(900, 4);
+  pcm.writeInt16LE(10, 6);
+  const converted = pcm24kTo16k(pcm);
+  assert.equal(converted.audio.length, 4);
+  assert.equal(converted.audio.readInt16LE(0), 0);
+  assert.equal(converted.audio.readInt16LE(2), 600);
+  assert.equal(converted.pending.length, 2);
+  assert.equal(converted.pending.readInt16LE(0), 10);
   assert.equal(voiceEndpoint({ base_url: "http://127.0.0.1:9/v1", voice_model: "grok-voice-latest" }, "ws://127.0.0.1:9/v1/realtime"), "ws://127.0.0.1:9/v1/realtime?model=grok-voice-latest");
   assert.equal(voiceEndpoint({ base_url: "https://example.com/v1", voice_model: "grok-voice-latest" }, "ws://127.0.0.1:9/v1/realtime"), null);
 });

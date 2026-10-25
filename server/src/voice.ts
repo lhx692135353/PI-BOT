@@ -25,11 +25,13 @@ export function voiceEndpoint(model: { base_url: string; provider?: string | nul
   const provider = model.provider || inferProvider(model.base_url);
   if (provider === "xai") return `wss://api.x.ai/v1/realtime?model=${encodeURIComponent(voice)}`;
   if (provider === "bailian") {
-    let host = "dashscope.aliyuncs.com";
+    let host = "token-plan.cn-beijing.maas.aliyuncs.com";
     try {
       const name = new URL(model.base_url).hostname.toLowerCase();
-      if (name.includes("intl") || name.includes("ap-southeast")) host = "dashscope-intl.aliyuncs.com";
-    } catch { /* the Beijing endpoint is the default */ }
+      if (name === "dashscope-intl.aliyuncs.com" || (name.endsWith(".dashscope.aliyuncs.com") && (name.includes("intl") || name.includes("ap-southeast")))) host = "dashscope-intl.aliyuncs.com";
+      else if (name === "dashscope.aliyuncs.com" || name.endsWith(".dashscope.aliyuncs.com")) host = "dashscope.aliyuncs.com";
+      else if (name) host = name;
+    } catch { /* Token Plan in Beijing */ }
     return `wss://${host}/api-ws/v1/realtime?model=${encodeURIComponent(voice)}`;
   }
   if (!override) return null;
@@ -224,6 +226,23 @@ async function cancelTextTurns(tx: Tx, hub: Hub, userId: string, botId: string) 
   return aborts;
 }
 
+/** Keep groups of 3 samples so a later chunk can finish an incomplete 24 kHz frame. */
+export function pcm24kTo16k(input: Buffer): { audio: Buffer; pending: Buffer } {
+  const even = input.length - (input.length % 2);
+  const groups = Math.floor(even / 2 / 3);
+  const used = groups * 3 * 2;
+  const audio = Buffer.alloc(groups * 4);
+  for (let group = 0; group < groups; group++) {
+    const offset = group * 6;
+    const first = input.readInt16LE(offset);
+    const second = input.readInt16LE(offset + 2);
+    const third = input.readInt16LE(offset + 4);
+    audio.writeInt16LE(first, group * 4);
+    audio.writeInt16LE(Math.round((second + third) / 2), group * 4 + 2);
+  }
+  return { audio, pending: Buffer.from(input.subarray(used)) };
+}
+
 function closeWith(ws: WebSocket, error: unknown) {
   const status = error instanceof HttpError ? error.status : 500;
   const detail = error instanceof HttpError && typeof error.detail === "string" ? error.detail : "语音通话没有接通";
@@ -254,6 +273,7 @@ class VoiceSession {
   private transcript: string[] = [];
   private assistant = "";
   private earlyAudio: Buffer[] = [];
+  private pcmPending = Buffer.alloc(0);
   private replacing = false;
   constructor(
     private db: Database,
@@ -305,12 +325,11 @@ class VoiceSession {
         type: "session.update",
         session: {
           modalities: ["text", "audio"],
-          voice: "Tina",
+          voice: "longanqian",
           instructions: this.call.instructions,
           input_audio_format: "pcm",
           output_audio_format: "pcm",
           turn_detection: { type: "server_vad", threshold: 0.5, silence_duration_ms: 800 },
-          input_audio_transcription: { model: "qwen3-asr-flash-realtime" },
           tools: VOICE_TOOLS,
         },
       } : {
@@ -355,6 +374,20 @@ class VoiceSession {
   private provider() {
     return String(this.call.model.provider || inferProvider(String(this.call.model.base_url ?? "")));
   }
+  /** Token Plan realtime returns 24 kHz PCM. Desktop and Android play 16 kHz. */
+  private playPcm(pcm: Buffer) {
+    if (!pcm.length || this.client?.readyState !== 1) return;
+    let audio = pcm;
+    if (this.provider() === "bailian") {
+      const converted = pcm24kTo16k(Buffer.concat([this.pcmPending, pcm]));
+      this.pcmPending = converted.pending;
+      audio = converted.audio;
+    }
+    if (!audio.length) return;
+    this.client.send(audio);
+    this.playbackIdle = false;
+    this.setPhase("speaking");
+  }
   private sendAudio(upstream: WebSocket, chunk: Buffer) {
     if (upstream.readyState !== 1 || !chunk.length) return;
     if (this.provider() === "bailian") upstream.send(JSON.stringify({ type: "input_audio_buffer.append", audio: chunk.toString("base64") }));
@@ -382,12 +415,7 @@ class VoiceSession {
   private onUpstream(data: RawData, isBinary: boolean) {
     if (this.ending) return;
     if (isBinary) {
-      const chunk = Buffer.isBuffer(data) ? data : Buffer.from(data as ArrayBuffer);
-      if (this.client?.readyState === 1) {
-        this.client.send(chunk);
-        this.playbackIdle = false;
-        this.setPhase("speaking");
-      }
+      this.playPcm(Buffer.isBuffer(data) ? data : Buffer.from(data as ArrayBuffer));
       return;
     }
     let event: Row;
@@ -400,11 +428,8 @@ class VoiceSession {
     else if (type === "response.created") { this.responseOpen = true; this.setPhase(this.tools.length ? "thinking" : "speaking"); }
     else if ((type === "response.output_text.delta" || type === "response.text.delta" || type === "response.output_audio_transcript.delta" || type === "response.audio_transcript.delta") && event.delta) this.assistant = (this.assistant + String(event.delta)).slice(0, 8000);
     else if ((type === "response.output_audio_transcript.done" || type === "response.audio_transcript.done") && !this.assistant.trim() && event.transcript) this.assistant = String(event.transcript).slice(0, 8000);
-    else if ((type === "response.output_audio.delta" || type === "response.audio.delta") && typeof event.delta === "string" && this.client?.readyState === 1) {
-      const chunk = Buffer.from(event.delta, "base64");
-      this.client.send(chunk);
-      this.playbackIdle = false;
-      this.setPhase("speaking");
+    else if ((type === "response.output_audio.delta" || type === "response.audio.delta") && typeof event.delta === "string") {
+      this.playPcm(Buffer.from(event.delta, "base64"));
     } else if (type === "response.function_call_arguments.done") {
       this.tools.push({ call_id: String(event.call_id ?? ""), name: String(event.name ?? ""), arguments: String(event.arguments ?? "{}") });
       this.setPhase("thinking");
