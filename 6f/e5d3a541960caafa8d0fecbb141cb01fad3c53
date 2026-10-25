@@ -1,0 +1,20 @@
+server/src/voice.ts
+  s_8f3836e5cedd6c::t_30940ab1814298 278
+  s_8f3836e5cedd6c::t_bbed185272b569 243-245
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6fe5d3a541960caafa8d0fecbb141cb01fad3c53",
+  "prompts": {},
+  "sessions": {
+    "s_8f3836e5cedd6c": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "61bd8377-a95b-4cb1-b389-44b8c30460c8",
+        "model": "grok-4.7"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
