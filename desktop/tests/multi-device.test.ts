@@ -96,6 +96,7 @@ test('independent computers route files, delegation, approvals and offline queue
   await eventually(async()=> (await db.tx(tx=>tx.get('bot_runs',approval.run_id))).status==='completed');
   // Simulate a replacement connection while the original has an interrupted
   // operation. The old run must finish before the replacement can accept work.
+  await eventually(async () => !(await db.tx(tx => tx.one("SELECT 1 FROM bot_runs WHERE bot_id=$1 AND lane='conversation' AND status IN ('running','waiting_approval')", [botA.id]))));
   const interrupted = await db.tx(async tx => {
     const r = await insertRun(tx,{userId:a.state().user!.id,botId:botA.id,requestId:randomUUID(),text:'interrupted',computer:{deviceId:aid}});
     await tx.rows("UPDATE bot_runs SET status='running' WHERE run_id=$1",[r.run_id]);
