@@ -2366,6 +2366,9 @@
                       }
                     ]
                   },
+                  "provider_search": {
+                    "type": "boolean"
+                  },
                   "api_key": {
                     "type": "string",
                     "minLength": 1,
@@ -2527,6 +2530,9 @@
                         "type": "null"
                       }
                     ]
+                  },
+                  "provider_search": {
+                    "type": "boolean"
                   },
                   "api_key": {
                     "type": "string",

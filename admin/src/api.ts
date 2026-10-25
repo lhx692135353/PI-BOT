@@ -71,6 +71,7 @@ export interface Model {
   base_url: string;
   provider_model: string;
   voice_model: string | null;
+  provider_search: boolean;
   context_window: number;
   max_tokens: number;
   enabled: boolean;

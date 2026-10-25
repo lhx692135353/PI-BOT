@@ -11,6 +11,27 @@ export interface CatalogModel {
 const VOICE_ID = /grok-voice|(?:^|[-_])realtime(?:$|[-_])|omni-.+realtime|realtime-(?:plus|flash)/i;
 const SKIP_CHAT = /embed|rerank|tts|asr|whisper|image|imagine|wanx|cosyvoice|paraformer|sambert|translat/i;
 
+/** Server-side search tools. The provider runs them inside the Responses request. */
+export function providerSearchTools(provider: string): { type: string }[] {
+  if (provider === "xai") return [{ type: "web_search" }, { type: "x_search" }];
+  if (provider === "bailian") return [{ type: "web_search" }];
+  return [];
+}
+
+export function applyProviderSearch(body: Record<string, unknown>, model: { provider?: string | null; provider_search?: boolean | null }, lane?: string | null) {
+  const extra = model.provider_search === true ? providerSearchTools(model.provider ?? "") : [];
+  if (lane !== "task" || extra.length === 0) return body;
+  const tools = Array.isArray(body.tools) ? body.tools.filter((tool) => {
+    if (!tool || typeof tool !== "object") return true;
+    const record = tool as Record<string, unknown>;
+    return !(record.type === "function" && record.name === "web_search");
+  }) : [];
+  for (const tool of extra) {
+    if (!tools.some((item) => item && typeof item === "object" && (item as Record<string, unknown>).type === tool.type)) tools.push(tool);
+  }
+  return { ...body, tools };
+}
+
 export function providerBase(provider: string): string | null {
   if (provider === "xai") return "https://api.x.ai/v1";
   if (provider === "bailian") return "https://dashscope.aliyuncs.com/compatible-mode/v1";

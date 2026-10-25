@@ -255,7 +255,7 @@ function UsersPage({ me }: { me: User }) {
   );
 }
 
-const EMPTY_MODEL: ModelInput = { name: "", provider: "xai", base_url: "", provider_model: "", voice_model: null, api_key: "", context_window: 128000, max_tokens: 8192, enabled: true, is_default: false };
+const EMPTY_MODEL: ModelInput = { name: "", provider: "xai", base_url: "", provider_model: "", voice_model: null, provider_search: false, api_key: "", context_window: 128000, max_tokens: 8192, enabled: true, is_default: false };
 const PROVIDER_LABEL: Record<ProviderName, string> = { xai: "xAI", bailian: "百炼", custom: "自定义" };
 
 function ModelForm({ model, onClose, onSaved }: { model?: Model; onClose: () => void; onSaved: () => void }) {
@@ -315,7 +315,7 @@ function ModelForm({ model, onClose, onSaved }: { model?: Model; onClose: () => 
         </label>
         <label>
           服务商
-          <select value={form.provider} onChange={(e) => { setCatalog(null); setManual(e.target.value === "custom"); set({ provider: e.target.value as ProviderName, provider_model: "", voice_model: null }); }}>
+          <select value={form.provider} onChange={(e) => { setCatalog(null); setManual(e.target.value === "custom"); set({ provider: e.target.value as ProviderName, provider_model: "", voice_model: null, provider_search: false }); }}>
             <option value="xai">xAI</option>
             <option value="bailian">百炼</option>
             <option value="custom">自定义</option>
@@ -365,6 +365,13 @@ function ModelForm({ model, onClose, onSaved }: { model?: Model; onClose: () => 
           </label>
         )}
         {known && <p className="muted small">语音模型可以不选。不选则这个模型不能打电话。</p>}
+        {known && (
+          <label className="check">
+            <input type="checkbox" checked={form.provider_search} onChange={(e) => set({ provider_search: e.target.checked })} />
+            使用服务商搜索
+          </label>
+        )}
+        {known && <p className="muted small">{form.provider === "xai" ? "打开后，任务里的联网搜索使用 xAI，检索网页和 X。" : "打开后，任务里的联网搜索使用百炼的网页检索。模型需要支持这项能力。"}</p>}
         {locked ? (
           <p className="muted small">上下文 {fmt(form.context_window)}，单次输出上限 {fmt(form.max_tokens)}。这两项来自所选模型。</p>
         ) : (
@@ -436,6 +443,8 @@ function ModelsPage() {
               <dd>{m.provider_model}</dd>
               <dt>语音</dt>
               <dd>{m.voice_model || "未开通"}</dd>
+              {(m.provider === "xai" || m.provider === "bailian") && <><dt>搜索</dt>
+              <dd>{m.provider_search ? "服务商" : "关闭"}</dd></>}
               {m.provider === "custom" && <><dt>接口</dt>
               <dd className="mono">{m.base_url}</dd></>}
               <dt>上下文</dt>

@@ -95,6 +95,7 @@ const modelFields = z.object({
   base_url: httpUrl.optional(),
   provider_model: z.string().trim().min(1).max(200),
   voice_model: z.string().trim().max(200).nullable().optional(),
+  provider_search: z.boolean().optional(),
   api_key: z.string().min(1).max(8192),
   context_window: z.number().int().min(1024).max(4000000),
   max_tokens: z.number().int().min(16).max(1000000),
@@ -118,6 +119,7 @@ const modelOut = (m: Row) => ({
   base_url: m.base_url,
   provider_model: m.provider_model,
   voice_model: m.voice_model ?? null,
+  provider_search: m.provider_search === true,
   context_window: m.context_window,
   max_tokens: m.max_tokens,
   enabled: m.enabled,
@@ -125,7 +127,7 @@ const modelOut = (m: Row) => ({
   created_at: m.created_at,
   updated_at: m.updated_at,
 });
-function normalizeModel(body: { provider?: string; base_url?: string; voice_model?: string | null }, current?: Row) {
+function normalizeModel(body: { provider?: string; base_url?: string; voice_model?: string | null; provider_search?: boolean }, current?: Row) {
   const provider = body.provider ?? current?.provider ?? "custom";
   if (provider !== "xai" && provider !== "bailian" && provider !== "custom") fail(422, "不支持的服务商");
   const fixed = providerBase(provider);
@@ -135,7 +137,13 @@ function normalizeModel(body: { provider?: string; base_url?: string; voice_mode
     if (!parsed.success) fail(422, "需要 HTTP(S) 接口地址");
   }
   const voice = body.voice_model === undefined ? current?.voice_model ?? null : body.voice_model;
-  return { provider, base_url: fixed ?? raw, voice_model: typeof voice === "string" && voice.trim() ? voice.trim() : null };
+  const requested = body.provider_search === undefined ? current?.provider_search === true : body.provider_search;
+  return {
+    provider,
+    base_url: fixed ?? raw,
+    voice_model: typeof voice === "string" && voice.trim() ? voice.trim() : null,
+    provider_search: (provider === "xai" || provider === "bailian") && requested,
+  };
 }
 async function computerStatus(tx: Tx, hub: Hub, userId: string) {
   const devices = await deviceList(tx, hub, userId);
@@ -601,7 +609,7 @@ export const routes: Route[] = [
       const id = randomUUID();
       const m = await tx.insert("models", {
         model_id: id, name: body.name, provider: normalized.provider, base_url: normalized.base_url, provider_model: body.provider_model,
-        voice_model: normalized.voice_model,
+        voice_model: normalized.voice_model, provider_search: normalized.provider_search,
         context_window: body.context_window, max_tokens: body.max_tokens, secret: new Vault(s.vaultFile).seal(body.api_key, id),
         enabled: body.enabled, is_default: false,
       });
@@ -621,6 +629,7 @@ export const routes: Route[] = [
       await tx.update("models", params.id, {
         name: body.name, provider: placed ? normalized.provider : undefined, base_url: placed ? normalized.base_url : undefined,
         provider_model: body.provider_model, voice_model: body.voice_model === undefined ? undefined : normalized.voice_model,
+        provider_search: body.provider_search !== undefined || placed ? normalized.provider_search : undefined,
         context_window: body.context_window,
         max_tokens: body.max_tokens, enabled: body.enabled, updated_at: new Date(),
         secret: body.api_key ? new Vault(s.vaultFile).seal(body.api_key, params.id) : undefined,
