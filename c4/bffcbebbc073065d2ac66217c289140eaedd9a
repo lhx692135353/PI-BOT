@@ -1,0 +1,27 @@
+server/tests/providers.test.ts
+  s_8f3836e5cedd6c::t_2d6600c9f52f6d 3-4
+  s_8f3836e5cedd6c::t_f27a65380e325e 30-73
+server/src/providers.ts
+  s_8f3836e5cedd6c::t_94ac564b2199b4 52,57,64-66,69-70
+  s_8f3836e5cedd6c::t_453fad963f85f6 92-93,97,103-118,120-126
+  s_8f3836e5cedd6c::t_65076b8d230863 119
+  s_8f3836e5cedd6c::t_82d888fe622a5c 148-149
+  s_8f3836e5cedd6c::t_5c7d95119d7025 128-129
+  s_8f3836e5cedd6c::t_f985a8a064496f 127
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c4bffcbebbc073065d2ac66217c289140eaedd9a",
+  "prompts": {},
+  "sessions": {
+    "s_8f3836e5cedd6c": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "61bd8377-a95b-4cb1-b389-44b8c30460c8",
+        "model": "grok-4.7"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
