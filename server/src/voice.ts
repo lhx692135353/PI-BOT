@@ -240,7 +240,9 @@ export function pcm24kTo16k(input: Buffer): { audio: Buffer; pending: Buffer } {
     audio.writeInt16LE(first, group * 4);
     audio.writeInt16LE(Math.round((second + third) / 2), group * 4 + 2);
   }
-  return { audio, pending: Buffer.from(input.subarray(used)) };
+  const pending = Buffer.alloc(input.length - used);
+  input.copy(pending, 0, used);
+  return { audio, pending };
 }
 
 function closeWith(ws: WebSocket, error: unknown) {
@@ -273,7 +275,7 @@ class VoiceSession {
   private transcript: string[] = [];
   private assistant = "";
   private earlyAudio: Buffer[] = [];
-  private pcmPending = Buffer.alloc(0);
+  private pcmPending: Buffer<ArrayBufferLike> = Buffer.alloc(0);
   private replacing = false;
   constructor(
     private db: Database,
