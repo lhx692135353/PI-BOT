@@ -1,0 +1,37 @@
+packages/agent/src/index.ts
+  s_b742c9082c1d21::t_cfca8a82b039c0 179-183,188
+server/tests/llm.test.ts
+  s_b742c9082c1d21::t_044b03f6e6d3a7 4-57
+desktop/tests/harness-e2e.test.ts
+  s_b742c9082c1d21::t_8202d74b0da930 142-147
+packages/agent/README.md
+  s_b742c9082c1d21::t_eb19a4de68f5a2 34,36-38
+server/src/llm.ts
+  s_b742c9082c1d21::t_cfca8a82b039c0 6,121,126
+packages/agent/tests/agent.test.ts
+  s_b742c9082c1d21::t_cfca8a82b039c0 195,204,210
+  s_b742c9082c1d21::t_bbd2fab131d802 42-45,69-73,193-194,196-203,205-209,211
+  s_b742c9082c1d21::t_cacaeedc93d4bc 212-214
+server/src/providers.ts
+  s_b742c9082c1d21::t_cfca8a82b039c0 35-46
+server/src/bots.ts
+  s_b742c9082c1d21::t_cfca8a82b039c0 489,506
+server/README.md
+  s_b742c9082c1d21::t_eb19a4de68f5a2 72-73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "83eae3636d4bacd3aea4482df3cd7be9b20b3a96",
+  "prompts": {},
+  "sessions": {
+    "s_b742c9082c1d21": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17887-030d-7381-a053-a19789df65d6",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
