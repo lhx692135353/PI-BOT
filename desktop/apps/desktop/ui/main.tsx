@@ -117,7 +117,7 @@ function Settings({ state, onClose, onOpenPhone }: { state: AccountState; onClos
 }
 
 const GOAL_STATUS: Record<string, string> = { active: '进行中', paused: '已暂停', waiting_user: '等你决定', done: '已完成' };
-interface GoalItem { id: string; title: string; goal: string; status: string; progress: string | null }
+interface GoalItem { operation_target?:string; id: string; title: string; goal: string; status: string; progress: string | null }
 interface LibraryEntry { name: string; type: 'dir' | 'file'; size: number }
 interface LibraryFile { kind: 'text' | 'binary' | 'image'; name: string; content?: string; truncated?: boolean }
 
@@ -153,6 +153,7 @@ function Inspector({ bot, local, onClose, onOpenLibrary }: { bot: Bot; local: bo
       <button type="button" className="ghost inspector-close" onClick={onClose} aria-label="关闭">×</button>
       <PiBot avatar={bot.avatar} mood="idle" size={72} />
       <h2>{bot.name}</h2>
+      <button className="ghost" onClick={()=>void call<{url:string}>("remoteDesktop",{botId:bot.id}).then(r=>bridge.openExternal(r.url)).catch(e=>setLibraryError(errorText(e)))}>云端桌面与文件</button>
       <div className="inspector-tabs">
         <button type="button" className={tab === 'goals' ? 'active' : ''} onClick={() => setTab('goals')}>目标</button>
         <button type="button" className={tab === 'library' ? 'active' : ''} onClick={() => setTab('library')}>资料库</button>
@@ -164,7 +165,7 @@ function Inspector({ bot, local, onClose, onOpenLibrary }: { bot: Bot; local: bo
           {goals?.map(goal => (
             <article key={goal.id} className="goal-card">
               <header><strong>{goal.title}</strong><span>{GOAL_STATUS[goal.status] ?? goal.status}</span></header>
-              <p>{goal.goal}</p>
+              <p>{goal.goal}</p><p className="muted small">{goal.operation_target?.startsWith("remote:")?"执行位置：云端机器":goal.operation_target?.startsWith("device:")?"执行位置：原电脑":"执行位置待指定"}</p>
               <p className="muted small">{goal.progress || '还没有进展'}</p>
             </article>
           ))}

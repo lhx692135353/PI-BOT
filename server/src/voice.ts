@@ -11,6 +11,7 @@ import { ACTIVE, collaborators, finishRun, ownBot, resolveModel, systemPrompt } 
 import { forgottenContext, maskForgotten } from "./memory.js";
 import { complete } from "./llm.js";
 import { cancelRun, dispatchDevice } from "./runs.js";
+import {targetPrompt} from "./targets.js";
 import { readVoiceTicket, user, Vault, type LlmClaims } from "./security.js";
 import { inferProvider } from "./providers.js";
 
@@ -53,17 +54,18 @@ const fn = (name: string, description: string, properties: Row, required: string
 });
 const VOICE_TOOLS = [
   fn("start_task", "立刻安排后台任务并返回，不要等待它做完。需要搜索、读写文件、执行命令或较长推理时使用。纯联网用 execution=cloud，本机文件或命令用 device。", {
-    title: { type: "string" }, task: { type: "string" }, execution: { type: "string", enum: ["device", "cloud"] },
+    title: { type: "string" }, task: { type: "string" }, execution: { type: "string", enum: ["device", "cloud", "remote"] }, device_id:{type:"string"},
   }, ["title", "task"]),
   fn("task_status", "查看本 Bot 的后台任务，不等待完成。", { task_id: { type: "string" } }, []),
   fn("task_message", "给进行中的任务补充要求。", { task_id: { type: "string" }, text: { type: "string" } }, ["task_id", "text"]),
   fn("cancel_task", "用户明确要求停止时取消任务。全部停止时 all=true。", { task_id: { type: "string" }, all: { type: "boolean" } }, []),
   fn("ask_agent", "把任务交给同一用户的另一个智能体，立即返回，不要等待。", {
-    agent: { type: "string" }, task: { type: "string" }, execution: { type: "string", enum: ["device", "cloud"] },
+    agent: { type: "string" }, task: { type: "string" }, execution: { type: "string", enum: ["device", "cloud", "remote"] }, device_id:{type:"string"},
   }, ["agent", "task"]),
   fn("goal_manage", "用户在追求一件会持续的事时，自己记下目标，不要等用户说建立目标。也可查询、修改、暂停、恢复、完成或停止。先 list 避免重复。create 必须给 goal 和 authorization。", {
     action: { type: "string", enum: ["list", "create", "update", "pause", "resume", "complete", "stop"] },
     goal_id: { type: "string" }, all: { type: "boolean" },
+    execution: { type: "string", enum: ["device", "remote"] }, device_id: { type: "string" },
     title: { type: "string" }, goal: { type: "string" }, authorization: { type: "string" },
     expected_version: { type: "number" },
   }, ["action"]),
@@ -98,7 +100,7 @@ export class VoiceHub implements VoiceAnnouncer {
   attach(ws: WebSocket, req: FastifyRequest) {
     const url = new URL(req.url, "http://localhost");
     return (async () => {
-      let auth: { userId: string; botId: string; callId: string | null };
+      let auth: { userId: string; botId: string; callId: string | null;client?:string;deviceId?:string };
       try {
         auth = await this.authenticate(url);
       } catch (error) {
@@ -120,7 +122,7 @@ export class VoiceHub implements VoiceAnnouncer {
         }
         if (current) return closeWith(ws, new HttpError(409, "正在语音通话"));
         try {
-          await this.start(ws, auth.userId, auth.botId);
+          await this.start(ws, auth.userId, auth.botId,auth.client,auth.deviceId);
         } catch (error) {
           closeWith(ws, error);
         }
@@ -141,16 +143,16 @@ export class VoiceHub implements VoiceAnnouncer {
       const claims = await readVoiceTicket(ticket, this.s);
       const active = await this.db.tx((tx) => tx.get("users", claims.userId));
       if (!active || active.disabled) fail(401, "账号不可用");
-      return { userId: claims.userId, botId: claims.botId, callId };
+      return { userId: claims.userId, botId: claims.botId, callId,client:claims.client,deviceId:claims.deviceId };
     }
     const token = url.searchParams.get("token");
     const botId = url.searchParams.get("bot");
     if (!token || !botId) throw new HttpError(401, "需要认证");
     const u = await this.db.tx((tx) => user(tx, { authorization: `Bearer ${token}` }, this.s));
     await this.db.tx((tx) => ownBot(tx, u.user_id, botId));
-    return { userId: String(u.user_id), botId, callId };
+    return { userId: String(u.user_id), botId, callId,client:url.searchParams.get("client")==="android"?"android":"legacy" };
   }
-  private async start(ws: WebSocket, userId: string, botId: string) {
+  private async start(ws: WebSocket, userId: string, botId: string,client="legacy",deviceId?:string) {
     const opened = await this.db.tx(async (tx) => {
       const bot = await ownBot(tx, userId, botId, true);
       const model = await resolveModel(tx, bot);
@@ -173,7 +175,8 @@ export class VoiceHub implements VoiceAnnouncer {
       const memory = await tx.get("bot_memories", bot.bot_id);
       const forgotten = await forgottenContext(tx, bot.bot_id);
       const agents = await collaborators(tx, bot);
-      const instructions = `${systemPrompt(bot, maskForgotten(memory?.summary ?? "", forgotten), "cloud", { lane: "conversation", agents })}
+      const location=deviceId?"device:"+deviceId:client==="android"?"remote":"legacy";
+      const instructions = `${systemPrompt(bot, maskForgotten(memory?.summary ?? "", forgotten), "cloud", { lane: "conversation", agents })}\n${client!=="legacy"?await targetPrompt(tx,this.s,this.hub,userId,location,client):""}
 
 你正在和用户打电话。用口语短句，不要 Markdown、列表、链接堆砌、任务编号和工具日志。闲聊和已有依据的简单问题直接回答。需要搜索、读写文件、执行命令或较长推理时立刻 start_task，用一句话说明正在做什么，然后停下，不要等待做完。用户一打断就停止当前这句。后台任务结束后，系统会把结果发给你，你再用一两句话告诉用户。其他智能体只用 ask_agent，不要等待。`;
       const runId = randomUUID();
@@ -183,7 +186,7 @@ export class VoiceHub implements VoiceAnnouncer {
       const lease = new Date(Date.now() + this.s.leaseSeconds * 1000);
       await tx.insert("bot_runs", {
         run_id: runId, bot_id: botId, user_id: userId, request_id: `voice:${runId}`,
-        executor: "cloud", status: "running", origin: "voice", lane: "conversation",
+        executor: "cloud", status: "running", origin: "voice", lane: "conversation", operation_target:location,source_client:client,source_device_id:deviceId,
         user_message_id: userMessageId, assistant_message_id: assistantMessageId,
         started_at: new Date(), lease_until: lease, trace_id: runId,
       });
@@ -528,9 +531,10 @@ class VoiceSession {
           title: typeof args.title === "string" ? args.title : undefined,
           task: String(args.task ?? ""),
           agent: typeof args.agent === "string" ? args.agent : undefined,
-          execution: args.execution === "cloud" || args.execution === "device" ? args.execution : undefined,
+          execution: ["cloud","device","remote"].includes(args.execution)?args.execution:undefined,
+          device_id:args.device_id,
           request_id: tool.call_id || randomUUID(),
-        }));
+        },this.s));
         if (created.run?.executor === "device") await dispatchDevice(this.db, this.s, this.hub, created.run.run_id);
         return JSON.stringify({ title: created.task.title, status: created.task.status, task_id: created.task.id });
       }
@@ -565,7 +569,7 @@ class VoiceSession {
       if (tool.name === "goal_manage") {
         const parsed = goalRequest.safeParse({ ...args, run_id: this.call.runId, request_id: tool.call_id || randomUUID() });
         if (!parsed.success) return JSON.stringify({ error: "参数无效" });
-        const managed = await this.db.tx((tx) => manageGoals(tx, this.userId, claims, parsed.data));
+        const managed = await this.db.tx((tx) => manageGoals(tx, this.userId, claims, parsed.data, undefined, this.s, this.hub));
         return JSON.stringify(managed);
       }
       return JSON.stringify({ error: "没有这个操作" });

@@ -1,3 +1,5 @@
+import { remoteRoutes } from './remote/routes.js';
+import type {RemoteService} from './remote/service.js';
 import { phoneRoutes } from './phone-routes.js';
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { randomUUID } from "node:crypto";
@@ -49,6 +51,7 @@ export interface Context {
   s: Settings;
   hub: Hub;
   webSearch: WebSearch;
+  remote: RemoteService;
   user: Row;
   device?: Row;
   llm?: LlmClaims;
@@ -172,11 +175,12 @@ async function deviceFiles(ctx: Context, method: "list" | "read") {
 
 export const routes: Route[] = [
   ...phoneRoutes,
+  ...remoteRoutes,
   {method:"POST",path:"/agent/automations/effect",auth:"llm",tag:"agents",summary:"目标检查操作日志",internal:true,
     body:z.object({run_id:uuid,tool_call_id:z.string().min(1).max(200),phase:z.enum(["start","end"]),confirmed:z.boolean().optional(),tool_name:z.enum(["write_file","edit_file","run_command"]).optional(),summary:z.string().max(2000).optional(),result:z.string().max(4000).optional()}).strict(),
     handler:async({tx,user,llm,body})=>recordAutomationEffect(tx,user.user_id,llm!,body)},
   { method:"POST",path:"/agent/automations",auth:"llm",tag:"agents",summary:"管理目标",internal:true,body:goalRequest,
-    handler:async({tx,user,llm,body})=>manageGoals(tx,user.user_id,llm!,body) },
+    handler:async({tx,s,hub,user,llm,body})=>manageGoals(tx,user.user_id,llm!,body,undefined,s,hub) },
   { method:"POST",path:"/agent/automations/finish",auth:"llm",tag:"agents",summary:"提交目标检查结果",internal:true,body:goalFinishRequest,
     handler:async({tx,user,llm,body})=>saveGoalDecision(tx,user.user_id,llm!,body) },
   {method:"POST",path:"/agent/memory",auth:"llm",tag:"memory",summary:"当前 Bot 的私有记忆",internal:true,body:memoryRequest,
@@ -191,7 +195,7 @@ export const routes: Route[] = [
     handler:async({tx,user,llm,body})=>checkpoint(tx,user.user_id,llm!,body.run_id,body.checkpoint,body.expected_version)},
   {method:"POST",path:"/agent/tasks/resume",auth:"llm",tag:"agents",summary:"用户要求后续接已结束任务",internal:true,
     body:z.object({run_id:uuid,task_id:uuid,request_id:z.string().min(1).max(200),text:z.string().max(8000).optional()}).strict(),
-    handler:async({tx,db,s,hub,user,llm,body,after})=>{const r=await resumeTask(tx,hub,user.user_id,llm!,body);if(r.run?.executor==="device") after(()=>dispatchDevice(db,s,hub,r.run!.run_id));return r.task;}},
+    handler:async({tx,db,s,hub,user,llm,body,after})=>{const r=await resumeTask(tx,hub,user.user_id,llm!,body,s);if(r.run?.executor==="device") after(()=>dispatchDevice(db,s,hub,r.run!.run_id));return r.task;}},
   {
     method: "POST", path: "/agent/skills", auth: "llm", tag: "skills", summary: "智能体私有能力管理",
     internal: true,
@@ -214,7 +218,8 @@ export const routes: Route[] = [
     method: "POST", path: "/agent/tasks", auth: "llm", tag: "agents", summary: "智能体把任务委托给同一用户的另一个 Bot（短期智能体令牌）",
     body: z.object({
       run_id: uuid,
-      execution: z.enum(["device","cloud"]).optional(),
+      execution: z.enum(["device","cloud","remote"]).optional(),
+      device_id:uuid.optional(),
       agent: z.string().trim().min(1).max(100).optional(),
       kind: z.enum(["background", "delegation"]).default("delegation"),
       title: z.string().trim().min(1).max(80).optional(),
@@ -223,7 +228,7 @@ export const routes: Route[] = [
       wait: z.boolean().default(true),
     }),
     handler: async ({ db, tx, s, hub, user, llm, body, after }) => {
-      const { task, run } = await createTask(tx, hub, user.user_id, llm!, body);
+      const { task, run } = await createTask(tx, hub, user.user_id, llm!, body, s);
       if (run?.executor === "device") after(() => dispatchDevice(db, s, hub, run.run_id));
       return task;
     },
@@ -416,9 +421,10 @@ export const routes: Route[] = [
   },
   {
     method: "POST", path: "/bots/:id/voice/ticket", auth: "actor", tag: "bots", summary: "签发一分钟语音通话票据，桌面端用它连接 /ws/voice",
-    handler: async ({ tx, s, user, params }) => {
+    body:z.object({client:z.enum(["desktop","android"]).optional()}),
+    handler: async ({ tx, s, user, device, params, body }) => {
       const bot = await ownBot(tx, user.user_id, params.id);
-      return { ticket: await issueVoiceTicket(user.user_id, bot.bot_id, s), expires_in: 60 };
+      return { ticket: await issueVoiceTicket(user.user_id, bot.bot_id, s,body.client?{client:device?"desktop":"android",deviceId:device?.device_id}:undefined), expires_in: 60 };
     },
   },
   {
@@ -431,11 +437,11 @@ export const routes: Route[] = [
   },
   {
     method: "POST", path: "/bots/:id/messages", auth: "actor", tag: "bots", summary: "给 Bot 发消息；电脑在线时在电脑上运行，否则在云端运行",
-    body: z.object({ text: z.string().trim().max(100000).default(''), images: imagesSchema.default([]), request_id: z.string().min(8).max(80) }).refine(body => body.text.length > 0 || body.images.length > 0, '请填写消息或选择图片'),
-    handler: async ({ db, tx, s, hub, user, params, body, after }) => {
+    body: z.object({ text: z.string().trim().max(100000).default(''), images: imagesSchema.default([]), request_id: z.string().min(8).max(80), client:z.enum(['android','desktop']).optional() }).refine(body => body.text.length > 0 || body.images.length > 0, '请填写消息或选择图片'),
+    handler: async ({ db, tx, s, hub, user, device, params, body, after }) => {
       await ownBot(tx,user.user_id,params.id,true);
-      const conn = await botConnection(tx,hub,user.user_id,params.id);
-      const { run, created } = await postMessage(tx, user.user_id, params.id, body.text, body.request_id, conn ? { deviceId: conn.deviceId } : null, body.images);
+      const conn = body.client ? (device ? hub.device(user.user_id,device.device_id) : undefined) : await botConnection(tx,hub,user.user_id,params.id);
+      const { run, created } = await postMessage(tx, user.user_id, params.id, body.text, body.request_id, conn ? { deviceId: conn.deviceId } : null, body.images, body.client ? {client:device?"desktop":"android",deviceId:device?.device_id} : {});
       if (created && run.executor === "device") after(() => dispatchDevice(db, s, hub, run.run_id));
       const messages = await tx.rows("SELECT * FROM bot_messages WHERE message_id = ANY($1) ORDER BY seq", [[run.user_message_id, run.assistant_message_id]]);
       return { run: runOut(run), messages: messages.map((m) => messageOut(m)) };
@@ -458,11 +464,11 @@ export const routes: Route[] = [
   },
   {
     method:"POST",path:"/bots/:id/messages/:messageId/ui-actions",auth:"actor",tag:"bots",summary:"提交界面操作并启动下一次 Bot 任务",
-    body:z.object({revision:z.number().int().positive(),request_id:z.string().uuid(),states:z.array(z.object({surfaceId:z.string().min(1).max(80),data:z.record(z.string(),z.unknown())})).max(4),action:z.object({name:z.string().min(1).max(80),surfaceId:z.string().min(1).max(80),sourceComponentId:z.string().min(1).max(80),context:z.record(z.string(),z.unknown())})}),
-    handler:async({db,tx,s,hub,user,params,body,after})=>{
+    body:z.object({client:z.enum(["desktop","android"]).optional(),revision:z.number().int().positive(),request_id:z.string().uuid(),states:z.array(z.object({surfaceId:z.string().min(1).max(80),data:z.record(z.string(),z.unknown())})).max(4),action:z.object({name:z.string().min(1).max(80),surfaceId:z.string().min(1).max(80),sourceComponentId:z.string().min(1).max(80),context:z.record(z.string(),z.unknown())})}),
+    handler:async({db,tx,s,hub,user,device,params,body,after})=>{
       await ownBot(tx,user.user_id,params.id,true);
-      const conn=await botConnection(tx,hub,user.user_id,params.id);
-      const {run,created}=await submitUiAction(tx,user.user_id,params.id,params.messageId,body,conn?{deviceId:conn.deviceId}:null);
+      const conn=body.client ? (device?hub.device(user.user_id,device.device_id):undefined) : await botConnection(tx,hub,user.user_id,params.id);
+      const {run,created}=await submitUiAction(tx,user.user_id,params.id,params.messageId,body,conn?{deviceId:conn.deviceId}:null,body.client?{client:device?"desktop":"android",deviceId:device?.device_id}:{});
       if(created&&run.executor==='device')after(()=>dispatchDevice(db,s,hub,run.run_id));
       const messages=await tx.rows("SELECT * FROM bot_messages WHERE message_id=ANY($1) ORDER BY seq",[[run.user_message_id,run.assistant_message_id]]);
       return {run:runOut(run),messages:messages.map(m=>messageOut(m))};

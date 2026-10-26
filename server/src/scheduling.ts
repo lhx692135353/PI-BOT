@@ -6,7 +6,7 @@ export const TASK_CONCURRENCY = 2;
 /** Lock the bot before the run: all executors share the same capacity checks. */
 export async function claimExecution(tx: Tx, id: string, s: Settings, workerId?: string): Promise<Row | null> {
   const candidate = await tx.get("bot_runs", id);
-  if (!candidate || candidate.status !== "queued" || (workerId && candidate.execution_policy === "device_only")) return null;
+  if (!candidate || candidate.status !== "queued" || (workerId && candidate.execution_policy === "device_only" && !candidate.operation_target?.startsWith("remote:"))) return null;
   const bot = await tx.one("SELECT * FROM bots WHERE bot_id=$1 FOR NO KEY UPDATE SKIP LOCKED", [candidate.bot_id]);
   if (!bot || bot.archived_at) return null;
   if (candidate.execution_policy === "device_only" && await tx.one("SELECT 1 FROM bot_runs WHERE bot_id=$1 AND lane='task' AND execution_policy='any' AND status='queued' AND NOT cancel_requested", [candidate.bot_id])) return null;

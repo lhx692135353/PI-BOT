@@ -76,6 +76,7 @@ export async function submitUiAction(
     request_id: string;
   },
   computer: { deviceId: string } | null,
+  source:{client?:string;deviceId?:string}={},
 ) {
   const row = await ownMessage(tx, userId, botId, messageId);
   // Same idempotency scope as normal messages. A retry must not append another user message.
@@ -110,7 +111,7 @@ export async function submitUiAction(
     states: ui.surfaces.map((s) => ({ surfaceId: s.id, data: s.data })),
   };
   if (JSON.stringify(detail).length > 90000) fail(422, "提交的界面数据过大");
-  const result = await postMessage(tx, userId, botId, text, requestId, computer);
+  const result = await postMessage(tx, userId, botId, text, requestId, computer,[],source);
   await tx.update("bot_messages", result.run.user_message_id, {
     ui_action: detail,
   });

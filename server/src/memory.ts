@@ -285,6 +285,7 @@ export async function resumeTask(
   userId: string,
   claims: LlmClaims,
   body: { run_id: string; task_id: string; request_id: string; text?: string },
+  settings?:import("./config.js").Settings,
 ) {
   const parent = await callerRun(tx, userId, claims, body.run_id);
   if (parent.lane !== "conversation") fail(422, "请由对话通道续接任务");
@@ -310,5 +311,7 @@ export async function resumeTask(
     request_id: body.request_id,
     resumed_from: old!.task_id,
     execution: old!.execution,
-  });
+    device_id:old!.device_id,
+    operation_target:old!.operation_target,
+  },settings);
 }

@@ -17,7 +17,7 @@ const NO_IMAGES: ChatImage[] = [];
 const Markdown = memo(function Markdown({ text }: { text: string }) {
   return (
     <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
-      a: ({ href, children }) => <a href={href} onClick={e => { e.preventDefault(); if (href && /^https?:/.test(href)) void bridge.openExternal(href); }}>{children}</a>,
+      a: ({ href, children }) => <a href={href} onClick={e => { e.preventDefault(); if(href&&/^\/remote\/artifacts\/[0-9a-f-]{36}$/.test(href))void call<{url:string}>('remoteArtifact',{id:href.split('/').at(-1)}).then(r=>bridge.openExternal(r.url)).catch(e=>alert(errorText(e)));else if (href && /^https?:/.test(href)) void bridge.openExternal(href); }}>{children}</a>,
     }}>{text}</ReactMarkdown>
   );
 });
@@ -42,7 +42,7 @@ function Delegations({ tasks, onOpenBot }: { tasks: AgentTaskRef[]; onOpenBot(id
     <div className="delegations">
       {tasks.map(t => (
         <button key={t.id} className={`delegation ${t.status}`} onClick={() => onOpenBot(t.bot_id)} title={`打开 ${t.bot_name} 的时间线`}>
-          交给了 {t.bot_name} · {t.mode === 'report' && t.status === 'running' ? '完成后回报' : TASK_STATE[t.status]} ›
+          交给了 {t.bot_name} · {t.mode === 'report' && t.status === 'running' ? '完成后回报' : TASK_STATE[t.status]}{t.operation_target?.startsWith('remote:')?' · 云端机器':t.operation_target?.startsWith('device:')?' · 电脑':''} ›
         </button>
       ))}
     </div>

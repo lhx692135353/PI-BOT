@@ -1,3 +1,4 @@
+import {targetPrompt} from "./targets.js";
 import { randomUUID } from "node:crypto";
 import { imageBytes, MAX_IMAGES_BYTES, type ChatImage } from '@pi-bot/agent/images';
 import { UI_INSTRUCTIONS, isInternalTool, PROGRESS_CHARS, PROGRESS_SEGMENTS, TASK_TOOL_NAMES, type SkillSummary } from "@pi-bot/agent";
@@ -62,6 +63,7 @@ export const runOut = (r: Row | undefined) =>
         status: r.status,
         executor: r.executor,
         device_id: r.device_id,
+        operation_target:r.operation_target,
         lane: r.lane,
         task_id: r.task_id,
         error: r.error,
@@ -73,6 +75,7 @@ export const runOut = (r: Row | undefined) =>
     : null;
 export const taskOut = (t: Row) => ({
   id: t.task_id,
+  operation_target:t.operation_target,
   bot_id: t.target_bot_id,
   bot_name: t.bot_name ?? "",
   status: t.status,
@@ -290,6 +293,7 @@ export async function postMessage(
   requestId: string,
   computer: { deviceId: string } | null,
   images: ChatImage[] = [],
+  source: {client?:string;deviceId?:string} = {},
 ) {
   const bot = await ownBot(tx, userId, botId, true);
   const existing = await tx.one(
@@ -300,11 +304,14 @@ export async function postMessage(
   if (await tx.one("SELECT 1 FROM bot_runs WHERE bot_id=$1 AND origin='voice' AND status = ANY($2)", [botId, ACTIVE]))
     fail(409, "正在语音通话，请直接说或挂断后再发文字");
   if (!(await resolveModel(tx, bot))) fail(503, "管理员尚未配置可用模型");
-  const run = await insertRun(tx, { userId, botId, requestId, text, computer, images });
+  const run = await insertRun(tx, { userId, botId, requestId, text, computer, images, sourceClient:source.client, sourceDeviceId:source.deviceId, operationTarget:source.client ? (source.deviceId ? "device:"+source.deviceId : "remote") : undefined });
   return { run, bot, created: true };
 }
 
 export interface NewRun {
+  operationTarget?:string;
+  sourceClient?:string;
+  sourceDeviceId?:string;
   userId: string;
   botId: string;
   requestId: string;
@@ -337,6 +344,9 @@ export async function insertRun(tx: Tx, o: NewRun) {
     bot_id: o.botId,
     user_id: o.userId,
     request_id: o.requestId,
+    operation_target:o.operationTarget??parent?.operation_target??"legacy",
+    source_client:o.sourceClient??parent?.source_client??"legacy",
+    source_device_id:o.sourceDeviceId??parent?.source_device_id??null,
     executor,
     device_id: o.targetDeviceId ?? o.computer?.deviceId ?? null,
     status: "queued",
@@ -384,6 +394,7 @@ export async function insertRun(tx: Tx, o: NewRun) {
 export interface RunContext {
   run_id: string;
   executor: "device" | "cloud";
+  operation_target?:string;
   bot: { id: string; name: string; slug: string };
   model: { id: string; name: string; context_window: number; max_tokens: number };
   system: string;
@@ -535,7 +546,10 @@ export async function buildContext(
   const memoryContext=(privateContext+(run.lane==="task"&&taskRecord?`\n当前任务 ID：${taskRecord.task_id}；检查点版本：${taskRecord.checkpoint_version}\n检查点：${checkpointText.slice(0,4000)}${checkpointText.length>4000?'\n[检查点已截断，需要时用 task_status 读取完整版本]':''}`:'')).slice(0,12500);
   const automation = await automationForRun(tx, run);
   let system=systemPrompt(bot,maskForgotten(memory?.summary??'',forgotten),run.executor,{search,providerSearch,agents,depth,lane:run.lane});
-  if (run.lane === "conversation") system += "\n目标：用户在追求一件会持续一段时间的事时，你自己用 goal_manage 记下，不要等用户说「建立目标」。记录目标说明和已经允许做的范围。不要用一次性 start_task 代替。查询、修改、暂停、恢复、完成和停止也使用该工具。全部操作仅在用户明确要求全部时使用 all=true。建立前先查询，避免重复。目标检查只在绑定电脑在线时进行，不在云端执行。";
+  if(run.operation_target!=="legacy") system += "\n"+await targetPrompt(tx,s,undefined,run.user_id,run.operation_target,run.source_client);
+  if(run.operation_target?.startsWith("remote:")&&run.lane==="task") system=system.replace(/你只能对话[^\n]+/,"使用提供的远端工具操作云端虚机，无法直接访问用户电脑。");
+  if(run.operation_target?.startsWith("remote:")&&run.lane==="task") system += "\n本任务在云端 Linux 虚机执行，文件和 shell 工具都操作该虚机；默认资料库为 /home/pibot/workspaces/"+bot.slug+"。浏览器和桌面操作前先读取状态；遇到人工接管或忙碌状态停止界面操作并说明原因。";
+  if (run.lane === "conversation") system += "\n目标：用户在追求一件会持续一段时间的事时，你自己用 goal_manage 记下，不要等用户说「建立目标」。记录目标说明和已经允许做的范围。不要用一次性 start_task 代替。查询、修改、暂停、恢复、完成和停止也使用该工具。全部操作仅在用户明确要求全部时使用 all=true。建立前先查询，避免重复。目标检查在每个目标保存的执行环境进行，不能自动迁移。";
   if (automation) system += `\n你正在检查自己的目标，当前时间 ${new Date().toISOString()}。发现资料、记忆或未完成工作里有明确且尚未完成的事时，可以用 goal_manage 新建一个目标，本轮最多一个；没有新的授权时 authorization 写「在自己的资料库内推进」。先查询，避免重复。不要修改、暂停或停止已有目标。结束前必须调用 goal_finish，为当时每一个进行中目标提交状态，包括本轮新建的，然后结束。不要只用普通文字结束。没有新进展时 notify=false。只有可交付成果、重要变化或需要用户决定才 notify=true，并提供稳定的 notification_key；同一目标同一状态不得换 key。需要用户决定时 state=waiting_user。不要把工作交给其他智能体。只推进该目标授权范围内、且有明确下一步的事项。先核实检查点和操作结果，未知副作用不可重放。检查点版本：${automation.checkpoint_version}`;
   if (run.automation_readonly) system += "\n本轮 memory_manage 仅允许 list/search，skill_manage 不可用。";
   const skills=await skillCatalog(tx,bot.bot_id);
@@ -576,6 +590,7 @@ export async function buildContext(
   return {
     run_id: run.run_id,
     executor: run.executor,
+    operation_target:run.operation_target,
     bot: { id: bot.bot_id, name: bot.name, slug: bot.slug },
     model: {
       id: model.model_id,

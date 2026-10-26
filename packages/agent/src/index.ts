@@ -308,3 +308,5 @@ export const createBotAgent: AgentFactory = async (o) => {
     !!o.skills,
   );
 };
+
+export {remoteTools} from "./remote.js";

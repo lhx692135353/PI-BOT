@@ -24,7 +24,7 @@ data class ServerUrl(val base: String) {
         val query = buildString {
             append("token=")
             append(URLEncoder.encode(token, "UTF-8"))
-            append("&bot=")
+            append("&client=android&bot=")
             append(URLEncoder.encode(botId, "UTF-8"))
             if (!callId.isNullOrBlank()) {
                 append("&call_id=")

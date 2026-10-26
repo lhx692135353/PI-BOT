@@ -16,8 +16,9 @@ export function automationTools(baseUrl: string, token: () => string, runId: str
     name: "goal_manage", label: "管理目标",
     description: review
       ? "发现明确且尚未完成的事时可以新建一个目标，本轮最多一个。先 list 避免重复。create 必须给 goal；没有新的授权时 authorization 写「在自己的资料库内推进」。不能修改、暂停或停止已有目标。若本轮新建了目标，goal_finish 必须带上它。"
-      : "用户在追求一件会持续的事时自己记下目标，不要等用户说「建立目标」，立即返回。先 list 避免重复。create 必须给 goal 和已经允许做的范围 authorization。list 可查进度、检查点和 version；修改使用 expected_version。all=true 仅在用户明确要求全部时使用。暂停、完成或停止会使进行中的检查失效。目标检查等待绑定电脑在线，不在云端执行。",
+      : "用户在追求一件会持续的事时自己记下目标，不要等用户说「建立目标」，立即返回。先 list 避免重复。create 必须给 goal 和已经允许做的范围 authorization。list 可查进度、检查点和 version；修改使用 expected_version。all=true 仅在用户明确要求全部时使用。暂停、完成或停止会使进行中的检查失效。目标检查在所保存的机器上运行。电脑用 execution=device、device_id 指定，云端虚机用 execution=remote。默认继承本轮位置，不自动切换。",
     parameters: Type.Object({
+      execution:Type.Optional(Type.Union([Type.Literal("device"),Type.Literal("remote")])),device_id:Type.Optional(Type.String({format:"uuid"})),
       action: Type.Union((review ? ["list", "create"] : ["list", "create", "update", "pause", "resume", "complete", "stop"]).map(x => Type.Literal(x))),
       ...(review ? {} : { goal_id: Type.Optional(Type.String({ format: "uuid" })), all: Type.Optional(Type.Boolean()), expected_version: Type.Optional(Type.Integer({ minimum: 1 })) }),
       title: Type.Optional(Type.String({ minLength: 1, maxLength: 80 })), goal: Type.Optional(Type.String({ minLength: 1, maxLength: 8000 })),

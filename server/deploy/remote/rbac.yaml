@@ -1,0 +1,39 @@
+# Apply in the configured VM namespace. The API may use this service account token or a mounted external token.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pibot-virtualization
+  namespace: pibot
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pibot-virtualization
+  namespace: pibot
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [get, create]
+  - apiGroups: [kubevirt.io]
+    resources: [virtualmachines, virtualmachineinstances]
+    verbs: [get, create]
+  - apiGroups: [cdi.kubevirt.io]
+    resources: [datavolumes]
+    verbs: [get, create]
+  - apiGroups: [subresources.kubevirt.io]
+    resources: [virtualmachineinstances/portforward]
+    verbs: [get, create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pibot-virtualization
+  namespace: pibot
+subjects:
+  - kind: ServiceAccount
+    name: pibot-virtualization
+    namespace: pibot
+roleRef:
+  kind: Role
+  name: pibot-virtualization
+  apiGroup: rbac.authorization.k8s.io

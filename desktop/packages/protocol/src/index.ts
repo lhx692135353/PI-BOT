@@ -23,6 +23,8 @@ export const schemas = {
   phoneFrame: z.object(phoneSession).strict(),
   phoneInput: z.object({...phoneSession,event:phoneInputEvent}).strict(),
   phoneRelease: z.object(phoneSession).strict(),
+  remoteArtifact:z.object({id}),
+  remoteDesktop:z.object({botId:id}),
   status: z.object({}),
   login: z.object({ serverUrl: z.string().url(), username: z.string().trim().min(1).max(64), password: z.string().min(1).max(200), label: z.string().trim().min(1).max(80) }),
   logout: z.object({}),
@@ -56,11 +58,11 @@ export function parseInput(method: Method, input: unknown) {
 }
 
 export type RunStatus = 'queued' | 'running' | 'waiting_approval' | 'completed' | 'failed' | 'cancelled';
-export interface Run { device_id?: string | null; lane?: 'conversation' | 'task'; task_id?: string | null; id: string; bot_id: string; status: RunStatus; executor: 'device' | 'cloud'; error: string | null; created_at: string; finished_at: string | null; assistant_message_id: string }
+export interface Run { operation_target?:string; device_id?: string | null; lane?: 'conversation' | 'task'; task_id?: string | null; id: string; bot_id: string; status: RunStatus; executor: 'device' | 'cloud'; error: string | null; created_at: string; finished_at: string | null; assistant_message_id: string }
 export interface ToolEntry { id: string; name: string; state: 'running' | 'completed' | 'failed'; summary?: string }
 /** Another bot that wrote a `user` message: a delegated task, or the report of one this bot handed off. */
 export interface FromBot { id: string; name: string; avatar: Avatar | null; kind: 'task' | 'report' }
-export interface AgentTaskRef { id: string; bot_id: string; bot_name: string; status: 'queued' | 'running' | 'waiting_approval' | 'completed' | 'failed' | 'cancelled'; mode: 'wait' | 'report'; kind?: 'background' | 'delegation'; title?: string; updated_at?: string; activity?: string | null }
+export interface AgentTaskRef { operation_target?:string; id: string; bot_id: string; bot_name: string; status: 'queued' | 'running' | 'waiting_approval' | 'completed' | 'failed' | 'cancelled'; mode: 'wait' | 'report'; kind?: 'background' | 'delegation'; title?: string; updated_at?: string; activity?: string | null }
 export interface Message { task_id?: string | null; id: string; bot_id: string; run_id: string | null; seq: number; role: 'user' | 'assistant'; content: string; images?: MessageImage[]; status: 'completed' | 'running' | 'failed' | 'cancelled'; executor: 'device' | 'cloud' | null; tools: ToolEntry[]; progress?: string[]; ui?: UiDocument | null; from_bot?: FromBot | null; agent_tasks?: AgentTaskRef[]; created_at: string; updated_at: string }
 export interface Approval { id: string; run_id: string; bot_id: string; kind: 'outside_access'; path: string; reason: string; status: string; expires_at: string }
 export interface Bot { execution_device_id?: string | null; active_tasks?: AgentTaskRef[]; activity?: { status: RunStatus | null; tool: string | null; summary: string | null; running_count: number; queued_count: number }; id: string; name: string; slug: string; persona: string; model_id: string | null; avatar: Avatar; is_main?: boolean; created_at: string; last_active_at: string; latest_run: Run | null; last_message: { role: string; preview: string; status: string; created_at: string } | null; pending_approvals: Approval[] }

@@ -55,6 +55,7 @@ data class Run(
     @SerialName("assistant_message_id") val assistantMessageId: String? = null,
     @SerialName("created_at") val createdAt: String,
     @SerialName("finished_at") val finishedAt: String? = null,
+    @SerialName("operation_target") val operationTarget: String? = null,
 ) {
     val active: Boolean get() = status in ACTIVE_RUNS
 }
@@ -149,6 +150,7 @@ data class AgentTaskRef(
     val kind: String = "delegation",
     val title: String = "",
     @SerialName("updated_at") val updatedAt: String? = null,
+    @SerialName("operation_target") val operationTarget: String? = null,
 )
 
 @Serializable
@@ -189,7 +191,7 @@ data class BotInput(
 private data class LoginBody(val username: String, val password: String)
 
 @Serializable
-private data class SendBody(val text: String, @SerialName("request_id") val requestId: String, val images: List<ChatImage> = emptyList())
+private data class SendBody(val text: String, @SerialName("request_id") val requestId: String, val images: List<ChatImage> = emptyList(), val client: String = "android")
 
 @Serializable
 private data class DecisionBody(val decision: String)
@@ -249,7 +251,11 @@ class PiBotApi(private val http: OkHttpClient, private val json: Json = API_JSON
         call(url, "POST", "/bots/$botId/messages/$messageId/ui-state", token, body)
 
     fun uiAction(url: ServerUrl, token: String, botId: String, messageId: String, body: JsonObject): SendResult =
-        call(url, "POST", "/bots/$botId/messages/$messageId/ui-actions", token, body)
+        call(url, "POST", "/bots/$botId/messages/$messageId/ui-actions", token, JsonObject(body + ("client" to kotlinx.serialization.json.JsonPrimitive("android"))))
+
+    fun remoteArtifact(url: ServerUrl, token: String, id: String): JsonObject = call(url,"POST","/remote/artifacts/$id/open",token,EmptyBody())
+
+    fun remoteDesktop(url: ServerUrl, token: String, botId: String): JsonObject = call(url,"POST","/remote/desktop/open",token, kotlinx.serialization.json.buildJsonObject { put("bot_id", kotlinx.serialization.json.JsonPrimitive(botId)) })
 
     fun cancel(url: ServerUrl, token: String, runId: String): Run = call(url, "POST", "/runs/$runId/cancel", token, EmptyBody())
 

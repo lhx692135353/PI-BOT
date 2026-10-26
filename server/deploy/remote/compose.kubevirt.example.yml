@@ -1,0 +1,7 @@
+# Apply as a Compose override; replace paths and version-matched virtctl executable.
+services:
+  api:
+    volumes:
+      - ./kubernetes/token:/run/secrets/kubernetes/token:ro
+      - ./kubernetes/ca.crt:/run/secrets/kubernetes/ca.crt:ro
+      - ./virtctl:/usr/local/bin/virtctl:ro

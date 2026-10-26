@@ -200,6 +200,8 @@ export class Application {
       case 'phoneFrame': return this.cloud('POST', `/devices/${input.deviceId}/phone/frame`, {sessionId:input.sessionId});
       case 'phoneInput': return this.cloud('POST', `/devices/${input.deviceId}/phone/input`, {sessionId:input.sessionId,event:input.event});
       case 'phoneRelease': return this.cloud('POST', `/devices/${input.deviceId}/phone/release`, {sessionId:input.sessionId});
+      case 'remoteArtifact':{const result=await this.cloud<{url:string}>('POST',`/remote/artifacts/${input.id}/open`,{});return {url:this.account!.serverUrl.replace(/\/+$/,'')+result.url};}
+      case 'remoteDesktop': {const result=await this.cloud<{url:string}>('POST','/remote/desktop/open',{bot_id:input.botId});return {url:this.account!.serverUrl.replace(/\/+$/,'')+result.url};}
       case 'status': return { ...this.state(), activities: [...this.activities.values()] };
       case 'login': return this.login(input);
       case 'logout': return this.logout();
@@ -219,11 +221,11 @@ export class Application {
       case 'botUpdate': { const { id, ...patch } = input; return this.cloud<Bot>('PATCH', `/bots/${id}`, patch); }
       case 'botDelete': return this.cloud('DELETE', `/bots/${input.id}`);
       case 'messages': return this.cloud<MessagePage>('GET', `/bots/${input.botId}/messages?limit=50${input.before ? `&before=${input.before}` : ''}`);
-      case 'send': return this.cloud('POST', `/bots/${input.botId}/messages`, { text: input.text, images: input.images, request_id: input.request_id ?? randomUUID() });
+      case 'send': return this.cloud('POST', `/bots/${input.botId}/messages`, { client:"desktop", text: input.text, images: input.images, request_id: input.request_id ?? randomUUID() });
       case 'image': return this.cloud('GET', `/bots/${input.botId}/messages/${input.messageId}/images/${input.imageId}`);
-      case 'voiceTicket': return this.cloud('POST', `/bots/${input.botId}/voice/ticket`);
+      case 'voiceTicket': return this.cloud('POST', `/bots/${input.botId}/voice/ticket`,{client:"desktop"});
       case 'uiState': return this.cloud('POST', `/bots/${input.botId}/messages/${input.messageId}/ui-state`, { revision: input.revision, states: input.states });
-      case 'uiAction': return this.cloud('POST', `/bots/${input.botId}/messages/${input.messageId}/ui-actions`, { revision: input.revision, states: input.states, action: input.action, request_id: input.request_id });
+      case 'uiAction': return this.cloud('POST', `/bots/${input.botId}/messages/${input.messageId}/ui-actions`, { client:"desktop", revision: input.revision, states: input.states, action: input.action, request_id: input.request_id });
       case 'cancel': this.executor?.cancel(input.runId); return this.cloud('POST', `/runs/${input.runId}/cancel`);
       case 'decide': return this.cloud('POST', `/approvals/${input.approvalId}`, { decision: input.decision });
     }

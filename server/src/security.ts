@@ -29,8 +29,8 @@ export async function passwordMatches(hashed: string, password: string) {
 }
 const secret = (s: Settings) => new TextEncoder().encode(s.jwtSecret);
 /** One-minute credential so a desktop renderer can open `/ws/voice` without the provider key. */
-export const issueVoiceTicket = (userId: string, botId: string, s: Settings) =>
-  new SignJWT({ typ: "voice", bot: botId })
+export const issueVoiceTicket = (userId: string, botId: string, s: Settings, source?:{client:string;deviceId?:string}) =>
+  new SignJWT({ typ: "voice", bot: botId, client:source?.client, did:source?.deviceId })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(userId)
     .setIssuedAt()
@@ -41,7 +41,7 @@ export async function readVoiceTicket(token: string, s: Settings) {
   const botId = payload.bot;
   const userId = payload.sub;
   if (typeof botId !== "string" || typeof userId !== "string") throw new HttpError(401, "认证失败");
-  return { userId, botId };
+  return { userId, botId, client:typeof payload.client==="string"?payload.client:"legacy", deviceId:typeof payload.did==="string"?payload.did:undefined };
 }
 export const issueToken = (u: Row, s: Settings) =>
   new SignJWT({ typ: "user", role: u.role })
@@ -178,7 +178,7 @@ export async function device(
 export class Vault {
   private keys!: Record<string, string>;
   private active!: string;
-  constructor(path?: string) {
+  constructor(path?: string, private domain = "model") {
     try {
       const d = JSON.parse(readFileSync(path!, "utf8"));
       this.keys = d.keys;
@@ -199,7 +199,7 @@ export class Vault {
         decodeBase64(this.keys[this.active], 32),
         nonce,
       );
-    c.setAAD(Buffer.from(`model:${id}`));
+    c.setAAD(Buffer.from(`${this.domain}:${id}`));
     const ciphertext = Buffer.concat([
       c.update(value, "utf8"),
       c.final(),
@@ -219,7 +219,7 @@ export class Vault {
           decodeBase64(this.keys[value.key_id], 32),
           decodeBase64(value.nonce, 12),
         );
-      d.setAAD(Buffer.from(`model:${id}`));
+      d.setAAD(Buffer.from(`${this.domain}:${id}`));
       d.setAuthTag(b.subarray(-16));
       return Buffer.concat([d.update(b.subarray(0, -16)), d.final()]).toString(
         "utf8",

@@ -148,7 +148,7 @@ test("one computer's offline backlog cannot starve another computer's due work o
     await tx.insert("devices", { device_id: offlineDevice, user_id: user, public_key: "offline-device", label: "Offline Linux", platform: "linux" });
     for (let i = 0; i < 101; i++) {
       const created = await createBot(tx, user, { name: `offline-${i}`, persona: "", execution_device_id: offlineDevice });
-      await tx.insert("bot_automations", { automation_id: randomUUID(), bot_id: created.bot_id, user_id: user, kind: "review", title: "目标检查", goal: "检查目标", next_wake_at: new Date(now.getTime() - 86400000) });
+      await tx.insert("bot_automations", { automation_id: randomUUID(), bot_id: created.bot_id, user_id: user, operation_target:"device:"+offlineDevice, kind: "review", title: "目标检查", goal: "检查目标", next_wake_at: new Date(now.getTime() - 86400000) });
     }
     const offline = await tx.rows("SELECT a.automation_id FROM bot_automations a JOIN bots b USING(bot_id) WHERE b.execution_device_id=$1 LIMIT 51", [offlineDevice]);
     for (const a of offline) await tx.insert("automation_reports", { report_id: randomUUID(), automation_id: a.automation_id,

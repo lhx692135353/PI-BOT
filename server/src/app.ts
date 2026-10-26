@@ -1,3 +1,5 @@
+import {RemoteService} from "./remote/service.js";
+import {remoteWeb} from "./remote/web.js";
 import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
 import websocket from "@fastify/websocket";
 import { randomUUID } from "node:crypto";
@@ -97,6 +99,7 @@ export async function createApp(
   db = new Database(s.databaseUrl),
   hub = new Hub(),
   webSearch = new WebSearch(s),
+  remoteFactory=(db:Database,s:Settings)=>new RemoteService(db,s),
 ) {
   await migrate(db);
   await bootstrapAdmin(db, s);
@@ -118,6 +121,8 @@ export async function createApp(
     reply.code(500).send({ detail: "服务暂时不可用" });
   });
 
+  const remote = remoteFactory(db,s);
+  app.addHook("onClose",async()=>remote.close());
   for (const route of routes)
     app.route({
       method: route.method,
@@ -136,7 +141,7 @@ export async function createApp(
         for (const [k, v] of Object.entries(params))
           if (k === "id" && !/^[0-9a-f-]{36}$/i.test(v)) fail(404, "记录不存在");
         const after: (() => unknown)[] = [];
-        const base = { db, s, hub, webSearch, query, params, req, reply, after: (fn: () => unknown) => void after.push(fn) };
+        const base = { db, s, hub, webSearch, remote, query, params, req, reply, after: (fn: () => unknown) => void after.push(fn) };
         let result: unknown;
         if (route.tx === false) {
           const who = await db.tx((tx) => authenticate(tx, route, req, raw, s));
@@ -176,11 +181,12 @@ export async function createApp(
   app.get("/admin/*", serveAdmin);
 
   await app.register(websocket, { options: { maxPayload: 8 * 1024 * 1024 } });
+  await remoteWeb(app,remote);
   const dispatcher = new AgentDispatcher(db, s, hub);
   const voice = new VoiceHub(db, s, hub, dispatcher);
   dispatcher.setAnnouncer(voice);
   await sockets(app, db, s, hub, dispatcher, voice);
-  return Object.assign(app, { hub, db });
+  return Object.assign(app, { hub, db, remote });
 }
 
 export function openapi() {
@@ -214,6 +220,8 @@ export function openapi() {
       responses: { "200": { description: "OK" }, default: { description: "{ detail }" } },
     };
   }
+  paths["/remote/artifacts/{id}"]={get:{tags:["remote"],summary:"读取自己的云端生成结果",security:[{UserBearer:[]}],parameters:[{name:"id",in:"path",required:true,schema:{type:"string",format:"uuid"}}],responses:{"200":{description:"文件流"}}}};
+  paths["/bots/{id}/remote/file"] = Object.fromEntries(["get","post"].map(method=>[method,{tags:["remote"],summary:method==="get"?"下载云端资料库文件":"流式上传云端文件（最多 100MiB）",security:[{UserBearer:[]}],parameters:[{name:"id",in:"path",required:true,schema:{type:"string",format:"uuid"}},{name:"path",in:"query",required:true,schema:{type:"string"}}],...(method==="post"?{requestBody:{required:true,content:{"application/octet-stream":{schema:{type:"string",format:"binary"}}}}}:{}),responses:{"200":{description:method==="get"?"文件流":"上传完成"}}}]));
   return {
     openapi: "3.1.0",
     info: { title: "Pi Bot API", version: "0.4.0" },

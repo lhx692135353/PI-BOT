@@ -127,6 +127,9 @@ export const api = {
   login: (username: string, password: string) =>
     request<{ access_token: string; user: User }>(server, "auth/login", "POST", { username, password }),
   me: () => request<{ user: User }>(server, "me"),
+  environment:(id:string)=>request<any>(adminApi,`users/${id}/environment`),
+  saveEnvironment:(id:string,body:unknown)=>request<any>(adminApi,`users/${id}/environment`,"POST",body),
+  testEnvironment:(id:string)=>request<any>(adminApi,`users/${id}/environment/test`,"POST",{}),
   overview: () => request<Overview>(adminApi, "overview"),
   users: () => request<User[]>(adminApi, "users"),
   createUser: (body: { username: string; password: string; display_name: string; role: string }) =>

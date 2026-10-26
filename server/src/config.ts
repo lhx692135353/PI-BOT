@@ -12,7 +12,17 @@ const integer = (
     .max(max)
     .parse(value ?? fallback);
 export function settings(env = process.env) {
+  const remoteBackend = z.enum(["none", "ssh", "kubevirt"]).parse(env.PI_BOT_REMOTE_BACKEND ?? "none");
+  const required = (name: string) => remoteBackend === "kubevirt" ? z.string().min(1).parse(env[name]) : env[name];
   return {
+    remoteBackend,
+    kubevirt: {
+      server: required("PI_BOT_K8S_SERVER"), tokenFile: required("PI_BOT_K8S_TOKEN_FILE"), caFile: required("PI_BOT_K8S_CA_FILE"),
+      namespace: env.PI_BOT_K8S_NAMESPACE ?? "pibot", imageUrl: required("PI_BOT_KUBEVIRT_IMAGE_URL"),
+      storageClass: env.PI_BOT_KUBEVIRT_STORAGE_CLASS, disk: env.PI_BOT_KUBEVIRT_DISK ?? "40Gi",
+      cpu: integer(env.PI_BOT_KUBEVIRT_CPU, 2, 1, 64), memory: env.PI_BOT_KUBEVIRT_MEMORY ?? "4Gi",
+      virtctl: env.PI_BOT_VIRTCTL_PATH ?? "virtctl", timeoutSeconds: integer(env.PI_BOT_REMOTE_READY_SECONDS, 300, 10, 1800),
+    },
     tracingEnabled: /^(true|1|yes)$/i.test(env.LANGFUSE_TRACING_ENABLED ?? "false"),
     databaseUrl: z.string().min(1).parse(env.PI_BOT_DATABASE_URL),
     adminUsername: z

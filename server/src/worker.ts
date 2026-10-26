@@ -40,7 +40,7 @@ export class Worker {
   async claim(): Promise<RunContext | undefined> {
     return this.db.tx(async (tx) => {
       const stale = await tx.rows(
-        "SELECT run_id, origin, assistant_message_id FROM bot_runs WHERE executor='cloud' AND status='running' AND lease_until < now() FOR UPDATE SKIP LOCKED",
+        "SELECT run_id, origin, assistant_message_id FROM bot_runs WHERE executor='cloud' AND status IN ('running','waiting_approval') AND lease_until < now() FOR UPDATE SKIP LOCKED",
       );
       for (const r of stale) {
         if (r.origin === "voice") {
@@ -48,7 +48,7 @@ export class Worker {
           await tx.rows("UPDATE bot_messages SET visibility='public' WHERE message_id=$1", [r.assistant_message_id]);
         } else await finishRun(tx, r.run_id, "failed", "云端执行中断，请重新发送");
       }
-      const candidates = await tx.rows("SELECT run_id FROM bot_runs WHERE executor='cloud' AND execution_policy='any' AND status='queued' AND NOT cancel_requested ORDER BY (lane='task'), (origin='report'), created_at LIMIT 100");
+      const candidates = await tx.rows("SELECT run_id FROM bot_runs WHERE executor='cloud' AND (execution_policy='any' OR operation_target LIKE 'remote:%') AND status='queued' AND NOT cancel_requested ORDER BY (lane='task'), (origin='report'), created_at LIMIT 100");
       let run: Row | null = null;
       for (const candidate of candidates) {
         run = await claimExecution(tx, candidate.run_id, this.s, this.id);
@@ -83,7 +83,7 @@ export class Worker {
     const headers = { Authorization: `Bearer ${this.s.runnerToken}`, "Content-Type": "application/json" };
     const cancelRunner = () =>
       fetch(`${this.s.runnerUrl}/runs/${job.run_id}/cancel`, { method: "POST", headers, signal: AbortSignal.timeout(5000) }).catch(() => {});
-    const ours = (r: Row | undefined) => !!r && r.status === "running" && r.worker_id === this.id;
+    const ours = (r: Row | undefined) => !!r && ["running","waiting_approval"].includes(r.status) && r.worker_id === this.id;
     const beat = async () => {
       if (beating) return;
       beating = true;
@@ -112,7 +112,7 @@ export class Worker {
       error = job.lane === "conversation" ? "对话响应超时，请重新发送" : "运行超过 30 分钟，已停止";
       void cancelRunner();
       controller.abort();
-    }, job.lane === "conversation" ? 60000 : RUN_LIMIT_MS);
+    }, job.deadline_at ? Math.max(1,Date.parse(job.deadline_at)-Date.now()) : job.lane === "conversation" ? 60000 : RUN_LIMIT_MS);
     let sawDone = false;
     try {
       const token = await issueLlmToken({ sub: owner.user_id, src: "cloud", bot: job.bot.id }, this.s, Math.ceil(RUN_LIMIT_MS / 1000) + 300);

@@ -124,10 +124,10 @@ class DomainTest {
         assertEquals("ws://example.com:8000/pibot/ws/events?token=a%2Bb", parseServerUrl("HTTP://example.com:8000/pibot").eventsSocket("a+b"))
         assertEquals("wss://example.com/pibot/ws/events?token=t", parseServerUrl("HTTPS://example.com/pibot").eventsSocket("t"))
         assertEquals(
-            "wss://bot.example.com/pibot/ws/voice?token=a%2Bb&bot=bot%2F1&call_id=call+1",
+            "wss://bot.example.com/pibot/ws/voice?token=a%2Bb&client=android&bot=bot%2F1&call_id=call+1",
             parseServerUrl("https://bot.example.com/pibot").voiceSocket("a+b", "bot/1", "call 1"),
         )
-        assertEquals("ws://192.168.1.5:8787/ws/voice?token=t&bot=b1", parseServerUrl("http://192.168.1.5:8787").voiceSocket("t", "b1"))
+        assertEquals("ws://192.168.1.5:8787/ws/voice?token=t&client=android&bot=b1", parseServerUrl("http://192.168.1.5:8787").voiceSocket("t", "b1"))
         for (invalid in listOf("https://x.com/?a=1", "http://x.com/#fragment", "http://user:password@x.com", "http:///missing-host", "ftp://x.com", "")) {
             assertThrows(IllegalArgumentException::class.java) { parseServerUrl(invalid) }
         }

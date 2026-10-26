@@ -178,6 +178,7 @@ fun TimelineScreen(
                 Box {
                     CircleAction("更多选项", { menuOpen = true }) { Icon(Icons.Filled.MoreVert, null) }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                        DropdownMenuItem(text = { Text("云端桌面与文件") }, onClick = { menuOpen = false; scope.launch { runCatching { val url = repository.remoteDesktop(botId); context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) }.onFailure { error = errorText(it) } } })
                         DropdownMenuItem(text = { Text("资料库") }, enabled = targetOnline, onClick = { menuOpen = false; onFiles() })
                         DropdownMenuItem(text = { Text("虚拟手机") }, onClick = { menuOpen = false; onPhone() })
                         DropdownMenuItem(text = { Text("编辑 Bot") }, onClick = { menuOpen = false; onEdit() }, leadingIcon = { Icon(Icons.Filled.Edit, null) })
@@ -282,6 +283,9 @@ private fun RelayItem(message: Message, from: FromBot, onOpenBot: (String) -> Un
 
 @Composable
 private fun MessageItem(message: Message, onOpenBot: (String) -> Unit, repository: PiBotRepository) {
+    val context=LocalContext.current
+    val scope=rememberCoroutineScope()
+    var artifactError by remember { mutableStateOf<String?>(null) }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val bubbleWidth = (maxWidth * 0.92f).coerceAtMost(600.dp)
         val from = message.fromBot
@@ -307,7 +311,7 @@ private fun MessageItem(message: Message, onOpenBot: (String) -> Unit, repositor
                         for (task in message.agentTasks.filter { it.kind != "background" }) {
                             val live = task.status == "queued" || task.status == "running"
                             Text(
-                                delegationLabel(task) + " ›",
+                                delegationLabel(task) + (if(task.operationTarget?.startsWith("remote:")==true) " · 云端机器" else if(task.operationTarget?.startsWith("device:")==true) " · 电脑" else "") + " ›",
                                 fontSize = 12.sp,
                                 color = if (task.status == "failed") Danger else if (live) Accent else Muted,
                                 modifier = Modifier
@@ -332,7 +336,12 @@ private fun MessageItem(message: Message, onOpenBot: (String) -> Unit, repositor
                         user -> Text(message.content, color = Color.White, lineHeight = 21.sp)
                         message.content.isBlank() && message.status == "running" -> Text("…", color = Muted)
                         message.content.isBlank() && message.status == "cancelled" -> Text("已停止", color = Muted)
-                        else -> MarkdownText(message.content)
+                        else -> Column {
+                            MarkdownText(message.content)
+                            val artifacts=remember(message.content) { Regex("/remote/artifacts/([0-9a-f-]{36})").findAll(message.content).map { it.groupValues[1] }.distinct().toList() }
+                            artifacts.forEachIndexed { index,id -> TextButton(onClick={scope.launch { runCatching { val url=repository.remoteArtifact(id);context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,android.net.Uri.parse(url))) }.onFailure { artifactError=errorText(it) } }}) { Text("查看云端结果 ${index+1}") } }
+                            artifactError?.let { Text(it,color=Danger) }
+                        }
                     }
                 }
                 if (!user && message.ui != null) {

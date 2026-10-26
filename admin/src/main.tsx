@@ -186,7 +186,24 @@ function UserForm({ user, onClose, onSaved }: { user?: User; onClose: () => void
   );
 }
 
+function EnvironmentForm({user,onClose}:{user:User;onClose():void}) {
+ const [environment,setEnvironment]=useState<any>();
+ const [form,setForm]=useState({host:'',port:22,username:'pibot',fingerprint:'',work_root:'/home/pibot/workspaces'});
+ const [privateKey,setPrivateKey]=useState(''),[password,setPassword]=useState(''),[passphrase,setPassphrase]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false);
+ useEffect(()=>{void api.environment(user.id).then(e=>{setEnvironment(e);if(e.config)setForm(e.config);}).catch(e=>setError(message(e)));},[user.id]);
+ const perform=async(test:boolean)=>{setBusy(true);setError('');try{if(!test){await api.saveEnvironment(user.id,{config:form,...(privateKey||password?{secret:{private_key:privateKey||undefined,password:password||undefined,passphrase:passphrase||undefined}}:{})});setPrivateKey('');setPassword('');setPassphrase('');}setEnvironment(test?await api.testEnvironment(user.id):await api.environment(user.id));}catch(e){setError(message(e));}finally{setBusy(false);}};
+ return <Modal title={`${user.display_name} 的云端环境`} onClose={onClose}><p>模式：{environment?.backend??'加载中'} · 状态：{environment?.status??''}</p><p className="muted small">每用户一台虚机。SSH 环境请先按部署文档安装 Ubuntu 24.04 操作组件，再录入主机指纹。</p>{environment?.backend==='ssh'&&<form onSubmit={e=>{e.preventDefault();void perform(false);}}>
+ {(['host','port','username','fingerprint','work_root'] as const).map(key=><label key={key}>{({host:'地址',port:'端口',username:'SSH 用户名',fingerprint:'SHA256 主机指纹',work_root:'工作根目录'})[key]}<input required value={form[key]} type={key==='port'?'number':'text'} onChange={e=>setForm({...form,[key]:key==='port'?Number(e.target.value):e.target.value})}/></label>)}
+ <label>私钥（留空保留原凭据）<textarea value={privateKey} onChange={e=>setPrivateKey(e.target.value)} autoComplete="off"/></label>
+ <label>私钥口令<input type="password" value={passphrase} onChange={e=>setPassphrase(e.target.value)} autoComplete="new-password"/></label>
+ <label>或 SSH 密码<input type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="new-password"/></label>
+ <button className="primary" disabled={busy}>保存</button></form>}
+ {environment?.error&&<p className="error">{environment.error}</p>}{error&&<p className="error">{error}</p>}
+ <p className="muted small">能力：{environment?.capabilities?.join('、')||'尚未检测'}</p><footer><button className="ghost" onClick={onClose}>关闭</button><button className="primary" disabled={busy||!environment||environment.backend==='none'} onClick={()=>void perform(true)}>{busy?'处理中…':'连接和能力检测'}</button></footer></Modal>;
+}
+
 function UsersPage({ me }: { me: User }) {
+  const [environmentUser,setEnvironmentUser]=useState<User|null>(null);
   const load = useCallback(() => api.users(), []);
   const { data, error, reload } = useLoad<User[]>(load);
   const [editing, setEditing] = useState<User | "new" | null>(null);
@@ -232,6 +249,7 @@ function UsersPage({ me }: { me: User }) {
               </td>
               <td>{u.disabled ? <span className="badge">已禁用</span> : <span className="badge ok">正常</span>}</td>
               <td className="actions">
+                <button className="ghost" onClick={()=>setEnvironmentUser(u)}>云端环境</button>
                 <button className="ghost" onClick={() => setEditing(u)}>
                   编辑
                 </button>
@@ -250,6 +268,7 @@ function UsersPage({ me }: { me: User }) {
           ))}
         </tbody>
       </table>
+      {environmentUser&&<EnvironmentForm user={environmentUser} onClose={()=>setEnvironmentUser(null)}/>}
       {editing && <UserForm user={editing === "new" ? undefined : editing} onClose={() => setEditing(null)} onSaved={reload} />}
     </>
   );

@@ -16,3 +16,10 @@
 ## 包管理器依赖
 
 项目通过 npm、Gradle 和容器镜像使用其他开源组件，它们分别遵循各自许可证。`package-lock.json` 和 Android 版本目录记录依赖版本；依赖包自身的 LICENSE/NOTICE 应在再分发时保留。本文件不是全部传递依赖的法律审计或 SBOM。引入新的内置第三方代码时，请在这里记录来源、版本、许可证和本地修改。
+
+
+## 云端操作依赖
+
+- `ssh2`：npm 锁定版本 1.17.0，MIT；来源 <https://github.com/mscdex/ssh2>。用于 SSH、SFTP 和虚机内端口转发，未修改依赖源码。
+- `@novnc/novnc`：npm 锁定版本 1.7.0；来源 <https://github.com/novnc/noVNC>。核心库采用 MPL-2.0，具体组件遵循包内 LICENSE／AUTHORS；服务端按原文件提供 core／vendor JavaScript，未修改依赖源码。发布镜像保留 npm 包中的许可文件。
+- `playwright`：虚机组件锁定版本 1.58.2，Apache-2.0；来源 <https://github.com/microsoft/playwright>。浏览器二进制及系统组件保留各自许可证，由虚机安装脚本安装；未将它们作为本项目原创代码重新许可。

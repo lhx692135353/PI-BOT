@@ -88,3 +88,10 @@ PI_BOT_TEST_DATABASE_URL=postgresql://pibot:pibot@127.0.0.1:5432/pibot npm test
 没有新进展不发消息。某个目标有新进展时，在原时间线发一条；同一状态不重复发。检查可以在该目标写明的授权范围内改文件或跑命令，资料库外访问仍需审批。不能自己新增目标，也不能把工作交给其他智能体。中断时操作结果无法确认会暂停并请你核实。
 
 升级需同步更新 API、Worker、Runner、Linux/Mac 客户端和 Android。服务端自动应用 `0010-multi-device`，保留已有电脑绑定、聊天和记忆；升级前备份数据库与 vault 并结束运行。旧客户端协议不兼容本版本。Android 不提供系统后台推送。
+
+
+## 云端机器操作
+
+默认关闭。`PI_BOT_REMOTE_BACKEND=ssh` 时，在用户后台配置每用户唯一的 SSH 虚机；`kubevirt` 时按照启动配置自动创建并复用每用户一台 VM。首版支持 Ubuntu 24.04 LTS amd64，包含文件／命令、浏览器、截图、桌面控制及人工接管。凭据保存在 API，Runner 通过当前任务授权调用。
+
+部署前请阅读 [云端环境部署与验收](deploy/remote/README.md)，包含 SSH 安装示例、KubeVirt 标准镜像构建、RBAC／VM 模板、启动配置及测试清单。API、Worker、Runner 和两端客户端需同步升级；文件不在电脑和云端之间自动同步。

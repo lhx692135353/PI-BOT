@@ -85,6 +85,19 @@ class PiBotRepository(
     /** A call failure to show once, after the call itself has gone. */
     val voiceNotice: StateFlow<String?> = _voiceNotice.asStateFlow()
 
+    suspend fun remoteArtifact(id: String): String {
+        val account = _session.value ?: error("请先登录")
+        val result = withContext(io) { api.remoteArtifact(ServerUrl(account.serverUrl),account.token,id) }
+        return account.serverUrl.trimEnd('/') + (result["url"]?.jsonPrimitive?.content ?: error("结果不可用"))
+    }
+
+    suspend fun remoteDesktop(botId: String): String {
+        val account = _session.value ?: error("请先登录")
+        val result = withContext(io) { api.remoteDesktop(ServerUrl(account.serverUrl), account.token, botId) }
+        val path = result["url"]?.jsonPrimitive?.content ?: error("云端桌面入口不可用")
+        return account.serverUrl.trimEnd('/') + path
+    }
+
     fun lastServerUrl(): String? = storage.lastServerUrl()
 
     fun timeline(botId: String): Flow<Timeline> = _timelines.map { it[botId] ?: Timeline() }.distinctUntilChanged()

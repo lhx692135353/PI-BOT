@@ -1,0 +1,46 @@
+# Structural example only. Automatic provisioning uses unique environment names and credentials.
+# Replace the image URL, StorageClass and SSH key before manual testing.
+apiVersion: v1
+kind: Secret
+metadata: {name: pibot-example, namespace: pibot}
+stringData:
+  userdata: |
+    #cloud-config
+    users:
+      - name: pibot
+        shell: /bin/bash
+        lock_passwd: true
+        ssh_authorized_keys: ["REPLACE_WITH_SSH_PUBLIC_KEY"]
+    runcmd:
+      - [systemctl, enable, --now, pibot-desktop.service, pibot-remote.service]
+---
+apiVersion: cdi.kubevirt.io/v1beta1
+kind: DataVolume
+metadata: {name: pibot-example, namespace: pibot}
+spec:
+  source:
+    http: {url: "https://images.example.com/pibot-ubuntu-24.04.qcow2"}
+  pvc:
+    accessModes: [ReadWriteOnce]
+    storageClassName: REPLACE_WITH_STORAGE_CLASS
+    resources: {requests: {storage: 40Gi}}
+---
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata: {name: pibot-example, namespace: pibot}
+spec:
+  runStrategy: Always
+  template:
+    spec:
+      domain:
+        cpu: {cores: 2}
+        resources: {requests: {memory: 4Gi}}
+        devices:
+          disks:
+            - {name: root, disk: {bus: virtio}}
+            - {name: cloudinit, disk: {bus: virtio}}
+          interfaces: [{name: default, masquerade: {}}]
+      networks: [{name: default, pod: {}}]
+      volumes:
+        - {name: root, dataVolume: {name: pibot-example}}
+        - {name: cloudinit, cloudInitNoCloud: {secretRef: {name: pibot-example}}}

@@ -1,3 +1,4 @@
+import {taskTarget} from "./targets.js";
 import { randomUUID } from "node:crypto";
 import { fail, type Database, type Row, type Tx } from "./db.js";
 import type { Settings } from "./config.js";
@@ -21,6 +22,7 @@ export const agentTaskOut = (t: Row) => ({
   status: t.status,
   execution: t.execution,
   device_id: t.device_id,
+  operation_target:t.operation_target,
   mode: t.mode,
   kind: t.kind,
   title: t.title,
@@ -100,7 +102,8 @@ export async function createTask(
   hub: Hub,
   userId: string,
   claims: LlmClaims,
-  body: { run_id: string; agent?: string; task: string; wait: boolean; kind?: "background" | "delegation"; title?: string; request_id?: string;resumed_from?:string; execution?: "device" | "cloud" },
+  body: { run_id: string; agent?: string; task: string; wait: boolean; kind?: "background" | "delegation"; title?: string; request_id?: string;resumed_from?:string; execution?: "device" | "cloud" | "remote"; device_id?:string; operation_target?:string },
+  settings?:Settings,
 ) {
   const parent = await callerRun(tx, userId, claims, body.run_id);
   if (parent.origin === "automation" || parent.automation_readonly) fail(403, "目标检查不能把工作交给其他智能体");
@@ -122,12 +125,10 @@ export async function createTask(
     fail(409, `「${target.name}」正在等你完成另一项任务，同步等待会互相卡住${depth === 0 ? "；可以改用 wait=false" : "，请自己完成"}`);
   const { n } = (await tx.one("SELECT count(*) AS n FROM agent_tasks WHERE parent_run_id=$1", [parent.run_id]))!;
   if (n >= MAX_TASKS_PER_RUN) fail(422, `本次任务已委托 ${MAX_TASKS_PER_RUN} 次，达到上限，请自己完成剩余部分`);
-  const execution = parent.execution_policy === "device_only" ? "device" : body.execution ?? (kind === "delegation" && !target.execution_device_id ? "cloud" : "device");
-  if (execution === "device" && !target.execution_device_id) fail(422, "请先为这个 Bot 绑定执行电脑；纯联网任务可选择云端执行");
-  if (execution === "device") await checkDevice(tx, userId, target.execution_device_id);
+  const location=await taskTarget(tx,settings,hub,userId,parent,target,body.execution,body.device_id);
+  if(body.operation_target&&body.operation_target!==location.operation_target) fail(409,"原任务的执行环境已变化，不能自动迁移");
   const task = await tx.insert("agent_tasks", {
-    execution,
-    device_id: execution === "device" ? target.execution_device_id : null,
+    ...location,
     task_id: randomUUID(),
     user_id: userId,
     parent_run_id: parent.run_id,
@@ -172,6 +173,7 @@ export async function startTask(tx: Tx, hub: Hub, task: Row) {
     return null;
   }
   const conn = hub.device(task.user_id,task.device_id);
+  if(task.execution==="device"&&task.operation_target!=="legacy"&&!conn){await failQueued(tx,task,"指定电脑已离线，本次操作未执行");return null;}
   const parent = await tx.get("bot_runs", task.parent_run_id);
   if (parent?.execution_policy === "device_only" && (!conn?.capabilities?.includes("always-on-v1") || parent.cancel_requested || !ACTIVE.includes(parent.status))) return null;
   const run = await insertRun(tx, {
@@ -181,6 +183,7 @@ export async function startTask(tx: Tx, hub: Hub, task: Row) {
     text: task.task,
     computer: task.execution === "device" && conn ? { deviceId: conn.deviceId } : null,
     targetDeviceId: task.execution === "device" ? task.device_id : null,
+    operationTarget:task.operation_target,
     origin: "agent",
     taskId: task.task_id,
     fromBotId: task.parent_bot_id,
@@ -253,7 +256,7 @@ export async function reportLater(tx: Tx, userId: string, claims: LlmClaims, tas
 }
 
 function reportText(t: Row) {
-  const task = t.task.length > 500 ? `${t.task.slice(0, 499)}…` : t.task;
+  const task = (t.task.length > 500 ? `${t.task.slice(0, 499)}…` : t.task)+(t.operation_target&&t.operation_target!=="legacy"?`\n执行环境：${t.operation_target}`:"");
   if (t.status === "completed")
     return `「${t.bot_name}」完成了你委托的任务。\n\n任务：${task}\n\n结果：\n${String(t.result || "（没有文字结果）").slice(0, 20000)}`;
   if (t.status === "failed") return `「${t.bot_name}」没能完成你委托的任务：${t.error ?? "运行失败"}\n\n任务：${task}`;
