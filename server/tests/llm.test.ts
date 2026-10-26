@@ -1,7 +1,60 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-import { complete, SseUsage, usageFrom } from "../src/llm.js";
+import Fastify from "fastify";
+import { complete, proxyResponses, SseUsage, usageFrom } from "../src/llm.js";
+import { Vault } from "../src/security.js";
+import { settings } from "../src/config.js";
+import type { Database } from "../src/db.js";
+import { tempDir, vaultFile } from "./helpers.js";
+
+test("Qwen chat and report requests explicitly disable default thinking without changing task requests", async () => {
+  const requests: any[] = [];
+  const provider = createServer(async (req, res) => {
+    let raw = "";
+    for await (const chunk of req) raw += chunk;
+    requests.push(JSON.parse(raw));
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ status: "completed", output: [] }));
+  });
+  const dir = tempDir();
+  const s = settings({ PI_BOT_DATABASE_URL: "unused", PI_BOT_JWT_SECRET: "j".repeat(40), PI_BOT_VAULT_FILE: vaultFile(dir.path) });
+  const db = { tx: async (fn: any) => fn({ insert: async () => ({}) }) } as unknown as Database;
+  const app = Fastify();
+  await new Promise<void>(resolve => provider.listen(0, "127.0.0.1", resolve));
+  const model = { model_id: "model", provider: "bailian", provider_model: "qwen3.8-flash", max_tokens: 1000,
+    base_url: `http://127.0.0.1:${(provider.address() as any).port}/v1`, secret: new Vault(s.vaultFile).seal("sk-test", "model") };
+  app.post<{ Params: { lane: string }; Body: Record<string, unknown> }>("/:lane", (req, reply) =>
+    proxyResponses(db, s, { sub: "user", src: "device" }, model, req.body, reply, new AbortController().signal,
+      { run: { lane: req.params.lane === "report" ? "conversation" : req.params.lane, origin: req.params.lane } }));
+  const input = { input: "核对任务状态", tools: [{ type: "function", name: "task_status" }] };
+  try {
+    for (const lane of ["conversation", "report"]) {
+      assert.equal((await app.inject({ method: "POST", url: `/${lane}`, payload: input })).statusCode, 200);
+      assert.deepEqual(requests.at(-1).reasoning, { effort: "none" });
+      assert.deepEqual(requests.at(-1).tools, input.tools);
+    }
+    await app.inject({ method: "POST", url: "/task", payload: input });
+    assert.equal(requests.at(-1).reasoning, undefined);
+    for (const override of [{ reasoning: { effort: "low" } }, { enable_thinking: true }]) {
+      await app.inject({ method: "POST", url: "/conversation", payload: { ...input, ...override } });
+      for (const [key, value] of Object.entries(override)) assert.deepEqual(requests.at(-1)[key], value);
+      if (!("reasoning" in override)) assert.equal(requests.at(-1).reasoning, undefined);
+    }
+    model.provider_model = "qwen3.8-2.4t-a95b";
+    await app.inject({ method: "POST", url: "/conversation", payload: input });
+    assert.equal(requests.at(-1).reasoning, undefined, "thinking-only models must keep their supported parameters");
+    model.provider = "custom";
+    model.provider_model = "other-model";
+    await app.inject({ method: "POST", url: "/conversation", payload: input });
+    assert.equal(requests.at(-1).reasoning, undefined);
+  } finally {
+    await app.close();
+    provider.closeAllConnections();
+    await new Promise<void>(resolve => provider.close(() => resolve()));
+    dir.cleanup();
+  }
+});
 
 test("Responses usage supports JSON and terminal events, including cached and reasoning tokens", () => {
   const usage = { input_tokens: 42, output_tokens: 12, input_tokens_details: { cached_tokens: 20 }, output_tokens_details: { reasoning_tokens: 8 } };

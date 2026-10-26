@@ -3,7 +3,7 @@ import { fail, type Database, type Row, type Tx } from "./db.js";
 import type { Settings } from "./config.js";
 import { Vault, type LlmClaims } from "./security.js";
 import { recordGeneration, bounded } from "./observations.js";
-import { applyProviderSearch } from "./providers.js";
+import { applyConversationReasoning, applyProviderSearch } from "./providers.js";
 import { randomUUID } from "node:crypto";
 
 export interface Usage {
@@ -118,12 +118,12 @@ export async function proxyResponses(
     if (!admitted) return openAiError(reply, 429, "目标检查已停止或达到本轮模型调用上限");
   }
   const key = new Vault(s.vaultFile).open(model.secret, model.model_id);
-  const payload = applyProviderSearch({
+  const payload = applyConversationReasoning(applyProviderSearch({
     ...body,
     model: model.provider_model,
     max_output_tokens: Math.min(body.max_output_tokens ?? model.max_tokens, model.max_tokens),
     store: false,
-  }, model, correlation?.run.lane);
+  }, model, correlation?.run.lane), model, correlation?.run.lane);
   const started=new Date(),generationId=correlation?.generationId??randomUUID();
   let captured:unknown=null,observedUsage:Usage|null=null,firstToken:Date|undefined,traceError:string|undefined;
   try {

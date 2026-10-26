@@ -69,6 +69,8 @@ PI_BOT_TEST_DATABASE_URL=postgresql://pibot:pibot@127.0.0.1:5432/pibot npm test
 
 模型调用统一使用 Responses API：执行电脑与 Runner 通过 `POST /llm/v1/responses`，连通性测试和记忆摘要直接调用服务商 `/responses`。Base URL 填到 `/v1`，不含 `/responses`；模型必须支持此协议。请求使用 `input`、`max_output_tokens`，工具使用 `function_call` / `function_call_output`，流式用量从终止事件的 `response.usage` 读取。历史由客户端发送，代理强制 `store: false`。升级时需同步更新 API、Worker、Runner 和执行电脑客户端。
 
+百炼 Qwen3.8 Flash、Max、27B 的对话与任务汇报请求，未显式指定思考参数时，代理补充 `reasoning.effort: "none"`，避免模型默认深度思考拖延短回复。后台任务保留服务商默认行为；已有 `reasoning` 或 `enable_thinking` 参数优先，不覆盖仅支持思考模式的型号。
+
 异步任务模式：对话持续接话，每个 Bot 最多并行执行两个后台任务，其余排队；用聊天查询进度、补充要求或取消，结果完成后另发。各客户端需与 API、Worker、Runner 同步升级，服务端自动应用数据库迁移；升级前结束旧运行。详情见 [整体架构](ARCHITECTURE.md)。
 
 记忆、协作目录、任务续接与云端 Langfuse 配置见[实现说明](MEMORY-OBSERVABILITY.md)。

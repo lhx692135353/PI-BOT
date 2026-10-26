@@ -176,13 +176,16 @@ export class PiAgent implements AgentHandle {
           .filter((c) => c.type === "text")
           .map((c) => c.text)
           .join("");
-        const internal = msg.content.some(c => c.type === "toolCall" && isInternalTool(c.name));
-        if (!internal) onText(this.redact(content));
+        // Goal operations are hidden from the tool log, but their user-facing
+        // opening reply must survive just like a task-status query. Private
+        // skill/memory/checkpoint remarks still stay out of the conversation.
+        const privateRemark = msg.content.some(c => c.type === "toolCall" && isInternalTool(c.name) && c.name !== "goal_manage");
+        if (!privateRemark) onText(this.redact(content));
         failed = msg.stopReason === "error";
         aborted = msg.stopReason === "aborted";
         if (!failed && !aborted && msg.content.some((c) => c.type === "toolCall")) {
           const remark = this.redact(content).trim().slice(0, PROGRESS_CHARS);
-          if (!internal && remark && !progress.includes(remark) && progress.length < PROGRESS_SEGMENTS) {
+          if (!privateRemark && remark && !progress.includes(remark) && progress.length < PROGRESS_SEGMENTS) {
             progress.push(remark);
             this.onProgress?.([...progress]);
           }

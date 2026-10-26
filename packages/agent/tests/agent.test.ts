@@ -39,6 +39,10 @@ before(async () => {
     let raw = "";
     for await (const chunk of req) raw += chunk;
     const json = JSON.parse(raw);
+    if (req.url === "/agent/automations") {
+      res.writeHead(200, { "content-type": "application/json" });
+      return void res.end(JSON.stringify({ goals: [] }));
+    }
     if (req.url === "/agent/checkpoint") {
       checkpoints.push(json);
       res.writeHead(200, { "content-type": "application/json" });
@@ -62,6 +66,11 @@ before(async () => {
       stream.text("已按补充改为蓝色。");
     } else if (user === "直接回答") {
       stream.text("你好，我在。");
+    } else if (user === "查询目标") {
+      if (!rounds) {
+        stream.text("我先核对当前目标记录，再说明检查的触发方式。");
+        stream.tool("goal_manage", { action: "list" }, "goal_list");
+      } else stream.text("已核对目标记录，当前没有进行中的目标。");
     } else if (user === "挂起") {
       res.flushHeaders();
       return;
@@ -178,6 +187,28 @@ test("direct answers do not create progress remarks", async () => {
   try {
     assert.equal(await agent.prompt("直接回答", () => {}), "你好，我在。");
     assert.deepEqual(progress, []);
+  } finally { agent.dispose(); }
+});
+
+test("a goal query keeps its opening reply before the tool and its verified answer afterwards", async () => {
+  const progress: string[][] = [];
+  let progressAtToolStart: string[][] | undefined;
+  const agent = await createBotAgent({
+    model: { id: "goal-reply", name: "测试", baseUrl: url, modelId: "test", contextWindow: 32000, maxTokens: 1000 },
+    apiKey: SECRET, cwd: dir, agentDir: join(dir, "goal-reply"), systemPrompt: "测试", history: [],
+    tools: automationTools(url.replace(/\/v1$/, ""), () => SECRET, "00000000-0000-4000-8000-000000000001"),
+    skills: { baseUrl: url, token: () => SECRET, runId: "goal-reply", catalog: [] },
+    onProgress: lines => progress.push(lines),
+    onObservation: event => {
+      if (event.name === "goal_manage" && event.phase === "start")
+        progressAtToolStart = progress.slice();
+    },
+    runId: "goal-reply",
+  });
+  try {
+    assert.equal(await agent.prompt("查询目标", () => {}), "已核对目标记录，当前没有进行中的目标。");
+    assert.deepEqual(progressAtToolStart, [["我先核对当前目标记录，再说明检查的触发方式。"]]);
+    assert.deepEqual(progress, [["我先核对当前目标记录，再说明检查的触发方式。"]]);
   } finally { agent.dispose(); }
 });
 

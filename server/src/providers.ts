@@ -32,6 +32,18 @@ export function applyProviderSearch(body: Record<string, unknown>, model: { prov
   return { ...body, tools };
 }
 
+/** Pi's non-reasoning model flag omits the parameter; Qwen then enables thinking by default. */
+export function applyConversationReasoning(
+  body: Record<string, unknown>,
+  model: { provider?: string | null; provider_model?: string | null },
+  lane?: string | null,
+) {
+  if (lane !== "conversation" || model.provider !== "bailian"
+    || !/^qwen3\.8-(?:flash|max|27b)(?:-|$)/i.test(model.provider_model ?? "")
+    || body.reasoning !== undefined || body.enable_thinking !== undefined) return body;
+  return { ...body, reasoning: { effort: "none" } };
+}
+
 export const TOKEN_PLAN_BASE = "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1";
 export const BAILIAN_VOICE_MODEL = "qwen-audio-3.0-realtime-plus";
 

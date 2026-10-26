@@ -139,6 +139,12 @@ test('the Mac harness logs in, binds itself and runs bots against its library', 
   const workerTools = await serverDb.tx(tx => tx.one("SELECT m.tools FROM agent_tasks t JOIN bot_runs r ON r.run_id=t.child_run_id JOIN bot_messages m ON m.message_id=r.assistant_message_id WHERE t.task_id=$1", [reply.task_id]));
   assert.deepEqual(workerTools!.tools.map((t: any) => [t.name, t.state]), [['write_file', 'completed']]);
   assert.deepEqual(reply.progress, [], 'the result is separate from the opening acknowledgement');
+  const page = await app.call('messages', { botId: bot.id }) as MessagePage;
+  const opening = page.messages.find(m => m.role === 'assistant' && !m.task_id)!;
+  assert.equal(opening.status, 'completed');
+  assert.deepEqual(opening.progress, ['我先看看资料，再帮你处理。'], 'the short reply survives background execution');
+  assert.match(opening.content, /任务已安排/);
+  assert.ok(opening.seq < reply.seq, 'the verified result is delivered after the opening reply');
   assert.equal(readFileSync(join(dir, 'pi-bot', 'writer', 'notes', 'hello.md'), 'utf8'), '# Hello from Pi Bot');
   assert.ok(events.some(e => e.type === 'bot.mood' && e.mood === 'working'), 'boards and UI see the bot working');
   assert.ok(events.some(e => e.type === 'delta'), 'streaming text reaches the UI');
