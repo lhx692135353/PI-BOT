@@ -1,0 +1,194 @@
+desktop/tests/harness-e2e.test.ts
+  s_cc42ddd46dcf1e::t_8f34d0b7f58824 35-39
+  s_cc42ddd46dcf1e::t_5474a836773850 161-173
+server/src/agents.ts
+  s_cc42ddd46dcf1e::t_51601023595d18 206
+  s_cc42ddd46dcf1e::t_68cad7d01b8f73 34,38,61,69,213,217,340-352
+  s_cc42ddd46dcf1e::t_e542ea808408c0 23
+  s_cc42ddd46dcf1e::t_cd0f60cc8300a1 58
+  s_cc42ddd46dcf1e::t_010231794b088c 156,353-355,357
+  s_cc42ddd46dcf1e::t_09fdc8bab23087 1,8,147,159,161,227-228,240-243,249,326,333-339,356,358-367
+packages/agent/src/index.ts
+  s_cc42ddd46dcf1e::t_0196ae79825456 119,140,225,233,247
+  s_cc42ddd46dcf1e::t_2ead3d998c0842 356
+  s_cc42ddd46dcf1e::t_dbb33df9c6cde9 18,69,131,141,160-163,189,201,211,227-229,231,259,359
+  s_cc42ddd46dcf1e::t_5baaada92c0310 19-20,68,129,139,168,175,200,235-236,257-258,261-262,266-269,329,338,357
+  s_cc42ddd46dcf1e::t_b92ef36fb32f8a 130,142,260,265,358
+  s_cc42ddd46dcf1e::t_ef13703b08b5e1 202-206,226,230,263-264
+server/src/routes.ts
+  s_cc42ddd46dcf1e::t_09fdc8bab23087 1,431-436
+  s_cc42ddd46dcf1e::t_43d6f71e8c6f29 437-438
+android/app/src/main/java/dev/pibot/android/data/PiBotRepository.kt
+  s_cc42ddd46dcf1e::t_e1d0e68b41f4db 74-75,160-161,164-173,184-185,191
+  s_cc42ddd46dcf1e::t_e0e9749e12b22e 73,76-77,162,183,186,188-189,236-238,240,253-255,362-364,367,369-371,378-379
+  s_cc42ddd46dcf1e::t_e542ea808408c0 365-366,368
+android/app/src/main/java/dev/pibot/android/voice/VoiceCallService.kt
+  s_cc42ddd46dcf1e::t_ca0f32c8955653 137-159
+  s_cc42ddd46dcf1e::t_d9e37965dcf100 14,23,53,88,125-136,162-164,166,313,316,319,322,324-325
+desktop/apps/desktop/ui/style.css
+  s_cc42ddd46dcf1e::t_a463801d7d579f 227,238
+  s_cc42ddd46dcf1e::t_b791a6c00ac39f 225-226,228-237,239
+desktop/ARCHITECTURE.md
+  s_cc42ddd46dcf1e::t_a003563a7e6b90 94
+  s_cc42ddd46dcf1e::t_f959d05ca4ab5f 92,132,249-255,257-258
+  s_cc42ddd46dcf1e::t_84accf0b3d6225 256
+  s_cc42ddd46dcf1e::t_0196ae79825456 259-260
+desktop/tests/activity-ui.test.ts
+  s_cc42ddd46dcf1e::t_c25dff743e14fa 1-25
+desktop/packages/service/src/application.ts
+  s_cc42ddd46dcf1e::t_b791a6c00ac39f 227
+packages/agent/src/replies.ts
+  s_cc42ddd46dcf1e::t_d0971bba5b143f 13,21,24
+  s_cc42ddd46dcf1e::t_b64066557239d9 1-7,9-12,14-20,22,25-29,31,33-34
+  s_cc42ddd46dcf1e::t_010231794b088c 23,30,32
+  s_cc42ddd46dcf1e::t_b92ef36fb32f8a 8
+desktop/packages/protocol/src/index.ts
+  s_cc42ddd46dcf1e::t_b791a6c00ac39f 42,66-69
+desktop/tests/chat-ui.test.ts
+  s_cc42ddd46dcf1e::t_c7fda67c243559 1-16,18-25
+  s_cc42ddd46dcf1e::t_2ead3d998c0842 17
+server/src/observations.ts
+  s_cc42ddd46dcf1e::t_09fdc8bab23087 208
+  s_cc42ddd46dcf1e::t_b92ef36fb32f8a 209-210
+server/src/task-conversation.ts
+  s_cc42ddd46dcf1e::t_bf722a3f703612 1,3-12,17,19-23
+  s_cc42ddd46dcf1e::t_72a172e2c4716c 2,13,18
+  s_cc42ddd46dcf1e::t_611e1467eeb8e5 14-16
+packages/agent/src/tasks.ts
+  s_cc42ddd46dcf1e::t_1462f4134783ba 22
+server/src/migrate.ts
+  s_cc42ddd46dcf1e::t_a6bd4d060365e8 4
+android/app/src/main/AndroidManifest.xml
+  s_cc42ddd46dcf1e::t_d9e37965dcf100 8
+desktop/tests/activity-entry-driver.js
+  s_cc42ddd46dcf1e::t_c25dff743e14fa 1-27
+packages/agent/src/ask-agent.ts
+  s_cc42ddd46dcf1e::t_1462f4134783ba 52,59
+desktop/tests/activity-entry-mock.js
+  s_cc42ddd46dcf1e::t_aa30fd90e8f898 1
+  s_cc42ddd46dcf1e::t_c25dff743e14fa 2-23
+desktop/REQUIREMENTS.md
+  s_cc42ddd46dcf1e::t_f959d05ca4ab5f 21
+  s_cc42ddd46dcf1e::t_84accf0b3d6225 15
+desktop/apps/desktop/ui/timeline.tsx
+  s_cc42ddd46dcf1e::t_b791a6c00ac39f 6,38,41-89,91-104,146,164,200,224-225
+  s_cc42ddd46dcf1e::t_8f34d0b7f58824 230
+server/tests/reply-migration.test.ts
+  s_cc42ddd46dcf1e::t_cd7d82c6f2a338 1-39
+server/tests/remote.test.ts
+  s_cc42ddd46dcf1e::t_010231794b088c 733-738
+server/migrations/0017-replies-conversations.sql
+  s_cc42ddd46dcf1e::t_bf722a3f703612 1-3,5-22,24,30-34
+  s_cc42ddd46dcf1e::t_ac27f5080a19e2 23,25-29
+  s_cc42ddd46dcf1e::t_b92ef36fb32f8a 4
+android/app/src/main/java/dev/pibot/android/voice/CallAudioRoute.kt
+  s_cc42ddd46dcf1e::t_d9e37965dcf100 1-72
+android/app/src/main/java/dev/pibot/android/ui/TimelineScreen.kt
+  s_cc42ddd46dcf1e::t_a463801d7d579f 78,290-291,300-303,315-319,325,330,345
+  s_cc42ddd46dcf1e::t_8f34d0b7f58824 368
+packages/agent/README.md
+  s_cc42ddd46dcf1e::t_0196ae79825456 57-58
+  s_cc42ddd46dcf1e::t_f959d05ca4ab5f 51-56
+server/src/worker.ts
+  s_cc42ddd46dcf1e::t_09fdc8bab23087 1,150-151
+server/src/replies.ts
+  s_cc42ddd46dcf1e::t_010231794b088c 8,12
+  s_cc42ddd46dcf1e::t_09fdc8bab23087 11
+  s_cc42ddd46dcf1e::t_bf722a3f703612 1-7,9-10,13-14,18-26,30-38
+  s_cc42ddd46dcf1e::t_b92ef36fb32f8a 27-29
+  s_cc42ddd46dcf1e::t_d012b00d6f21b6 15-17
+desktop/apps/desktop/ui/main.tsx
+  s_cc42ddd46dcf1e::t_e0e9749e12b22e 61,216,218,220,224,228,232-233,235,282-284,287-290
+  s_cc42ddd46dcf1e::t_84accf0b3d6225 217,221,229,286
+  s_cc42ddd46dcf1e::t_e542ea808408c0 285
+server/tests/async-tasks.test.ts
+  s_cc42ddd46dcf1e::t_a5654fd6879280 160
+  s_cc42ddd46dcf1e::t_8f34d0b7f58824 34-43,130-137
+  s_cc42ddd46dcf1e::t_2c0abc973f1156 138-139
+packages/agent/tests/execution-receipts.test.ts
+  s_cc42ddd46dcf1e::t_f79411624c5351 1-88
+desktop/tests/chat.harness.tsx
+  s_cc42ddd46dcf1e::t_c7fda67c243559 1-35,37
+  s_cc42ddd46dcf1e::t_8f34d0b7f58824 36
+server/src/runner.ts
+  s_cc42ddd46dcf1e::t_09fdc8bab23087 159
+  s_cc42ddd46dcf1e::t_dbb33df9c6cde9 27,146
+server/tests/replies.test.ts
+  s_cc42ddd46dcf1e::t_a003563a7e6b90 51,114,119-121,127
+  s_cc42ddd46dcf1e::t_b991d2c583ff02 1-17,19-35,37-50,52-60,62-72,74-82,84-113,115-118,122-126,128-129
+  s_cc42ddd46dcf1e::t_d012b00d6f21b6 18,36,73,83
+  s_cc42ddd46dcf1e::t_0196ae79825456 61
+packages/agent/src/execution-receipts.ts
+  s_cc42ddd46dcf1e::t_ef13703b08b5e1 8-9,13,20,27-28,30,49
+  s_cc42ddd46dcf1e::t_0864246762a6db 1-7,10-12,14-19,21-26,29,31-48
+android/app/src/test/java/dev/pibot/android/voice/CallAudioRouteTest.kt
+  s_cc42ddd46dcf1e::t_de4a3e63f40bb5 1-114
+server/openapi.json
+  s_cc42ddd46dcf1e::t_d012b00d6f21b6 2008,2012-2073
+  s_cc42ddd46dcf1e::t_e840b8969434c7 2009-2011
+android/app/src/test/java/dev/pibot/android/RepositoryTest.kt
+  s_cc42ddd46dcf1e::t_a003563a7e6b90 241-259
+  s_cc42ddd46dcf1e::t_aa30fd90e8f898 239,260-290
+  s_cc42ddd46dcf1e::t_5474a836773850 20,207-238
+  s_cc42ddd46dcf1e::t_69a738a94b2cab 240
+desktop/tests/activity-ui-runner.mjs
+  s_cc42ddd46dcf1e::t_c25dff743e14fa 1-21
+server/src/runs.ts
+  s_cc42ddd46dcf1e::t_010231794b088c 1,200-205
+  s_cc42ddd46dcf1e::t_09fdc8bab23087 2,62,155
+server/tests/integration.test.ts
+  s_cc42ddd46dcf1e::t_d012b00d6f21b6 357
+server/src/bots.ts
+  s_cc42ddd46dcf1e::t_ac27f5080a19e2 664,688
+  s_cc42ddd46dcf1e::t_dbb33df9c6cde9 433,526,642
+  s_cc42ddd46dcf1e::t_09fdc8bab23087 781-782
+  s_cc42ddd46dcf1e::t_a6bd4d060365e8 1-3,90,106,521,523-524,527-530,685-687,689-693,696,740-744,746-747,770-777
+  s_cc42ddd46dcf1e::t_d2c9bf9620bd08 522,531
+  s_cc42ddd46dcf1e::t_010231794b088c 745,804-806
+  s_cc42ddd46dcf1e::t_e542ea808408c0 126-128,148,161,165-166,169-170,172-173,175-176,179-192
+  s_cc42ddd46dcf1e::t_51601023595d18 168,171,177-178
+  s_cc42ddd46dcf1e::t_2ead3d998c0842 658-659
+  s_cc42ddd46dcf1e::t_1462f4134783ba 525
+  s_cc42ddd46dcf1e::t_d6596aeb72ffa7 589
+packages/agent/tests/replies.test.ts
+  s_cc42ddd46dcf1e::t_b991d2c583ff02 1-60,62
+  s_cc42ddd46dcf1e::t_010231794b088c 61
+desktop/tests/chat-ui-runner.mjs
+  s_cc42ddd46dcf1e::t_c7fda67c243559 1-13,18-47
+  s_cc42ddd46dcf1e::t_2ead3d998c0842 14
+  s_cc42ddd46dcf1e::t_d012b00d6f21b6 15-17
+android/README.md
+  s_cc42ddd46dcf1e::t_d9e37965dcf100 45-46
+.github/workflows/ci.yml
+  s_cc42ddd46dcf1e::t_a358deb3cc001a 46-48
+docs/screenshots/bot-replies/README.md
+  s_cc42ddd46dcf1e::t_6e4cbc1ee2adaf 1-9
+desktop/packages/service/src/executor.ts
+  s_cc42ddd46dcf1e::t_dbb33df9c6cde9 17,171
+  s_cc42ddd46dcf1e::t_09fdc8bab23087 182
+android/app/src/main/java/dev/pibot/android/data/PiBotApi.kt
+  s_cc42ddd46dcf1e::t_e0e9749e12b22e 133,154,158-172,261-262
+  s_cc42ddd46dcf1e::t_b35ffa5e5a493e 263
+android/app/src/main/java/dev/pibot/android/ui/TaskConversationDialog.kt
+  s_cc42ddd46dcf1e::t_e23437a1ba1206 1-98
+server/tests/activity.test.ts
+  s_cc42ddd46dcf1e::t_611e1467eeb8e5 7,79-80
+  s_cc42ddd46dcf1e::t_443293ea8015e8 1-6,8-48,50-78,81-130
+  s_cc42ddd46dcf1e::t_aa30fd90e8f898 49
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0806743b224be4fe62dc4a2545266869fd94cd57",
+  "prompts": {},
+  "sessions": {
+    "s_cc42ddd46dcf1e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17d6e-013d-7681-b9fd-a34852441b94",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
