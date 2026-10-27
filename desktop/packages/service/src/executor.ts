@@ -14,6 +14,7 @@ export interface RunContext {
   lane?: 'conversation' | 'task';
   execution_policy?: 'any' | 'device_only';
   automation_readonly?: boolean;
+  verify_execution_claims?: boolean;
   deadline_at?: string;
   automation?: { id: string; kind: 'review'; version: number; checkpoint_version: number; checkpoint: Record<string, unknown> };
   instructions?: { id: string; text: string }[];
@@ -167,6 +168,7 @@ export class Executor {
         model: { id: run.model.id, name: run.model.name, baseUrl: this.deps.proxyUrl, modelId: run.model.id, contextWindow: run.model.context_window, maxTokens: run.model.max_tokens },
         apiKey: token,
         readonly: run.automation_readonly,
+        verifyExecutionClaims: run.verify_execution_claims,
         cwd: sandbox.root,
         agentDir: join(this.deps.agentDir, 'bots', run.bot.id),
         systemPrompt: `${run.system}\n实际执行环境：${process.platform}；shell：${commandShell()}；资料库绝对路径：${sandbox.root}。${phoneEnvironment}${process.platform === 'win32' ? ' 使用非交互 PowerShell 语法，不使用 bash/cmd 语法；含空格路径必须加引号，调用带引号的程序路径使用 &。输出为 UTF-8（旧程序可能使用其他代码页）。' : ''}`,
@@ -177,6 +179,7 @@ export class Executor {
         memory:{baseUrl:api,token:()=>token,runId:run.run_id,lane:run.lane??'task',context:run.memory_context??'',taskId:run.task_id,checkpointVersion:run.checkpoint_version,readonly:run.automation_readonly},
         onObservation:run.observation_enabled?e=>event({kind:'observation',...e}):undefined,
         onTool,
+        onReply: run.automation ? undefined : reply => { event({ kind: "reply", ...reply }); },
         onProgress: lines => {
           clearTimeout(pendingText); pendingText = undefined;
           latest = '';

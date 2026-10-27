@@ -58,7 +58,7 @@ function Login({ state }: { state: AccountState }) {
 
 function botMood(bot: Bot, activity: LocalActivity | undefined, now: number): Mood {
   if (bot.activity?.status && ['running', 'waiting_approval', 'queued'].includes(bot.activity.status)) return moodFor({ status: bot.activity.status, tool: bot.activity.tool });
-  if (activity) return activity.mood;
+  if (activity && (!bot.activity || (bot.latest_run?.id === activity.runId && ['running', 'queued', 'waiting_approval'].includes(bot.latest_run.status)))) return activity.mood;
   const run = bot.latest_run;
   return moodFor({ status: run?.status ?? null, finishedAt: run?.finished_at ? Date.parse(run.finished_at) : null, lastActiveAt: Date.parse(bot.last_active_at), now });
 }
@@ -213,17 +213,26 @@ function App() {
   selectedRef.current = selected;
   const online = account?.connection === 'online';
 
+  const botsRequest = useRef(0);
+  const botsInFlight = useRef(0);
+  const tailRequest = useRef<Record<string, number>>({});
   const loadBots = useCallback(async () => {
+    const request = ++botsRequest.current;
+    botsInFlight.current++;
     try {
       const r = await call<{ bots: Bot[]; devices: Device[] }>('bots');
+      if (request !== botsRequest.current) return;
       setDevices(r.devices ?? []);
       setBots(r.bots); setLoadError('');
       setSelected(s => (s && r.bots.some(b => b.id === s) ? s : r.bots[0]?.id ?? null));
-    } catch (e) { setLoadError(errorText(e)); }
+    } catch (e) { if (request === botsRequest.current) setLoadError(errorText(e)); }
+    finally { botsInFlight.current--; }
   }, []);
   const loadTail = useCallback(async (botId: string) => {
+    const request = (tailRequest.current[botId] ?? 0) + 1;
+    tailRequest.current[botId] = request;
     const page = await call<MessagePage>('messages', { botId }).catch(() => null);
-    if (!page) return;
+    if (!page || tailRequest.current[botId] !== request) return;
     setPages(p => {
       const old = p[botId];
       const byId = new Map((old?.messages ?? []).map(m => [m.id, m]));
@@ -270,6 +279,15 @@ function App() {
   }, [online, loadBots]);
   useEffect(() => { if (selected) { localStorage.setItem('pi-bot.selected', selected); if (online) void loadTail(selected); } }, [selected, online, loadTail]);
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 3000); return () => clearInterval(t); }, []);
+  useEffect(() => {
+    if (!online) return;
+    const refresh = () => { void loadBots(); const id = selectedRef.current; if (id) void loadTail(id); };
+    // A missed start notification leaves the cached state idle. Always reconcile.
+    const poll = setInterval(() => { if (document.visibilityState === 'visible' && !botsInFlight.current) refresh(); }, 5000);
+    const visible = () => { if (document.visibilityState === 'visible') refresh(); };
+    window.addEventListener('focus', refresh); document.addEventListener('visibilitychange', visible);
+    return () => { clearInterval(poll); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', visible); };
+  }, [online, loadBots, loadTail]);
 
   if (!service || !account) return <div className="splash"><PiBot avatar={ORANGE} mood="sleeping" size={110} /><p className="muted">正在连接本地服务…</p></div>;
   if (account.connection === 'signed_out' || account.connection === 'revoked') return <Login state={account} />;

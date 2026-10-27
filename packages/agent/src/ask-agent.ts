@@ -49,13 +49,14 @@ export function askAgentTool(baseUrl: string, token: () => string, runId: string
     parameters: Type.Object({
       agent: Type.String({ minLength: 1, maxLength: 100, description: "目标智能体稳定 ID（优先）或名字，从 agent_directory 获取" }),
       task: Type.String({ minLength: 1, maxLength: 8000, description: "自包含的任务描述" }),
+      title: Type.Optional(Type.String({ minLength: 1, maxLength: 80, description: "用户能看懂的简短任务名称，通常 10–20 字，例如检查显存占用；不填内部代号、命令或参数" })),
       wait: Type.Optional(Type.Boolean({ description: "是否等待结果，默认 true" })),
       device_id:Type.Optional(Type.String({format:"uuid"})),
       execution: Type.Optional(Type.Union([Type.Literal("device"), Type.Literal("cloud"), Type.Literal("remote")])),
     }),
     execute: async (_id, args: any, signal) => {
       const wait = options.conversation ? false : args.wait !== false;
-      let task = await call("POST", "/agent/tasks", { run_id: runId, agent: args.agent, task: args.task, wait, execution: args.execution, device_id:args.device_id, request_id: _id }, signal);
+      let task = await call("POST", "/agent/tasks", { run_id: runId, agent: args.agent, task: args.task, title: args.title, wait, execution: args.execution, device_id:args.device_id, request_id: _id }, signal);
       const name = task.agent.name || String(args.agent);
       if (!wait) return text(`已转交给「${name}」。对方完成后你会收到回报，现在可以先告诉用户任务已经交出去了。`);
       const deadline = Date.now() + waitLimit;

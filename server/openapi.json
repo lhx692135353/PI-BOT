@@ -2009,6 +2009,72 @@
         }
       }
     },
+    "/bots/{id}/tasks/{taskId}/conversation": {
+      "get": {
+        "tags": [
+          "bots"
+        ],
+        "summary": "本次委托的双方传话记录",
+        "security": [
+          {
+            "UserBearer": []
+          },
+          {
+            "DeviceSignature": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "{ detail }"
+          }
+        }
+      }
+    },
     "/bots/{id}/messages": {
       "get": {
         "tags": [

@@ -1,3 +1,4 @@
+import { recordReply } from "./replies.js";
 import { randomUUID } from "node:crypto";
 import { CONVERSATION_TIMEOUT_MS } from "@pi-bot/agent";
 import { Database, type Row } from "./db.js";
@@ -146,6 +147,8 @@ export class Worker {
           } else if(e.type === "observation") {
             const {type,...observation}=e;
             await this.db.tx(async tx=>{const r=await tx.get("bot_runs",job.run_id);if(ours(r))await recordObservation(tx,r,observation,this.s.tracingEnabled);}).catch(()=>{});
+          } else if (e.type === "reply") {
+            await this.db.tx(async tx => { const r = await tx.get("bot_runs", job.run_id); if (ours(r)) await recordReply(tx, r, e); });
           } else if (e.type === "instruction_ack") {
             await this.db.tx(tx => tx.rows("UPDATE agent_task_instructions SET delivered_at=now() WHERE task_id=$1 AND instruction_id=$2", [owner.task_id, e.id]));
           } else if (e.type === "ui") {

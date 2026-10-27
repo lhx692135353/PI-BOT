@@ -17,6 +17,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.async
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -201,6 +202,90 @@ class RepositoryTest {
         repo.loadMore("b1")
         assertEquals("1", server.takeRequest().requestUrl!!.queryParameter("before"))
         assertEquals(false, repo.timeline("b1").first().hasMore)
+    }
+
+    @Test
+    fun replySegmentsAndTaskConversationKeepTheirWireFields() = runBlocking {
+        login()
+        val reply = msg("m2", 2, "assistant", "服务正常", "completed").dropLast(1) + """, "reply_segments":[{"id":"open","phase":"opening","text":"先检查服务。","created_at":"2026-10-27T12:00:00Z"},{"id":"answer","phase":"answer","text":"服务正常","created_at":"2026-10-27T12:00:01Z"}]}"""
+        respond(200, """{"messages":[$reply],"has_more":false}""")
+        repo.loadTail("b1"); server.takeRequest()
+        assertEquals(listOf("opening", "answer"), repo.timeline("b1").first().messages.single().replySegments.map { it.phase })
+        respond(200, """{"task_id":"t1","status":"completed","bots":[{"id":"b1","name":"甲"},{"id":"b2","name":"乙"}],"messages":[{"id":"8","seq":8,"from_bot_id":"b2","to_bot_id":"b1","kind":"answer","content":"已完成","created_at":null}],"total":3,"has_more":false,"next_after":8}""")
+        val conversation = repo.taskConversation("b1", "t1", 7)
+        val request = server.takeRequest()
+        assertEquals("/pibot/bots/b1/tasks/t1/conversation?after=7", request.path)
+        assertEquals("Bearer tok", request.getHeader("Authorization"))
+        assertEquals("b2", conversation.messages.single().fromBotId)
+        assertNull(conversation.messages.single().createdAt)
+        assertEquals(3, conversation.total)
+    }
+
+    @Test
+    fun anOlderBotRefreshCannotRestoreTheRunningIndicator() = runBlocking {
+        login()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        repo = PiBotRepository(PiBotApi(http), http, storage, scope, io = Dispatchers.IO)
+        try {
+            server.enqueue(MockResponse().setBody(BOT.dropLast(1) + """, "activity":{"status":"running","summary":"正在检查"}}""").setBodyDelay(200, TimeUnit.MILLISECONDS))
+            val old = async(Dispatchers.IO) { repo.refreshBot("b1") }
+            server.takeRequest(5, TimeUnit.SECONDS)
+            respond(200, BOT.dropLast(1) + """, "activity":{"status":null,"summary":null}}""")
+            repo.refreshBot("b1")
+            old.await()
+            assertNull(repo.bots.value!!.single().activity?.summary)
+            assertNull(repo.bots.value!!.single().activity?.status)
+        } finally { scope.cancel() }
+    }
+
+    @Test
+    fun anOlderBotListCannotOverwriteANewerIdleBot() = runBlocking {
+        login()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        repo = PiBotRepository(PiBotApi(http), http, storage, scope, io = Dispatchers.IO)
+        try {
+            val running = BOT.dropLast(1) + """, "activity":{"status":"running","summary":"正在检查"}}"""
+            server.enqueue(MockResponse().setBody("""{"bots":[$running]}""").setBodyDelay(200, TimeUnit.MILLISECONDS))
+            val old = async(Dispatchers.IO) { repo.refreshBots() }
+            server.takeRequest(5, TimeUnit.SECONDS)
+            respond(200, BOT.dropLast(1) + """, "activity":{"status":null,"summary":null}}""")
+            repo.refreshBot("b1")
+            old.await()
+            assertNull(repo.bots.value!!.single().activity?.status)
+            assertNull(repo.bots.value!!.single().activity?.summary)
+        } finally { scope.cancel() }
+    }
+
+    @Test
+    fun idleForegroundDiscoversAndClearsTasksWithoutSocketNotifications() = runBlocking {
+        login()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        repo = PiBotRepository(PiBotApi(http), http, storage, scope, io = Dispatchers.IO)
+        val phase = java.util.concurrent.atomic.AtomicBoolean(false)
+        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
+                if (request.path.orEmpty().contains("/ws/events")) return MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
+                    override fun onOpen(webSocket: WebSocket, response: Response) { webSocket.send("""{"type":"hello","device_online":true}""") }
+                    override fun onClosing(webSocket: WebSocket, code: Int, reason: String) { webSocket.close(code, reason) }
+                })
+                if (request.path == "/pibot/bots") {
+                    val activity = if (phase.get()) """{"status":"running","summary":"正在检查服务启动","running_count":1}""" else """{"status":null,"summary":null,"running_count":0}"""
+                    return MockResponse().setHeader("content-type", "application/json").setBody("""{"bots":[${BOT.dropLast(1)},"activity":$activity}]}""")
+                }
+                return MockResponse().setResponseCode(404)
+            }
+        }
+        try {
+            repo.startEvents()
+            withTimeout(5000) { repo.bots.first { it != null } }
+            assertNull(repo.bots.value!!.single().activity?.summary)
+            phase.set(true)
+            withTimeout(8000) { repo.bots.first { it?.singleOrNull()?.activity?.status == "running" } }
+            assertEquals("正在检查服务启动", repo.bots.value!!.single().activity?.summary)
+            phase.set(false)
+            withTimeout(8000) { repo.bots.first { it?.singleOrNull()?.activity?.summary == null } }
+            assertEquals(0, repo.bots.value!!.single().activity?.runningCount)
+        } finally { repo.stopEvents(); scope.cancel() }
     }
 
     @Test

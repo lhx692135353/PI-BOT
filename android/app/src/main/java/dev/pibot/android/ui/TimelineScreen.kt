@@ -75,6 +75,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.pibot.android.data.AgentTaskRef
 import dev.pibot.android.data.Approval
 import dev.pibot.android.data.Bot
 import dev.pibot.android.data.FromBot
@@ -286,6 +287,8 @@ private fun MessageItem(message: Message, onOpenBot: (String) -> Unit, repositor
     val context=LocalContext.current
     val scope=rememberCoroutineScope()
     var artifactError by remember { mutableStateOf<String?>(null) }
+    var selectedTask by remember(message.id) { mutableStateOf<AgentTaskRef?>(null) }
+    selectedTask?.let { TaskConversationDialog(message.botId, it, repository, { selectedTask = null }, onOpenBot) }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val bubbleWidth = (maxWidth * 0.92f).coerceAtMost(600.dp)
         val from = message.fromBot
@@ -294,7 +297,10 @@ private fun MessageItem(message: Message, onOpenBot: (String) -> Unit, repositor
         } else {
             val user = message.role == "user"
             // Older servers and saved history may still include the retired placeholder.
-            val remarks = message.progress.filter { it.filterNot(Char::isWhitespace) != "好，我来看看，稍后把结果给你。" }
+            val segmentTexts = message.replySegments.map { it.text }.toSet()
+            val remarks = message.progress.filter { it !in segmentTexts && it.filterNot(Char::isWhitespace) != "好，我来看看，稍后把结果给你。" }
+            val answerText = message.replySegments.filter { it.phase == "answer" }.joinToString("\n\n") { it.text }
+            val showContent = message.content.isNotBlank() && message.content != answerText && message.content !in segmentTexts
             Column(Modifier.fillMaxWidth(), horizontalAlignment = if (user) Alignment.End else Alignment.Start) {
                 val bubble = Modifier
                     .widthIn(max = bubbleWidth)
@@ -306,17 +312,22 @@ private fun MessageItem(message: Message, onOpenBot: (String) -> Unit, repositor
                     }
                     Spacer(Modifier.height(6.dp))
                 }
+                if (!user) for (segment in message.replySegments) {
+                    Box(bubble) { MarkdownText(segment.text) }
+                    Text(clockTime(segment.createdAt), color = Muted, fontSize = 11.sp, modifier = Modifier.padding(vertical = 3.dp))
+                    Spacer(Modifier.height(3.dp))
+                }
                 if (!user && message.agentTasks.any { it.kind != "background" }) {
                     Column(Modifier.padding(horizontal = 14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         for (task in message.agentTasks.filter { it.kind != "background" }) {
                             val live = task.status == "queued" || task.status == "running"
                             Text(
-                                delegationLabel(task) + (if(task.operationTarget?.startsWith("remote:")==true) " · 云端机器" else if(task.operationTarget?.startsWith("device:")==true) " · 电脑" else "") + " ›",
+                                "${task.messageCount} 条消息往来 · ${task.botName} · ${taskState(task.status)} ›",
                                 fontSize = 12.sp,
                                 color = if (task.status == "failed") Danger else if (live) Accent else Muted,
                                 modifier = Modifier
                                     .background(if (live) AccentSoft else Card, RoundedCornerShape(999.dp))
-                                    .clickable { onOpenBot(task.botId) }
+                                    .clickable { selectedTask = task }
                                     .padding(horizontal = 10.dp, vertical = 3.dp),
                             )
                         }
@@ -331,7 +342,7 @@ private fun MessageItem(message: Message, onOpenBot: (String) -> Unit, repositor
                     }
                     Spacer(Modifier.height(6.dp))
                 }
-                if (!user || message.content.isNotBlank()) Box(bubble) {
+                if (user && message.content.isNotBlank() || !user && (showContent || message.replySegments.isEmpty())) Box(bubble) {
                     when {
                         user -> Text(message.content, color = Color.White, lineHeight = 21.sp)
                         message.content.isBlank() && message.status == "running" -> Text("…", color = Muted)
@@ -354,7 +365,7 @@ private fun MessageItem(message: Message, onOpenBot: (String) -> Unit, repositor
                     "cancelled" -> "已停止"
                     else -> if (!user && message.executor == "cloud") "云端" else null
                 }
-                Text(listOfNotNull(dayLabel(message.createdAt) + " " + clockTime(message.createdAt), note).joinToString(" · "), fontSize = 11.sp, color = if (message.status == "failed") Danger else Muted)
+                if (message.replySegments.isEmpty() || note != null) Text(listOfNotNull((dayLabel(message.createdAt) + " " + clockTime(message.createdAt)).takeIf { message.replySegments.isEmpty() }, note).joinToString(" · "), fontSize = 11.sp, color = if (message.status == "failed") Danger else Muted)
             }
         }
     }

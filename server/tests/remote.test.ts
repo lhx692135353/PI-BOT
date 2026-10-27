@@ -730,8 +730,12 @@ test(
           r.run_id,
         ]),
       );
-      assert.equal(await worker.runOnce(), true);
-      const saved = await db.tx((tx) => tx.get("bot_runs", r.run_id));
+      // Earlier tasks can enqueue reports concurrently with this test's job.
+      const saved = await eventually(async () => {
+        await worker.runOnce();
+        const current = await db.tx(tx => tx.get("bot_runs", r.run_id));
+        return ["completed", "failed", "cancelled"].includes(current.status) && current;
+      });
       assert.equal(saved.status, "completed", saved.error);
       const message = await db.tx((tx) =>
         tx.get("bot_messages", r.assistant_message_id),

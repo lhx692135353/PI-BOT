@@ -11,6 +11,7 @@ import android.content.pm.ServiceInfo
 import androidx.core.content.ContextCompat
 import android.media.AudioAttributes
 import android.media.AudioFormat
+import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.AudioTrack
 import android.media.MediaRecorder
@@ -19,6 +20,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.util.Log
 import dev.pibot.android.PiBotApp
 import dev.pibot.android.data.API_JSON
 import dev.pibot.android.data.LiveCall
@@ -48,6 +50,7 @@ class VoiceCallService : Service() {
     private var recorder: AudioRecord? = null
     private var player: AudioTrack? = null
     private var canceller: AcousticEchoCanceler? = null
+    private var audioRoute: CallAudioRoute? = null
     private var botId: String? = null
     private var callId: String? = null
     private var muted = false
@@ -82,8 +85,7 @@ class VoiceCallService : Service() {
         botId = incoming
         hungUp = false
         if (!showCallNotification()) { fail("无法显示通话通知"); return START_NOT_STICKY }
-        startAudio()
-        connect()
+        if (startAudio() && !hungUp) connect()
         return START_STICKY
     }
 
@@ -120,34 +122,48 @@ class VoiceCallService : Service() {
         } catch (_: Exception) { false }
     }
 
-    private fun startAudio() {
-        if (running.get()) return
-        val minIn = AudioRecord.getMinBufferSize(RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
-        val minOut = AudioTrack.getMinBufferSize(RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
-        if (minIn <= 0 || minOut <= 0) { fail("这台设备无法以通话音质录音"); return }
-        val record = try {
-            AudioRecord(MediaRecorder.AudioSource.VOICE_COMMUNICATION, RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, maxOf(minIn, 3200))
+    @Synchronized
+    private fun startAudio(): Boolean {
+        if (running.get()) return true
+        audioRoute = CallAudioRoute(AndroidCallAudioSystem(getSystemService(AudioManager::class.java)))
+        try {
+            audioRoute?.start()
+        } catch (error: Exception) {
+            Log.w("PiBotVoice", "Unable to select speakerphone", error)
+            fail("无法开启免提，请重试")
+            return false
+        }
+        try {
+            val minIn = AudioRecord.getMinBufferSize(RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+            val minOut = AudioTrack.getMinBufferSize(RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
+            if (minIn <= 0 || minOut <= 0) { fail("这台设备无法以通话音质录音"); return false }
+            val record = AudioRecord(MediaRecorder.AudioSource.VOICE_COMMUNICATION, RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, maxOf(minIn, 3200))
+            recorder = record
+            if (record.state != AudioRecord.STATE_INITIALIZED) { fail("无法打开麦克风"); return false }
+            val track = AudioTrack.Builder()
+                .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
+                .setAudioFormat(AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_16BIT).setSampleRate(RATE).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
+                .setBufferSizeInBytes(maxOf(minOut, 3200))
+                .setTransferMode(AudioTrack.MODE_STREAM)
+                .setSessionId(record.audioSessionId)
+                .build()
+            player = track
+            if (track.state != AudioTrack.STATE_INITIALIZED) { fail("无法打开扬声器"); return false }
+            if (AcousticEchoCanceler.isAvailable()) canceller = runCatching { AcousticEchoCanceler.create(record.audioSessionId)?.also { it.enabled = true } }.getOrNull()
+            writtenSamples = 0
+            running.set(true)
+            record.startRecording()
+            track.play()
+            thread(name = "pibot-voice-mic", isDaemon = true) { capture(record) }
+            handler.post(playbackWatch)
+            return true
         } catch (_: SecurityException) {
             fail("需要麦克风权限才能语音通话")
-            return
+        } catch (error: Exception) {
+            Log.w("PiBotVoice", "Unable to start call audio", error)
+            fail("无法开启语音通话，请重试")
         }
-        if (record.state != AudioRecord.STATE_INITIALIZED) { record.release(); fail("无法打开麦克风"); return }
-        val track = AudioTrack.Builder()
-            .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
-            .setAudioFormat(AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_16BIT).setSampleRate(RATE).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
-            .setBufferSizeInBytes(maxOf(minOut, 3200))
-            .setTransferMode(AudioTrack.MODE_STREAM)
-            .setSessionId(record.audioSessionId)
-            .build()
-        if (AcousticEchoCanceler.isAvailable()) canceller = runCatching { AcousticEchoCanceler.create(record.audioSessionId)?.also { it.enabled = true } }.getOrNull()
-        recorder = record
-        player = track
-        writtenSamples = 0
-        running.set(true)
-        record.startRecording()
-        track.play()
-        thread(name = "pibot-voice-mic", isDaemon = true) { capture(record) }
-        handler.post(playbackWatch)
+        return false
     }
 
     private fun capture(record: AudioRecord) {
@@ -294,16 +310,19 @@ class VoiceCallService : Service() {
         stopSelf()
     }
 
+    @Synchronized
     private fun releaseAudio() {
         running.set(false)
-        canceller?.release()
+        canceller?.runCatching { release() }
         canceller = null
         recorder?.runCatching { stop() }
-        recorder?.release()
+        recorder?.runCatching { release() }
         recorder = null
         player?.runCatching { pause(); flush(); stop() }
-        player?.release()
+        player?.runCatching { release() }
         player = null
+        audioRoute?.runCatching { close() }?.onFailure { Log.w("PiBotVoice", "Unable to release call audio route", it) }
+        audioRoute = null
     }
 
     private fun publish(phase: String? = null, callId: String? = null, muted: Boolean? = null, error: String? = null) {

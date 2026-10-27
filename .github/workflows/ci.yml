@@ -43,7 +43,9 @@ jobs:
           bash -n server/deploy/ubuntu/install.sh server/deploy/ubuntu/deploy.sh
           python3 -m unittest discover -s server/deploy/ubuntu -p 'test_*.py' -v
       - run: npm run typecheck
-      - run: npm test
+      - name: Install Electron for mounted UI regression tests
+        run: npm rebuild electron
+      - run: xvfb-run --auto-servernum npm test
         env:
           PI_BOT_TEST_DATABASE_URL: postgresql://pibot:pibot@127.0.0.1:5432/pibot_test
       - run: npm run build

@@ -205,6 +205,9 @@ async function recordRunData(tx: Tx, run: Row) {
         resumed_from_trace_id: previous?.trace_id
           ? traceId(previous.trace_id)
           : null,
+        first_reply_ms: run.first_reply_at ? new Date(run.first_reply_at).getTime() - new Date(run.created_at).getTime() : null,
+        reply_generation_ms: run.first_reply_generation_ms ?? null,
+        reply_delivery_overhead_ms: run.first_reply_at && run.first_reply_generation_ms != null ? Math.max(0, new Date(run.first_reply_at).getTime() - new Date(run.started_at ?? run.created_at).getTime() - run.first_reply_generation_ms) : null,
         incomplete: run.status !== "completed",
       },
     },

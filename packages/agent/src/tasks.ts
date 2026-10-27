@@ -19,7 +19,7 @@ export function taskTools(baseUrl: string, token: () => string, runId: string): 
     {
       name: "start_task", label: "安排后台任务",
       description: "创建独立的后台任务并立即返回。task 包含目标、相关上下文、已有条件和期望输出；不要重复创建已有任务。最多同时执行两个，其他排队。操作电脑用 device，可用 device_id 指定电脑；操作云端虚机用 remote；纯文字或搜索用 cloud。默认遵守本轮操作位置和已有文件归属。原机器离线时说明，不自动换机器。",
-      parameters: Type.Object({ execution: Type.Optional(Type.Union([Type.Literal("device"),Type.Literal("cloud"),Type.Literal("remote")])), device_id: Type.Optional(Type.String({format:"uuid"})), title: Type.String({ minLength: 1, maxLength: 80 }), task: Type.String({ minLength: 1, maxLength: 8000 }) }),
+      parameters: Type.Object({ execution: Type.Optional(Type.Union([Type.Literal("device"),Type.Literal("cloud"),Type.Literal("remote")])), device_id: Type.Optional(Type.String({format:"uuid"})), title: Type.String({ minLength: 1, maxLength: 80, description: "用户能看懂的简短任务名称，通常 10–20 字，例如检查显存占用；不填内部代号、命令或参数" }), task: Type.String({ minLength: 1, maxLength: 8000 }) }),
       execute: async (id, args: any) => result(await call("POST", "", { ...args, run_id: runId, kind: "background", wait: false, request_id: id })),
     },
     {

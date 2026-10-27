@@ -222,3 +222,18 @@ button.menu-backdrop:hover { background: transparent; }
 .phone-keys { flex-wrap: wrap; }
 .phone-keys button { flex: 1; }
 .phone-compose input { flex: 1; }
+
+.reply-segment { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; margin-bottom: 8px; }
+.conversation-dialog { padding: 0; border: 0; border-radius: 18px; background: var(--bg); color: var(--ink, #29292d); width: min(760px, calc(100vw - 32px)); max-height: 85vh; }
+.conversation-dialog::backdrop { background: #0006; }
+.conversation-panel { display: flex; flex-direction: column; max-height: 85vh; }
+.conversation-panel header, .conversation-panel footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; }
+.conversation-participants, .conversation-participants > span, .conversation-sender { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.conversation-participants { font-weight: 600; }
+.conversation-meta { color: var(--muted); font-size: 12px; padding: 0 20px 12px; }
+.conversation-messages { overflow-y: auto; padding: 4px 20px 16px; }
+.conversation-messages article { margin: 0 0 20px; }
+.conversation-sender { font-size: 13px; color: var(--accent); margin-bottom: 6px; }
+.conversation-sender time { color: var(--muted); font-size: 11px; margin-left: auto; }
+.conversation-messages .bubble { background: var(--panel); border-radius: 14px; padding: 10px 14px; overflow-wrap: anywhere; }
+@media (max-width: 560px) { .conversation-dialog { width: calc(100vw - 16px); } .conversation-panel header, .conversation-panel footer { padding: 12px; } .conversation-meta { padding-left: 12px; } .conversation-messages { padding: 4px 12px 12px; } }

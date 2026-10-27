@@ -70,6 +70,11 @@ class PiBotRepository(
     private var socket: WebSocket? = null
     private var reconnect: Job? = null
     private var wantEvents = false
+    private var activityPoll: Job? = null
+    private val botRequestClock = java.util.concurrent.atomic.AtomicLong()
+    private val botListRequest = java.util.concurrent.atomic.AtomicLong()
+    private val botRefreshVersions = ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicLong>()
+    private val tailVersions = ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicLong>()
     private var attempts = 0
 
     val session: StateFlow<Session?> = _session.asStateFlow()
@@ -152,8 +157,20 @@ class PiBotRepository(
     }
 
     suspend fun refreshBots() {
+        val version = botRequestClock.incrementAndGet()
+        val request = botListRequest.incrementAndGet()
+        val originalSession = _session.value
         val list = authed { u, t -> api.bots(u, t) }
-        _bots.value = list.bots
+        if (_session.value != originalSession || botListRequest.get() != request) return
+        _bots.update { previous ->
+            val current = previous.orEmpty().associateBy { it.id }
+            val incoming = list.bots.map { bot ->
+                val counter = botRefreshVersions.computeIfAbsent(bot.id) { java.util.concurrent.atomic.AtomicLong() }
+                if (counter.get() > version) current[bot.id] ?: bot
+                else { counter.updateAndGet { maxOf(it, version) }; bot }
+            }
+            incoming + previous.orEmpty().filter { old -> incoming.none { it.id == old.id } && (botRefreshVersions[old.id]?.get() ?: 0) > version }
+        }
         _computer.value = list.computer
         _devices.value = list.devices
     }
@@ -163,10 +180,15 @@ class PiBotRepository(
     suspend fun revokeDevice(id: String) { authed { u,t -> api.revokeDevice(u,t,id) }; refreshMe() }
 
     suspend fun refreshBot(id: String) {
+        val counter = botRefreshVersions.computeIfAbsent(id) { java.util.concurrent.atomic.AtomicLong() }
+        val version = botRequestClock.incrementAndGet()
+        counter.updateAndGet { maxOf(it, version) }
+        val originalSession = _session.value
         try {
-            upsert(authed { u, t -> api.bot(u, t, id) })
+            val bot = authed { u, t -> api.bot(u, t, id) }
+            if (counter.get() == version && _session.value == originalSession) upsert(bot)
         } catch (e: ApiException) {
-            if (e.status == 404) remove(id) else throw e
+            if (e.status == 404) { if (counter.get() == version && _session.value == originalSession) remove(id) } else throw e
         }
     }
 
@@ -211,7 +233,11 @@ class PiBotRepository(
     }
 
     suspend fun loadTail(botId: String) {
+        val counter = tailVersions.computeIfAbsent(botId) { java.util.concurrent.atomic.AtomicLong() }
+        val version = counter.incrementAndGet()
+        val originalSession = _session.value
         val page = authed { u, t -> api.messages(u, t, botId) }
+        if (counter.get() != version || _session.value != originalSession) return
         _timelines.update { all ->
             val current = all[botId] ?: Timeline()
             all + (botId to current.merge(page.messages, if (current.loaded) current.hasMore else page.hasMore))
@@ -223,6 +249,9 @@ class PiBotRepository(
         val page = authed { u, t -> api.messages(u, t, botId, before = oldest) }
         _timelines.update { all -> all + (botId to (all[botId] ?: Timeline()).merge(page.messages, page.hasMore)) }
     }
+
+    suspend fun taskConversation(botId: String, taskId: String, after: Long = 0): TaskConversation =
+        authed { u, t -> api.taskConversation(u, t, botId, taskId, after) }
 
     suspend fun send(botId: String, text: String, requestId: String = UUID.randomUUID().toString(), images: List<ChatImage> = emptyList()): Run {
         val result = authed { u, t -> api.send(u, t, botId, text, requestId, images) }
@@ -330,12 +359,24 @@ class PiBotRepository(
     @Synchronized
     fun startEvents() {
         wantEvents = true
+        if (activityPoll?.isActive != true) activityPoll = scope.launch {
+            while (wantEvents) {
+                delay(5000)
+                // Idle caches can miss the event that starts a task on another computer.
+                runCatching {
+                    refreshBots()
+                    for ((id, timeline) in _timelines.value) if (timeline.loaded) loadTail(id)
+                }
+            }
+        }
         if (socket == null) connect()
     }
 
     @Synchronized
     fun stopEvents() {
         wantEvents = false
+        activityPoll?.cancel()
+        activityPoll = null
         reconnect?.cancel()
         socket?.close(1000, null)
         socket = null

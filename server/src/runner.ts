@@ -24,6 +24,7 @@ const requestSchema = z.object({
     memory_context:z.string().max(50000).optional(),
     task_id:z.string().uuid().optional(),checkpoint_version:z.number().int().min(0).optional(),
     observation_enabled:z.boolean().default(false),
+    verify_execution_claims:z.boolean().default(false),
     lane: z.enum(["conversation", "task"]).default("task"),
     execution_policy: z.enum(["any", "device_only"]).default("any"),
     automation_readonly: z.boolean().default(false),
@@ -142,6 +143,7 @@ export async function createRunner(options: { token: string; dir: string; factor
           maxTokens: p.run.model.max_tokens,
         },
         readonly:p.run.automation_readonly,
+        verifyExecutionClaims:p.run.verify_execution_claims,
         apiKey: p.token,
         cwd,
         agentDir: join(options.dir, "pi", "bots", p.run.bot.id),
@@ -154,6 +156,7 @@ export async function createRunner(options: { token: string; dir: string; factor
         onObservation:p.run.observation_enabled?e=>emit({type:'observation',...e}):undefined,
         onTool: (t) => emit({ type: "tool", ...t }),
         onProgress: (lines) => emit({ type: "progress", lines }),
+        onReply: p.run.automation ? undefined : reply => emit({ type: "reply", ...reply }),
       });
       if (state.cancelled) throw new Error(CANCELLED);
       const initial = state.pending.splice(0);

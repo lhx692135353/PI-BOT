@@ -31,6 +31,16 @@ const factory: AgentFactory = async options => {
     tools: options.tools.map(t => t.name), setApiKey: async () => {}, dispose() {},
     abort: async () => { stop?.(); }, steer: async text => { messages.push(text); },
     prompt: async (text, onText) => {
+      if (text === "explicit replies") {
+        await options.onReply?.({ id: "opening", phase: "opening", text: "先核对服务状态。", generated_at: new Date().toISOString() });
+        return await new Promise<string>(resolve => {
+          jobs.set("explicit-replies", { messages: [], finish: result => { void (async () => {
+            const answer = { id: "answer", phase: "answer" as const, text: result, generated_at: new Date().toISOString() };
+            await options.onReply?.(answer); await options.onReply?.(answer);
+            resolve(result);
+          })(); } });
+        });
+      }
       if (options.tools.some(t => t.name === "start_task")) {
         if (text.startsWith("launch ")) {
           const name = text.slice(7);
@@ -117,6 +127,16 @@ after(async () => {
   dir?.cleanup();
 });
 
+test("Runner publishes and persists the opening before completion and deduplicates reply events and final echoes", { skip }, async () => {
+  const sent = await send("explicit replies");
+  await eventually(() => jobs.has("explicit-replies"));
+  const early = await eventually(async () => (await api(`/bots/${bot}/messages`)).data.messages.find((m: any) => m.run_id === sent.run.id && m.role === "assistant" && m.reply_segments.length));
+  assert.equal(early.status, "running"); assert.equal(early.reply_segments[0].text, "先核对服务状态。");
+  jobs.get("explicit-replies")!.finish("服务正常。");
+  const final = await settled(sent.run.id);
+  assert.equal(final.reply_segments.length, 2); assert.equal(final.content, "服务正常。");
+});
+
 test("two background jobs keep dialogue available, queue a third, steer, cancel and report exactly once without leaking task records", { skip }, async () => {
   const events = socket(base.replace("http", "ws") + "/ws/events", { authorization: `Bearer ${token}` });
   await events.next(m => m.type === "hello");
@@ -137,7 +157,7 @@ test("two background jobs keep dialogue available, queue a third, steer, cancel 
     assert.equal(state.active_tasks.filter((t: any) => t.status === "running").length, 2);
     assert.equal(state.active_tasks.filter((t: any) => t.status === "queued").length, 1);
     assert.equal(jobs.has("C"), false);
-    assert.equal(state.activity.summary, "正在处理 2 个任务");
+    assert.equal(state.activity.summary, "正在A，另有 1 个任务");
     await settled((await send(`change ${taskA}`)).run.id);
     await eventually(() => jobs.get("A")!.messages.length === 1);
     assert.deepEqual(jobs.get("A")!.messages, ["请改为蓝色"]);

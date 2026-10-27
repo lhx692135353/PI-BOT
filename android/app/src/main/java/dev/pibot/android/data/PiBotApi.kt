@@ -130,6 +130,7 @@ data class Message(
     val executor: String? = null,
     val tools: List<ToolEntry> = emptyList(),
     val progress: List<String> = emptyList(),
+    @SerialName("reply_segments") val replySegments: List<ReplySegment> = emptyList(),
     val ui: JsonObject? = null,
     @SerialName("from_bot") val fromBot: FromBot? = null,
     @SerialName("agent_tasks") val agentTasks: List<AgentTaskRef> = emptyList(),
@@ -150,8 +151,24 @@ data class AgentTaskRef(
     val kind: String = "delegation",
     val title: String = "",
     @SerialName("updated_at") val updatedAt: String? = null,
+    @SerialName("message_count") val messageCount: Int = 0,
     @SerialName("operation_target") val operationTarget: String? = null,
 )
+
+@Serializable
+data class ReplySegment(val id: String, val text: String, val phase: String, @SerialName("created_at") val createdAt: String)
+
+@Serializable
+data class ConversationBot(val id: String, val name: String, val avatar: Avatar = Avatar())
+
+@Serializable
+data class ConversationMessage(val id: String, val seq: Long, @SerialName("from_bot_id") val fromBotId: String,
+    @SerialName("to_bot_id") val toBotId: String, val kind: String, val content: String, @SerialName("created_at") val createdAt: String? = null)
+
+@Serializable
+data class TaskConversation(@SerialName("task_id") val taskId: String, val status: String,
+    val bots: List<ConversationBot>, val messages: List<ConversationMessage>, val total: Int,
+    @SerialName("has_more") val hasMore: Boolean, @SerialName("next_after") val nextAfter: Long)
 
 @Serializable
 data class MessagePage(val messages: List<Message>, @SerialName("has_more") val hasMore: Boolean = false)
@@ -240,6 +257,9 @@ class PiBotApi(private val http: OkHttpClient, private val json: Json = API_JSON
 
     fun messages(url: ServerUrl, token: String, botId: String, before: Int? = null): MessagePage =
         call(url, "GET", "/bots/$botId/messages", token, query = listOfNotNull("limit" to "50", before?.let { "before" to it.toString() }))
+
+    fun taskConversation(url: ServerUrl, token: String, botId: String, taskId: String, after: Long = 0): TaskConversation =
+        call(url, "GET", "/bots/$botId/tasks/$taskId/conversation", token, query = listOf("after" to after.toString()))
 
     fun send(url: ServerUrl, token: String, botId: String, text: String, requestId: String, images: List<ChatImage> = emptyList()): SendResult =
         call(url, "POST", "/bots/$botId/messages", token, SendBody(text, requestId, images))

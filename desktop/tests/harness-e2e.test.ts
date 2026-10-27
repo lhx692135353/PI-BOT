@@ -32,7 +32,11 @@ async function scriptedProvider(outside: string) {
     const results = realToolOutputs(messages).map(m => text(m.output));
     let reply: { text?: string; tool?: { name: string; args: object } };
     const goalId = user.match(/"id":"([0-9a-f-]{36})"/)?.[1];
-    if (user === '建立自动检查链路测试') reply = toolDone
+    if (user === '分条回复测试') reply = results.length === 0
+      ? { tool: { name: 'send_reply', args: { phase: 'opening', text: '先核对服务状态。' } } }
+      : results.length === 1 ? { tool: { name: 'send_reply', args: { phase: 'answer', text: '服务正常，接下来再测一次。' } } }
+      : { text: '服务正常，接下来再测一次。' };
+    else if (user === '建立自动检查链路测试') reply = toolDone
       ? { text: '已建立目标，有进展会告诉你。' }
       : { tool: { name: 'goal_manage', args: { action: 'create', title: '自动检查链路测试', goal: '把已授权的检查结论保存到自动记录文件，完成后告知', authorization: '用户授权在自己的资料库创建 automation/result.txt' } } };
     else if (user === '建立一个会保持安静的目标') reply = toolDone
@@ -154,6 +158,19 @@ test('the Mac harness logs in, binds itself and runs bots against its library', 
   assert.deepEqual(files.json.entries.map((e: any) => e.name), ['hello.md']);
   const content = await http('GET', `/bots/${bot.id}/files/content?path=notes/hello.md`, undefined, bobToken);
   assert.equal(content.json.content, '# Hello from Pi Bot');
+});
+
+test('desktop replies travel through device events and survive reload without duplicate final text', { skip }, async () => {
+  const bots = await app.call('bots', {}) as { bots: Bot[] };
+  const bot = bots.bots[0];
+  const sent = await app.call('send', { botId: bot.id, text: '分条回复测试' }) as { run: { id: string } };
+  const reply = await eventually(async () => {
+    const page = await app.call('messages', { botId: bot.id }) as MessagePage;
+    return page.messages.find(m => m.run_id === sent.run.id && m.role === 'assistant' && m.status === 'completed');
+  });
+  assert.equal(reply.reply_segments?.length, 2);
+  assert.equal(reply.reply_segments?.[0].text, '先核对服务状态。');
+  assert.equal(reply.content, '服务正常，接下来再测一次。');
 });
 
 test('the Mac sends, loads and replays image attachments through its signed cloud connection', { skip }, async () => {

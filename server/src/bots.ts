@@ -1,3 +1,6 @@
+import { replyAnswer, type ReplySegment } from "@pi-bot/agent";
+import { recordReply } from "./replies.js";
+import { taskMessage } from "./task-conversation.js";
 import {targetPrompt} from "./targets.js";
 import { randomUUID } from "node:crypto";
 import { imageBytes, MAX_IMAGES_BYTES, type ChatImage } from '@pi-bot/agent/images';
@@ -84,6 +87,7 @@ export const taskOut = (t: Row) => ({
   title: t.title,
   updated_at: t.updated_at,
   activity: t.activity ?? null,
+  message_count: t.message_count ?? 0,
 });
 /** `m` may carry `from_bot_name`, `from_bot_avatar` and `run_origin` from `MESSAGE_SELECT`. */
 export const messageOut = (m: Row, tasks: Row[] = []) => ({
@@ -99,6 +103,7 @@ export const messageOut = (m: Row, tasks: Row[] = []) => ({
   executor: m.executor,
   tools: (m.tools ?? []).filter((tool: ToolEvent) => !isInternalTool(tool.name) && !TASK_TOOL_NAMES.has(tool.name)),
   progress: m.progress ?? [],
+  reply_segments: m.reply_segments ?? [],
   ui: m.ui ?? null,
   from_bot: m.from_bot_id
     ? {
@@ -118,7 +123,9 @@ export async function messageTasks(tx: Tx, messages: Row[]) {
   const runs = [...new Set(messages.filter((m) => m.role === "assistant" && m.run_id).map((m) => m.run_id))];
   if (!runs.length) return [];
   return tx.rows(
-    `SELECT t.*, b.name AS bot_name FROM agent_tasks t JOIN bots b ON b.bot_id=t.target_bot_id
+    `SELECT t.*, b.name AS bot_name, coalesce(r.status,t.status) AS status,
+       (SELECT count(*) FROM agent_task_messages c WHERE c.task_id=t.task_id) AS message_count
+     FROM agent_tasks t JOIN bots b ON b.bot_id=t.target_bot_id LEFT JOIN bot_runs r ON r.run_id=t.child_run_id
      WHERE t.parent_run_id = ANY($1) ORDER BY t.created_at`,
     [runs],
   );
@@ -138,7 +145,7 @@ export const approvalOut = (a: Row) => ({
   created_at: a.created_at,
 });
 export async function botOut(tx: Tx, b: Row) {
-  const [run, last, approvals, tasks, automatic] = await Promise.all([
+  const [run, last, approvals, tasks, executions] = await Promise.all([
     tx.one(
       "SELECT * FROM bot_runs WHERE bot_id=$1 AND lane='conversation' ORDER BY (status IN ('running','waiting_approval')) DESC, created_at DESC LIMIT 1",
       [b.bot_id],
@@ -151,22 +158,38 @@ export async function botOut(tx: Tx, b: Row) {
       "SELECT * FROM approvals WHERE bot_id=$1 AND status='pending' AND expires_at>now() ORDER BY created_at",
       [b.bot_id],
     ),
-    tx.rows(`SELECT t.*, b.name AS bot_name, m.progress, m.tools, r.status AS run_status
+    tx.rows(`SELECT t.*, b.name AS bot_name, m.progress, m.tools, r.status AS run_status, r.waiting_on_task_id, coalesce(r.status,t.status) AS status
       FROM agent_tasks t JOIN bots b ON b.bot_id=t.target_bot_id
       LEFT JOIN bot_runs r ON r.run_id=t.child_run_id
       LEFT JOIN bot_messages m ON m.message_id=r.assistant_message_id
-      WHERE (t.parent_bot_id=$1 OR t.target_bot_id=$1) AND t.status IN ('queued','running','waiting_approval')
+      WHERE (t.parent_bot_id=$1 OR t.target_bot_id=$1)
+        AND ((r.run_id IS NULL AND t.status='queued') OR r.status IN ('queued','running','waiting_approval'))
       ORDER BY t.created_at`, [b.bot_id]),
-    tx.rows("SELECT r.*,a.kind FROM bot_runs r JOIN bot_automations a USING(automation_id) WHERE r.bot_id=$1 AND r.origin='automation' AND a.status='enabled' AND r.status IN ('queued','running','waiting_approval')", [b.bot_id]),
+    tx.rows(`SELECT r.*,t.title,m.tools,a.status AS automation_status FROM bot_runs r
+      LEFT JOIN agent_tasks t ON t.task_id=r.task_id
+      LEFT JOIN bot_messages m ON m.message_id=r.assistant_message_id
+      LEFT JOIN bot_automations a ON a.automation_id=r.automation_id
+      WHERE r.bot_id=$1 AND r.lane='task' AND r.status IN ('queued','running','waiting_approval')
+      ORDER BY r.created_at,r.run_id`, [b.bot_id]),
   ]);
-  const autoRunning = automatic.filter(r => r.status !== "queued");
-  const running = tasks.filter(t => t.status !== "queued");
-  const activeTool = running.flatMap(t => t.tools ?? []).findLast(t => t.state === "running");
-  const status = approvals.length ? "waiting_approval" : running.length || autoRunning.length ? "running" : tasks.length || automatic.length ? "queued" : run?.status ?? null;
-  const labels: Record<string, string> = { run_command: "正在运行命令", web_search: "正在查找资料", read_file: "正在阅读文件", write_file: "正在整理文件", edit_file: "正在修改文件", ask_agent: "正在等待协作结果" };
-  const activity = { status, tool: activeTool?.name ?? null, running_count: running.length + autoRunning.length,
-    queued_count: tasks.length - running.length + automatic.length - autoRunning.length,
-    summary: approvals.length ? "等你批准访问请求" : running.length > 1 ? `正在处理 ${running.length} 个任务` : running.length ? labels[activeTool?.name] ?? "正在处理任务" : autoRunning.length ? "正在检查目标" : tasks.length ? `有 ${tasks.length} 个任务排队中` : run?.origin === "voice" && ACTIVE.includes(run.status) ? "语音通话中" : run && ACTIVE.includes(run.status) ? "正在思考" : null };
+  // Executions are authoritative. A finished chat turn or stale task metadata
+  // must neither hide a live executor nor keep a finished executor on screen.
+  const owned = executions.filter(r => !r.waiting_on_task_id
+    && !(r.origin === "automation" && r.status === "queued" && r.automation_status !== "enabled"));
+  const running = owned.filter(r => r.status !== "queued");
+  const queuedRuns = owned.filter(r => r.status === "queued");
+  const linkedTasks = new Set(executions.map(r => r.task_id).filter(Boolean));
+  const unstarted = tasks.filter(t => t.target_bot_id === b.bot_id && !t.child_run_id && t.status === "queued" && !linkedTasks.has(t.task_id));
+  const queuedCount = queuedRuns.length + unstarted.length;
+  const activeTool = running.flatMap(r => r.tools ?? []).findLast(t => t.state === "running");
+  const status = approvals.length ? "waiting_approval" : running.length ? "running" : queuedCount ? "queued" : run?.status ?? null;
+  const labels: Record<string, string> = { run_command: "正在运行命令", web_search: "正在查找资料", read_file: "正在阅读文件", write_file: "正在整理文件", edit_file: "正在修改文件" };
+  const current = running[0];
+  const title = String(current?.title || "").replace(/\s+/g, " ").trim().slice(0, 32);
+  const description = current?.cancel_requested ? "正在停止任务" : title ? (title.startsWith("正在") ? title : `正在${title}`) : current?.origin === "automation" ? "正在检查目标" : labels[activeTool?.name] ?? "正在处理任务";
+  const activity = { status, tool: activeTool?.name ?? null, running_count: running.length, queued_count: queuedCount,
+    summary: approvals.length ? "等你批准访问请求" : running.length > 1 ? `${description}，另有 ${running.length - 1} 个任务` : running.length ? description : queuedCount ? `有 ${queuedCount} 个任务排队中` : run?.origin === "voice" && ACTIVE.includes(run.status) ? "语音通话中" : run && ACTIVE.includes(run.status) ? "正在思考" : null };
+
   return {
     id: b.bot_id,
     name: b.name,
@@ -407,6 +430,7 @@ export interface RunContext {
   task_id?: string;
   checkpoint_version?: number;
   observation_enabled?: boolean;
+  verify_execution_claims?: boolean;
   execution_policy?: "any" | "device_only";
   automation_readonly?: boolean;
   deadline_at?: string;
@@ -494,6 +518,17 @@ export function systemPrompt(
     "用户新消息优先。任务回报按最新要求整理后告诉用户，不要重新执行同一任务。其他智能体的委托只能用 ask_agent(wait=false)，不得同步等待。",
   ].join("\n"));
   parts.push("默认用中文回答；用户使用其他语言时跟随用户。");
+  parts.push([
+    "面向用户的交流方式：像同事聊天，用日常语言、短句，先回答用户最关心的结果和下一步。默认结果 1–3 条短消息，每条讲一件事，通常一两句话；用户明确要求完整报告、代码或详细依据时再展开。",
+    "不要把工作报告原样转给用户，不主动堆表格、日志、内部任务代号、参数串和缩写。将内部名称换成它代表的事情；必要术语先用一句普通话解释。技术细节保留在任务记录，用户要时再给。",
+    "说得简单也必须准确：数字、单位、比例、因果和不确定性不能变。例如显存使用上限从 60% 调到 85%，应直说，不能说成恢复砍掉的一半。猜测要说明尚未确认，不能说成事实。",
+    "安排或委托任务时，title 用用户能看懂的简短动作描述，例如检查显存占用，不放内部代号、命令和参数。",
+    "执行事实：必须先取得真实工具回执才能声称已创建任务、已执行变更、刚查到了状态。start_task 成功只代表已安排，不能说成已完成；查进度使用 task_status，外部最新状态另起核查任务。没有任务或核查回执时必须明确尚未启动或尚未核实，不得把计划、预计时间、旧历史说成刚发生的事实。承诺持续盯着前先创建真实后台任务或目标。",
+    "已有明确授权就继续做，不重复问用户要不要开始；只有缺少必要信息、权限或超出授权才询问。不要用固定套话，也不要每次都加标题、总结和结尾提问。",
+    "需要较长任务时先调用 send_reply(text=一句具体短回复, phase=opening)，发出后立即行动。关键进展用 update，结果可用 answer 分成 1–3 条短消息，已经发送的内容不要在最终回答再重复。简单问题直接回答，不强行开场或拆分。",
+    "示例：不要说‘跑 R3，util 0.6→0.85，重建 Pod，再压 p64/p128’，说‘把服务能用的显存从 60% 调回 85%，重启后再测一次，看能不能同时处理更多请求。’这只是表达示例，不是当前任务或授权。",
+  ].join("\n"));
+  if (options.lane === "task") parts.push("后台执行回报：最终结果供发起方整理，保留核实后的关键数据、依据、来源和必要的技术细节，不要为缩短聊天而丢失结果。公开进展仍用短句。发起方负责按用户的问题用日常语言转述，需要细节时可读取本次完整任务记录。");
   parts.push(UI_INSTRUCTIONS);
   if (options.providerSearch && options.lane !== "conversation") parts.push(options.providerSearch === "xai"
     ? "联网检索由 xAI 在这一轮里完成，可以检索网页和 X，不要调用 web_search。需要最新公开信息时直接检索，并在回答里给出来源链接。不要把检索摘要当成已经读过全文。检索失败时说明限制，不要反复换一种说法重试。"
@@ -551,6 +586,7 @@ export async function buildContext(
   if(run.operation_target?.startsWith("remote:")&&run.lane==="task") system += "\n本任务在云端 Linux 虚机执行，文件和 shell 工具都操作该虚机；默认资料库为 /home/pibot/workspaces/"+bot.slug+"。浏览器和桌面操作前先读取状态；遇到人工接管或忙碌状态停止界面操作并说明原因。";
   if (run.lane === "conversation") system += "\n目标：用户在追求一件会持续一段时间的事时，你自己用 goal_manage 记下，不要等用户说「建立目标」。记录目标说明和已经允许做的范围。不要用一次性 start_task 代替。查询、修改、暂停、恢复、完成和停止也使用该工具。全部操作仅在用户明确要求全部时使用 all=true。建立前先查询，避免重复。目标检查在每个目标保存的执行环境进行，不能自动迁移。";
   if (automation) system += `\n你正在检查自己的目标，当前时间 ${new Date().toISOString()}。发现资料、记忆或未完成工作里有明确且尚未完成的事时，可以用 goal_manage 新建一个目标，本轮最多一个；没有新的授权时 authorization 写「在自己的资料库内推进」。先查询，避免重复。不要修改、暂停或停止已有目标。结束前必须调用 goal_finish，为当时每一个进行中目标提交状态，包括本轮新建的，然后结束。不要只用普通文字结束。没有新进展时 notify=false。只有可交付成果、重要变化或需要用户决定才 notify=true，并提供稳定的 notification_key；同一目标同一状态不得换 key。需要用户决定时 state=waiting_user。不要把工作交给其他智能体。只推进该目标授权范围内、且有明确下一步的事项。先核实检查点和操作结果，未知副作用不可重放。检查点版本：${automation.checkpoint_version}`;
+  if (automation) system = system.split("\n").filter(line => !line.includes("send_reply")).join("\n");
   if (run.automation_readonly) system += "\n本轮 memory_manage 仅允许 list/search，skill_manage 不可用。";
   const skills=await skillCatalog(tx,bot.bot_id);
   const instructions=run.task_id && run.lane === "task" ? (await tx.rows("SELECT instruction_id AS id, text FROM agent_task_instructions WHERE task_id=$1 AND delivered_at IS NULL ORDER BY created_at, instruction_id", [run.task_id])) as { id: string; text: string }[] : [];
@@ -603,6 +639,7 @@ export async function buildContext(
     task_id:run.task_id??undefined,
     checkpoint_version:automation?.checkpoint_version??taskRecord?.checkpoint_version??0,
     observation_enabled:s.tracingEnabled,
+    verify_execution_claims: run.lane === "conversation" && run.origin === "user",
     lane: run.lane ?? "conversation",
     system,
     history,
@@ -618,10 +655,13 @@ export async function buildContext(
   };
 }
 export async function setContent(tx: Tx, run: Row, content: string) {
+  const active = await tx.one("SELECT run_id FROM bot_runs WHERE run_id=$1 AND status=ANY($2) FOR NO KEY UPDATE", [run.run_id, ACTIVE]);
+  if (!active) return;
   await tx.rows(
     "UPDATE bot_messages SET content=$2, updated_at=now() WHERE message_id=$1 AND status='running'",
     [run.assistant_message_id, content],
   );
+  if (content.trim() && run.origin !== "automation") await tx.rows("UPDATE bot_runs SET first_reply_at=coalesce(first_reply_at,now()) WHERE run_id=$1", [run.run_id]);
 }
 export interface ToolEvent {
   id: string;
@@ -642,13 +682,18 @@ function replayPieces(row: Row): RunContext['history'] {
 }
 export async function setProgress(tx: Tx, run: Row, lines: string[]) {
   const progress = [...new Set(lines.map(line => line.trim().slice(0, PROGRESS_CHARS)).filter(Boolean))].slice(0, PROGRESS_SEGMENTS);
-  await tx.rows(
-    "UPDATE bot_messages SET progress=$2, content='', updated_at=now() WHERE message_id=$1 AND status='running'",
-    [run.assistant_message_id, JSON.stringify(progress)],
-  );
+  const m = await tx.one("SELECT * FROM bot_messages WHERE message_id=$1 FOR UPDATE", [run.assistant_message_id]);
+  if (!m || m.status !== "running") return;
+  const combined = [...new Set([...(m.progress ?? []), ...progress])];
+  await tx.rows("UPDATE bot_messages SET progress=$2,content=$3,updated_at=now() WHERE message_id=$1", [m.message_id, JSON.stringify(combined), replyAnswer(m.reply_segments ?? [])]);
+  if (run.lane === "task" && run.task_id) {
+    const task = await tx.get("agent_tasks", run.task_id);
+    for (const [i, line] of progress.entries()) await taskMessage(tx, task, `progress:${run.run_id}:${i}`, "update", line);
+    await tx.notify({ user_id: run.user_id, bot_id: task.parent_bot_id });
+  }
 }
 export async function recordTool(tx: Tx, run: Row, tool: ToolEvent) {
-  if (isInternalTool(tool.name) || TASK_TOOL_NAMES.has(tool.name)) return;
+  if (isInternalTool(tool.name) || TASK_TOOL_NAMES.has(tool.name) || tool.name === "send_reply") return;
   const m = await tx.get("bot_messages", run.assistant_message_id);
   if (!m) return;
   const tools: ToolEvent[] = Array.isArray(m.tools) ? m.tools : [];
@@ -692,6 +737,14 @@ export async function finishRun(
     const settled = await settleAutomation(tx, run, final, error, now);
     final = settled.state as typeof final; error = settled.error;
   }
+  const message = await tx.get("bot_messages", run.assistant_message_id);
+  const segments: ReplySegment[] = message?.reply_segments ?? [];
+  const finalText = content ?? message?.content ?? "";
+  const answer = replyAnswer(segments, finalText);
+  if (finalText.trim() && finalText.trim() !== replyAnswer(segments) && !segments.some(r => r.text === finalText.trim())) {
+    await recordReply(tx, run, { id: `final:${runId}`, phase: "answer", text: finalText, generated_at: now.toISOString() }, true);
+  }
+  content = answer;
   await tx.rows(
     "UPDATE bot_runs SET status=$2, error=$3, finished_at=now(), lease_until=NULL WHERE run_id=$1",
     [runId, final, final === "failed" ? error : null],
@@ -714,11 +767,19 @@ export async function finishRun(
       "UPDATE agent_tasks SET status=$2, result=$3, error=$4, finished_at=now(), updated_at=now() WHERE task_id=$1 AND status IN ('queued','running','waiting_approval') RETURNING parent_bot_id",
       [run.task_id, final, final === "completed" ? reply?.content ?? "" : null, final === "failed" ? error ?? "运行失败" : null],
     );
-    if (task) await tx.notify({ user_id: run.user_id, bot_id: task.parent_bot_id });
+    if (task) {
+      const fullTask = await tx.get("agent_tasks", run.task_id);
+      const sent = await tx.rows("SELECT content FROM agent_task_messages WHERE task_id=$1 AND kind='answer' ORDER BY seq", [run.task_id]);
+      const already = sent.map(r => r.content).join("\n\n");
+      if (final !== "completed" || (answer && answer !== already))
+        await taskMessage(tx, fullTask, "terminal", final === "completed" ? "answer" : "error", final === "completed" ? answer : error ?? (final === "cancelled" ? "任务已取消" : "任务未完成"));
+      await tx.notify({ user_id: run.user_id, bot_id: task.parent_bot_id });
+    }
   }
   if ((final === "cancelled" || (final === "failed" && run.execution_policy === "device_only")) && run.lane === "task") await cancelDelegations(tx, runId);
   await tx.notify({ user_id: run.user_id, bot_id: run.bot_id });
-  await recordRun(tx,{...run,status:final,error:final==='failed'?error:null,finished_at:new Date()},run.observation_enabled);
+  const timing = await tx.get("bot_runs", runId);
+  await recordRun(tx,{...timing,status:final,error:final==='failed'?error:null,finished_at:new Date()},run.observation_enabled);
   return { ...run, status: final };
 }
 /**
@@ -740,6 +801,9 @@ export async function cancelDelegations(tx: Tx, runId: string) {
        WHERE task_id=$1`,
       [t.task_id],
     );
+    if (t.status === "queued") await taskMessage(tx, t, "terminal", "error", "任务已取消");
+    await tx.notify({ user_id: t.user_id, bot_id: t.parent_bot_id });
+    await tx.notify({ user_id: t.user_id, bot_id: t.target_bot_id });
     if (!["queued", "running", "waiting_approval"].includes(t.status) || !t.child_run_id) continue;
     const child = await tx.one(
       "UPDATE bot_runs SET cancel_requested=true WHERE run_id=$1 AND status = ANY($2) RETURNING *",

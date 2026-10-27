@@ -15,6 +15,9 @@ import {
   InMemoryCredentialStore,
   InMemoryModelsStore,
 } from "@earendil-works/pi-ai";
+import { ExecutionReceipts, RECEIPT_CORRECTION } from "./execution-receipts.js";
+import { replyTool, replyAnswer, type ReplyEvent } from "./replies.js";
+export { replyAnswer, type ReplyEvent, type ReplySegment } from "./replies.js";
 import { TASK_TOOL_NAMES } from "./tasks.js";
 import { isInternalTool, SKILL_TOOLS, skillsExtension, type SkillOptions } from "./skills.js";
 import { memoryExtension, MEMORY_TOOLS, type MemoryOptions } from "./hermes-memory/extension.js";
@@ -62,6 +65,8 @@ export interface BotAgentOptions {
   skills?: SkillOptions;
   redactSecrets?: string[];
   onTool?: (activity: ToolActivity) => void;
+  onReply?: (reply: ReplyEvent) => void | Promise<void>;
+  verifyExecutionClaims?: boolean;
   /** Completed, brief remarks before tool use, kept separate from the answer. */
   onProgress?: (lines: string[]) => void;
   /** Stop a model stream that sends no events; running tools are exempt. */
@@ -111,6 +116,7 @@ export function summarize(value: unknown) {
 
 export class PiAgent implements AgentHandle {
   tools: string[];
+  private cancelled = false;
   constructor(
     private session: AgentSession,
     private runtime: ModelRuntime,
@@ -120,6 +126,9 @@ export class PiAgent implements AgentHandle {
     private onProgress?: BotAgentOptions["onProgress"],
     private modelIdleTimeoutMs = MODEL_TIMEOUT_MS,
     private privateSkills = false,
+    private replies: ReplyEvent[] = [],
+    private replyClock = { started: 0 },
+    private receipts?: ExecutionReceipts,
   ) {
     this.tools = session.getActiveToolNames();
   }
@@ -127,6 +136,10 @@ export class PiAgent implements AgentHandle {
     return this.runtime.setRuntimeApiKey(this.provider, key);
   }
   async prompt(text: string, onText: (text: string) => void, images?: ChatImage[]) {
+    this.replies.length = 0;
+    this.cancelled = false;
+    this.receipts?.reset();
+    this.replyClock.started = performance.now();
     let content = "",
       failed = false,
       aborted = false,
@@ -144,19 +157,22 @@ export class PiAgent implements AgentHandle {
       const e = event as any;
       if (e.type === "tool_execution_start") runningTools.add(String(e.toolCallId ?? e.toolName));
       if (e.type === "tool_execution_end" && e.toolName === "show_ui" && !e.isError) renderedUi = true;
-      if (e.type === "tool_execution_end") runningTools.delete(String(e.toolCallId ?? e.toolName));
+      if (e.type === "tool_execution_end") {
+        runningTools.delete(String(e.toolCallId ?? e.toolName));
+        if (!e.isError) this.receipts?.record(e.toolName, e.result);
+      }
       armIdleTimer();
       if (event.type === "message_start" && event.message.role === "assistant") {
         content = "";
       }
-      if (e.type === "tool_execution_start" && !isInternalTool(e.toolName) && !TASK_TOOL_NAMES.has(e.toolName))
+      if (e.type === "tool_execution_start" && !isInternalTool(e.toolName) && !TASK_TOOL_NAMES.has(e.toolName) && e.toolName !== "send_reply")
         this.onTool?.({
           id: String(e.toolCallId ?? e.toolName),
           name: e.toolName,
           state: "running",
           summary: this.redact(summarize(e.args)),
         });
-      if (e.type === "tool_execution_end" && !isInternalTool(e.toolName) && !TASK_TOOL_NAMES.has(e.toolName))
+      if (e.type === "tool_execution_end" && !isInternalTool(e.toolName) && !TASK_TOOL_NAMES.has(e.toolName) && e.toolName !== "send_reply")
         this.onTool?.({
           id: String(e.toolCallId ?? e.toolName),
           name: e.toolName,
@@ -170,7 +186,7 @@ export class PiAgent implements AgentHandle {
         // Tool calls may arrive after the opening text. Buffer private-skill
         // sessions until the message is classified, so management remarks
         // cannot leak through transient WebSocket deltas.
-        if (!this.privateSkills) onText(this.redact(content));
+        if (!this.privateSkills && !this.receipts) onText(this.redact(content));
       }
       if (event.type === "message_end" && event.message.role === "assistant") {
         const msg = event.message;
@@ -181,13 +197,18 @@ export class PiAgent implements AgentHandle {
         // Goal operations are hidden from the tool log, but their user-facing
         // opening reply must survive just like a task-status query. Private
         // skill/memory/checkpoint remarks still stay out of the conversation.
-        const privateRemark = msg.content.some(c => c.type === "toolCall" && isInternalTool(c.name) && c.name !== "goal_manage");
-        if (!privateRemark) onText(this.redact(content));
+        const privateRemark = msg.content.some(c => c.type === "toolCall" && isInternalTool(c.name) && c.name !== "goal_manage") || msg.content.some(c => c.type === "toolCall" && c.name === "send_reply");
+        const unsupported = this.receipts?.unsupported(content) ?? false;
+        if (this.receipts && unsupported) this.receipts.rejected = true;
+        if (!privateRemark && !unsupported) {
+          if (this.receipts && content.trim() && !msg.content.some(c => c.type === "toolCall")) this.receipts.rejected = false;
+          onText(this.redact(content));
+        }
         failed = msg.stopReason === "error";
         aborted = msg.stopReason === "aborted";
         if (!failed && !aborted && msg.content.some((c) => c.type === "toolCall")) {
           const remark = this.redact(content).trim().slice(0, PROGRESS_CHARS);
-          if (!privateRemark && remark && !progress.includes(remark) && progress.length < PROGRESS_SEGMENTS) {
+          if (!privateRemark && !unsupported && remark && !progress.includes(remark) && progress.length < PROGRESS_SEGMENTS) {
             progress.push(remark);
             this.onProgress?.([...progress]);
           }
@@ -201,10 +222,18 @@ export class PiAgent implements AgentHandle {
     try {
       await this.session.prompt(text, { expandPromptTemplates: false, images: modelImages(images) });
       if (!settled) await this.session.waitForIdle();
+      if (this.cancelled) throw new Error(CANCELLED);
+      if (!failed && !aborted && this.receipts && (this.receipts.rejected || this.receipts.unsupported(content))) {
+        content = ""; settled = false;
+        await this.session.prompt(RECEIPT_CORRECTION, { expandPromptTemplates: false });
+        if (!settled) await this.session.waitForIdle();
+        if (this.receipts.rejected || this.receipts.unsupported(content)) throw new Error("模型未取得真实任务回执，无法确认已启动或已执行，请重试");
+      }
       if (timedOut) throw new Error("模型长时间没有响应，已停止本次任务，请稍后重试");
-      if (aborted) throw new Error(CANCELLED);
+      if (aborted || this.cancelled) throw new Error(CANCELLED);
       if (failed) throw new Error("模型请求失败，请稍后重试或联系管理员检查模型配置");
-      if (!content && !renderedUi) throw new Error("模型未返回文本");
+      content = replyAnswer(this.replies, content);
+      if (!content && !renderedUi && !this.replies.length) throw new Error("模型未返回文本");
       return this.redact(content);
     } finally {
       clearTimeout(idleTimer);
@@ -215,6 +244,7 @@ export class PiAgent implements AgentHandle {
     await this.session.steer(text);
   }
   abort() {
+    this.cancelled = true;
     return this.session.abort();
   }
   dispose() {
@@ -224,6 +254,19 @@ export class PiAgent implements AgentHandle {
 
 export const createBotAgent: AgentFactory = async (o) => {
   if (o.tools.some(tool => isInternalTool(tool.name) && !["goal_manage", "goal_finish"].includes(tool.name))) throw new Error("内部工具名称不能由外部工具覆盖");
+  if (o.tools.some(t => t.name === "send_reply")) throw new Error("公开回复工具不能由外部工具覆盖");
+  const replies: ReplyEvent[] = [];
+  const receipts = o.verifyExecutionClaims ? new ExecutionReceipts() : undefined;
+  const replyClock = { started: 0 };
+  const redact = redactor([o.apiKey, ...(o.redactSecrets ?? [])]);
+  const tools = [...o.tools, ...(o.onReply ? [replyTool(async reply => {
+    if (receipts?.unsupported(reply.text)) { receipts.rejected = true; throw new Error(RECEIPT_CORRECTION); }
+    if (receipts && reply.phase === "answer") receipts.rejected = false;
+    const safe = { ...reply, text: redact(reply.text), elapsed_ms: Math.max(0, Math.round(performance.now() - replyClock.started)) };
+    if (replies.some(r => r.id === safe.id)) return;
+    await o.onReply!(safe);
+    replies.push(safe);
+  })] : [])];
   mkdirSync(o.agentDir, { recursive: true, mode: 0o700 });
   const runtime = await ModelRuntime.create({
     credentials: new InMemoryCredentialStore(),
@@ -283,7 +326,7 @@ export const createBotAgent: AgentFactory = async (o) => {
   });
   await resourceLoader.reload();
   if (resourceLoader.getExtensions().errors.length) throw new Error("内部能力插件加载失败");
-  const allowed = new Set([...o.tools.map(t => t.name), ...(o.skills ? SKILL_TOOLS.filter(n => !o.readonly || n !== "skill_manage") : []),...(o.memory?MEMORY_TOOLS.filter(n=>n!== (o.memory!.lane==="task"?"resume_task":"task_checkpoint")):[])]);
+  const allowed = new Set([...tools.map(t => t.name), ...(o.skills ? SKILL_TOOLS.filter(n => !o.readonly || n !== "skill_manage") : []),...(o.memory?MEMORY_TOOLS.filter(n=>n!== (o.memory!.lane==="task"?"resume_task":"task_checkpoint")):[])]);
   const { session } = await createAgentSession({
     cwd: o.cwd,
     agentDir: o.agentDir,
@@ -292,7 +335,7 @@ export const createBotAgent: AgentFactory = async (o) => {
     thinkingLevel: "off",
     noTools: "all",
     tools: [...allowed],
-    customTools: o.tools,
+    customTools: tools,
     resourceLoader,
     sessionManager,
     settingsManager,
@@ -310,7 +353,10 @@ export const createBotAgent: AgentFactory = async (o) => {
     o.onTool,
     o.onProgress,
     o.modelIdleTimeoutMs,
-    !!o.skills,
+    !!o.skills || !!o.onReply,
+    replies,
+    replyClock,
+    receipts,
   );
 };
 

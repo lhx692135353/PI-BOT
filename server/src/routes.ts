@@ -1,3 +1,4 @@
+import { conversation } from "./task-conversation.js";
 import { remoteRoutes } from './remote/routes.js';
 import type {RemoteService} from './remote/service.js';
 import { phoneRoutes } from './phone-routes.js';
@@ -425,6 +426,14 @@ export const routes: Route[] = [
     handler: async ({ tx, s, user, device, params, body }) => {
       const bot = await ownBot(tx, user.user_id, params.id);
       return { ticket: await issueVoiceTicket(user.user_id, bot.bot_id, s,body.client?{client:device?"desktop":"android",deviceId:device?.device_id}:undefined), expires_in: 60 };
+    },
+  },
+  {
+    method: "GET", path: "/bots/:id/tasks/:taskId/conversation", auth: "actor", tag: "bots", summary: "本次委托的双方传话记录",
+    query: z.object({ after: z.coerce.number().int().nonnegative().default(0), limit: z.coerce.number().int().min(1).max(100).default(50) }),
+    handler: async ({ tx, user, params, query }) => {
+      await ownBot(tx, user.user_id, params.id);
+      return conversation(tx, user.user_id, params.id, params.taskId, query.after, query.limit);
     },
   },
   {

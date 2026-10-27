@@ -224,6 +224,7 @@ export class Application {
       case 'botCreate': return this.cloud<Bot>('POST', '/bots', input);
       case 'botUpdate': { const { id, ...patch } = input; return this.cloud<Bot>('PATCH', `/bots/${id}`, patch); }
       case 'botDelete': return this.cloud('DELETE', `/bots/${input.id}`);
+      case 'taskConversation': return this.cloud('GET', `/bots/${input.botId}/tasks/${input.taskId}/conversation?after=${input.after ?? 0}`);
       case 'messages': return this.cloud<MessagePage>('GET', `/bots/${input.botId}/messages?limit=50${input.before ? `&before=${input.before}` : ''}`);
       case 'send': return this.cloud('POST', `/bots/${input.botId}/messages`, { client:"desktop", text: input.text, images: input.images, request_id: input.request_id ?? randomUUID() });
       case 'image': return this.cloud('GET', `/bots/${input.botId}/messages/${input.messageId}/images/${input.imageId}`);

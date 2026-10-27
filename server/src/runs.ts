@@ -1,3 +1,5 @@
+import { taskMessage } from "./task-conversation.js";
+import { recordReply, replySchema } from "./replies.js";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { fail, type Database, type Row, type Tx } from "./db.js";
@@ -57,6 +59,7 @@ const live = new Map<string, { content: string; written: number }>();
 const runEvent = z.discriminatedUnion("kind", [
   observationSchema.extend({kind:z.literal('observation')}),
   z.object({ kind: z.literal("started") }),
+  replySchema.extend({ kind: z.literal("reply") }),
   z.object({ kind: z.literal("instruction_ack"), id: z.string().uuid() }),
   z.object({ kind: z.literal("ui"), messages: z.array(z.record(z.string(),z.unknown())).min(1).max(20) }),
   z.object({ kind: z.literal("text"), text: z.string().max(400000) }),
@@ -149,6 +152,7 @@ export async function handleRunEvent(
       await tx.notify({ user_id: run.user_id, bot_id: run.bot_id });
       return null;
     }
+    if (e.kind === "reply") { await recordReply(tx, run, e); return null; }
     if (e.kind === "ui") { await recordUi(tx,run,e.messages); return null; }
     if (e.kind === "tool") {
       await recordTool(tx, run, e);
@@ -193,8 +197,12 @@ export async function failDeviceRuns(db: Database, deviceId: string, reason = DE
   await db.tx(async (tx) => {
     if (!keepQueued) {
       const tasks = await tx.rows(`UPDATE agent_tasks SET status='failed',error=$2,finished_at=now(),updated_at=now()
-        WHERE device_id=$1 AND status='queued' AND child_run_id IS NULL RETURNING user_id,parent_bot_id`, [deviceId, reason]);
-      for (const t of tasks) await tx.notify({user_id:t.user_id,bot_id:t.parent_bot_id});
+        WHERE device_id=$1 AND status='queued' AND child_run_id IS NULL RETURNING *`, [deviceId, reason]);
+      for (const t of tasks) {
+        await taskMessage(tx, t, "terminal", "error", reason);
+        await tx.notify({user_id:t.user_id,bot_id:t.parent_bot_id});
+        await tx.notify({user_id:t.user_id,bot_id:t.target_bot_id});
+      }
     }
     const runs = await tx.rows(
       "SELECT run_id FROM bot_runs WHERE executor='device' AND device_id=$1 AND status = ANY($2)",
