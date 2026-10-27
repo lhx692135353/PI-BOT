@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { ChatImage } from '@pi-bot/agent/images';
 import { join } from 'node:path';
-import { a2uiTools, askAgentTool, taskTools, automationTools, CANCELLED, createBotAgent, webSearchTool, type AgentFactory, type AgentHandle, type ToolActivity, type SkillSummary } from '@pi-bot/agent';
+import { a2uiTools, askAgentTool, taskTools, automationTools, CANCELLED, CONVERSATION_TIMEOUT_MS, createBotAgent, webSearchTool, type AgentFactory, type AgentHandle, type ToolActivity, type SkillSummary } from '@pi-bot/agent';
 import type { Mood } from '@pi-bot/bot-face';
 import { PhoneAdb, isPhoneAdbCommand } from './phone.js';
 import { commandShell } from './platform.js';
@@ -77,7 +77,7 @@ export class Executor {
     event({ kind: 'started' });
     this.deps.activity(run, null, 'thinking');
     let timedOut = false;
-    const timeoutMs = run.deadline_at ? Math.max(1, Date.parse(run.deadline_at) - Date.now()) : run.lane === 'conversation' ? 60000 : undefined;
+    const timeoutMs = run.deadline_at ? Math.max(1, Date.parse(run.deadline_at) - Date.now()) : run.lane === 'conversation' ? CONVERSATION_TIMEOUT_MS : undefined;
     const deadline = timeoutMs === undefined ? undefined : setTimeout(() => { timedOut = true; void state.agent?.abort(); }, timeoutMs);
     let latest = '', lastSent = 0, pendingText: NodeJS.Timeout | undefined, refresh: NodeJS.Timeout | undefined;
     const flush = () => { clearTimeout(pendingText); pendingText = undefined; lastSent = Date.now(); event({ kind: 'text', text: latest }); };

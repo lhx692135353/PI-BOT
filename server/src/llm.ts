@@ -1,4 +1,5 @@
 import type { FastifyReply } from "fastify";
+import { MODEL_TIMEOUT_MS } from "@pi-bot/agent";
 import { fail, type Database, type Row, type Tx } from "./db.js";
 import type { Settings } from "./config.js";
 import { Vault, type LlmClaims } from "./security.js";
@@ -133,7 +134,7 @@ export async function proxyResponses(
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
       body: JSON.stringify(payload),
-      signal: AbortSignal.any([signal, AbortSignal.timeout(300000)]),
+      signal: AbortSignal.any([signal, AbortSignal.timeout(MODEL_TIMEOUT_MS)]),
       redirect: "error",
     });
   } catch {

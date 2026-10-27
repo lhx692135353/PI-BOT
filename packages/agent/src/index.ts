@@ -1,4 +1,6 @@
 import { mkdirSync } from "node:fs";
+import { MODEL_TIMEOUT_MS } from "./timeouts.js";
+export { CONVERSATION_TIMEOUT_MS, MODEL_TIMEOUT_MS } from "./timeouts.js";
 import { modelImages, type ChatImage } from './images.js';
 import {
   createAgentSession,
@@ -116,7 +118,7 @@ export class PiAgent implements AgentHandle {
     private redact: (value: string) => string,
     private onTool?: BotAgentOptions["onTool"],
     private onProgress?: BotAgentOptions["onProgress"],
-    private modelIdleTimeoutMs = 120000,
+    private modelIdleTimeoutMs = MODEL_TIMEOUT_MS,
     private privateSkills = false,
   ) {
     this.tools = session.getActiveToolNames();
@@ -268,7 +270,7 @@ export const createBotAgent: AgentFactory = async (o) => {
           },
     );
   const settingsManager = SettingsManager.inMemory({
-    retry: { enabled: true, maxRetries: 2, provider: { timeoutMs: 120000, maxRetries: 0 } },
+    retry: { enabled: true, maxRetries: 2, provider: { timeoutMs: MODEL_TIMEOUT_MS, maxRetries: 0 } },
     compaction: { enabled: true },
   });
   // Explicit factories only: never discover executable code or skills from the

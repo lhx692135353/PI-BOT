@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { CONVERSATION_TIMEOUT_MS } from "@pi-bot/agent";
 import { Database, type Row } from "./db.js";
 import { settings, type Settings } from "./config.js";
 import { issueLlmToken, Vault } from "./security.js";
@@ -112,7 +113,7 @@ export class Worker {
       error = job.lane === "conversation" ? "对话响应超时，请重新发送" : "运行超过 30 分钟，已停止";
       void cancelRunner();
       controller.abort();
-    }, job.deadline_at ? Math.max(1,Date.parse(job.deadline_at)-Date.now()) : job.lane === "conversation" ? 60000 : RUN_LIMIT_MS);
+    }, job.deadline_at ? Math.max(1,Date.parse(job.deadline_at)-Date.now()) : job.lane === "conversation" ? CONVERSATION_TIMEOUT_MS : RUN_LIMIT_MS);
     let sawDone = false;
     try {
       const token = await issueLlmToken({ sub: owner.user_id, src: "cloud", bot: job.bot.id }, this.s, Math.ceil(RUN_LIMIT_MS / 1000) + 300);
