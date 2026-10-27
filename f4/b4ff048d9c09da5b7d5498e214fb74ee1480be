@@ -1,0 +1,28 @@
+packages/agent/tests/relay-receipts.test.ts
+  s_3dec9b2fb72731::t_9784a8b67f37ab 48,65-67,105
+packages/agent/src/execution-receipts.ts
+  s_3dec9b2fb72731::t_9784a8b67f37ab 43-53,76
+desktop/tests/harness-e2e.test.ts
+  s_3dec9b2fb72731::t_9784a8b67f37ab 40
+  s_3dec9b2fb72731::t_d6ed707b727ed4 347-348
+packages/agent/README.md
+  s_3dec9b2fb72731::t_9784a8b67f37ab 61-62
+packages/agent/src/index.ts
+  s_3dec9b2fb72731::t_9784a8b67f37ab 222,227,231
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f4b4ff048d9c09da5b7d5498e214fb74ee1480be",
+  "prompts": {},
+  "sessions": {
+    "s_3dec9b2fb72731": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17cac-3377-7513-b423-85458b72c6f8",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
