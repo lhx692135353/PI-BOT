@@ -59,7 +59,7 @@ const server = createServer(socket => {
     }
   });
 });
-server.on('error', () => { console.error('本地服务无法监听，请检查是否已有实例'); process.exit(1); });
+server.on('error', (error: NodeJS.ErrnoException) => { console.error(`本地服务无法监听（${error.code ?? 'UNKNOWN'}，${socketPath}），请检查端口是否可用或已有实例`); process.exit(1); });
 server.listen(listenAddress, () => {
   if (!windows) chmodSync(socketPath, 0o600);
   void application.start();

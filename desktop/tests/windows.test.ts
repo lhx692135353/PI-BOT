@@ -10,6 +10,8 @@ import { libraryFolder, nativeWindows, powerShellArgs, protectWindowsDirectory, 
 import { FileCredentials } from '../packages/service/src/keychain.js';
 import { libraryDir, runCommand, Sandbox, OutsideError } from '../packages/service/src/library.js';
 import { ServiceClient } from '../apps/desktop/src/service-client.js';
+import { createServer } from 'node:net';
+import { windowsIpcPort } from '../packages/service/src/paths.js';
 
 const windows = process.platform === 'win32';
 const native = { skip: windows ? false : 'Requires Windows APIs and compiled MSVC helper' };
@@ -25,6 +27,15 @@ test('Windows directories use win32 semantics even on Linux', () => {
   assert.equal(defaultDataDir('win32', {}, 'C:\\Users\\a'), 'C:\\Users\\a\\AppData\\Local\\Pi Bot');
   assert.equal(defaultDataDir('win32', { LOCALAPPDATA: 'relative' }, 'C:\\Users\\a'), 'C:\\Users\\a\\AppData\\Local\\Pi Bot');
   assert.throws(() => defaultDataDir('win32', { PI_BOT_DATA_DIR: 'relative' }), /绝对路径/);
+});
+test('Windows IPC supports an explicit valid port while retaining stable per-user discovery', () => {
+  const port = windowsIpcPort('C:\\Users\\Test\\Pi Bot', 'test');
+  assert.ok(port >= 20000 && port < 60000);
+  assert.equal(windowsIpcPort('c:/users/test/pi bot', 'test'), port);
+  assert.equal(windowsIpcPort('C:\\data', 'test', '12345'), 12345);
+  for (const invalid of ['', '0', '-1', '65536', '1.5', 'NaN', '123abc', ' 123', '00123']) {
+    assert.throws(() => windowsIpcPort('C:\\data', 'test', invalid), /PI_BOT_IPC_PORT/);
+  }
 });
 test('Windows file policy rejects namespaces, alternate streams, drive-relative and reserved names', () => {
   for (const path of ['C:foo', 'C:', '\\foo', '/foo', '\\\\server\\share', '//server/share', '\\\\?\\C:\\a', 'C:\\a:stream', 'a\\NUL.txt', 'a\\COM1', 'a\\LPT¹.txt', 'a.', 'a ', 'a\\b.\\c', 'a\\b?c']) assert.throws(() => validateWindowsPath(path), Error, path);
@@ -140,7 +151,12 @@ test('Windows Job Object kills descendants when the owning Node process crashes'
 });
 test('Windows service authenticates IPC, refuses wrong token, and shuts down on parent EOF', native, async t => {
   const dir = temp(t); const dataDir = join(dir, 'private');
-  const env = { ...process.env, PI_BOT_DATA_DIR: dataDir, PI_BOT_LIBRARY_ROOT: join(dir, 'libraries'), PI_BOT_PARENT_LEASE: '1' };
+  // Let Windows choose a bindable port instead of hashing into an occupied or excluded range.
+  const reservation = createServer();
+  await new Promise<void>((resolve, reject) => { reservation.once('error', reject); reservation.listen({ host: '127.0.0.1', port: 0, exclusive: true }, resolve); });
+  const port = (reservation.address() as import('node:net').AddressInfo).port;
+  await new Promise<void>((resolve, reject) => reservation.close(error => error ? reject(error) : resolve()));
+  const env = { ...process.env, PI_BOT_DATA_DIR: dataDir, PI_BOT_LIBRARY_ROOT: join(dir, 'libraries'), PI_BOT_PARENT_LEASE: '1', PI_BOT_IPC_PORT: String(port) };
   const service = spawn(process.execPath, [resolve('packages/service/dist/server.mjs')], { env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
   t.after(() => { if (service.exitCode === null) service.kill(); });
   service.stdin.on('error', () => {}); let stderr = ''; service.stderr.on('data', b => { stderr += b; });
@@ -152,6 +168,7 @@ test('Windows service authenticates IPC, refuses wrong token, and shuts down on 
   // Derive the endpoint in a separate process using the same environment, so module caching cannot mask bugs.
   const { execFileSync } = await import('node:child_process');
   const endpoint = execFileSync(process.execPath, ['--input-type=module', '-e', `const {socketPath}=await import(${JSON.stringify(new URL('../packages/service/dist/paths.mjs', import.meta.url).href)}); process.stdout.write(socketPath);`], { env, windowsHide: true, encoding: 'utf8' });
+  assert.equal(endpoint, `tcp:${port}`);
   const tokenPath = join(dataDir, 'ipc-token');
   const client = new ServiceClient(() => {}, { socketPath: endpoint, tokenPath }); client.start();
   t.after(() => client.stop());

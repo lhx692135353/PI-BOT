@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { dirname, resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
+import { createServer } from 'node:net';
 if (process.platform !== 'win32') throw new Error('Windows-only smoke test');
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 // Stage outside the repository so ancestor node_modules cannot hide missing runtime dependencies.
@@ -11,7 +12,11 @@ let service;
 try {
   const runtime = join(stage, 'runtime');
   cpSync(resolve(root, 'apps/desktop/runtime'), runtime, { recursive: true });
-  const env = { ...process.env, PI_BOT_DATA_DIR: join(stage, 'private'), PI_BOT_LIBRARY_ROOT: join(stage, 'libraries'), PI_BOT_WINDOWS_HELPER: join(runtime, 'pi-bot-windows.exe'), PI_BOT_PARENT_LEASE: '1' };
+  const reservation = createServer();
+  await new Promise((resolve, reject) => { reservation.once('error', reject); reservation.listen({ host: '127.0.0.1', port: 0, exclusive: true }, resolve); });
+  const port = reservation.address().port;
+  await new Promise((resolve, reject) => reservation.close(error => error ? reject(error) : resolve()));
+  const env = { ...process.env, PI_BOT_DATA_DIR: join(stage, 'private'), PI_BOT_LIBRARY_ROOT: join(stage, 'libraries'), PI_BOT_WINDOWS_HELPER: join(runtime, 'pi-bot-windows.exe'), PI_BOT_PARENT_LEASE: '1', PI_BOT_IPC_PORT: String(port) };
   const node = join(runtime, 'bin/node.exe');
   service = spawn(node, [join(runtime, 'server.mjs')], { cwd: stage, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
   service.stdin.on('error', () => {});
