@@ -1,3 +1,4 @@
+import { errorInfo } from "@pi-bot/runtime-contracts";
 import { randomUUID } from "node:crypto";
 import { posix } from "node:path";
 import type { Duplex } from "node:stream";
@@ -244,8 +245,7 @@ export class RemoteService {
     } catch (e) {
       if (
         !controller.signal.aborted &&
-        e instanceof Error &&
-        /SSH|连接中断|组件连接/.test(e.message)
+        errorInfo(e)?.code === "transport_closed"
       ) {
         state.connection?.close();
         state.connection = undefined;

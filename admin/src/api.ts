@@ -65,6 +65,7 @@ export interface CatalogModel {
   max_tokens: number | null;
 }
 export interface Model {
+  capabilities?: {chat:boolean;vision:boolean;voice:boolean;tools:boolean;reasoning:"none"|"configurable"|"required"|"unknown";reasoning_off?:Record<string,unknown>};
   id: string;
   name: string;
   provider: ProviderName;

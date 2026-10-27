@@ -1,3 +1,4 @@
+import { errorInfo } from "@pi-bot/runtime-contracts";
 /**
  * Not mounted. PhoneDock in phone-control.tsx is the panel the app renders.
  * This PhoneDesk keeps an earlier token/lease design and a different storage key;
@@ -139,8 +140,9 @@ export function readFrame(value: unknown): PhoneFrame | null {
   if (width < 1 || width > FRAME_WIDTH || height < 1 || height > FRAME_HEIGHT) return null;
   return { src: `data:image/jpeg;base64,${data}`, width, height };
 }
-export function sessionEnded(message: string) {
-  return /会话已|连接已断开|正在被人工控制|已被占用/.test(message);
+export function sessionEnded(error: unknown) {
+  const code=errorInfo(error)?.code;
+  return code === "session_expired" || code === "session_occupied" || code === "transport_closed";
 }
 export function textProblem(text: string) {
   if (!text) return '';
@@ -425,7 +427,7 @@ export class PhoneDesk {
     } catch (error) {
       if (this.session?.sessionId !== session.sessionId) return false;
       const message = errorText(error);
-      if (sessionEnded(message)) {
+      if (sessionEnded(error)) {
         this.notice = message;
         this.stopWork(true);
         this.mode = 'preview';
@@ -512,9 +514,9 @@ export class PhoneDesk {
       }).catch(error => {
         if (token !== this.previewToken || this.mode === 'control') return;
         const message = errorText(error);
-        this.frameNotice = message.includes('未知方法') ? '只读预览尚未接入本地服务' : '暂时没有取到预览';
+        this.frameNotice = errorInfo(error)?.code === 'unsupported' ? '只读预览尚未接入本地服务' : '暂时没有取到预览';
         this.emit();
-        if (message.includes('未知方法')) return;
+        if (errorInfo(error)?.code === 'unsupported') return;
       }).finally(() => {
         if (token !== this.previewToken || this.closed || this.hidden || this.mode === 'control') return;
         if (this.frameNotice === '只读预览尚未接入本地服务') {
@@ -555,7 +557,7 @@ export class PhoneDesk {
     }).catch(error => {
       if (token !== this.frameToken || this.session?.sessionId !== session.sessionId) return;
       const message = errorText(error);
-      if (sessionEnded(message) || ++this.frameFailures >= 5) this.failFrames(sessionEnded(message) ? message : '连续没有取到画面，会话已结束');
+      if (sessionEnded(error) || ++this.frameFailures >= 5) this.failFrames(sessionEnded(error) ? message : '连续没有取到画面，会话已结束');
       else this.frameNotice = '暂时没有取到画面';
       this.emit();
     }).finally(() => {

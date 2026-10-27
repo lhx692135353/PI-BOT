@@ -1,3 +1,4 @@
+import { errorInfo } from "@pi-bot/runtime-contracts";
 /** Client-only phone association and frame checks. This does not talk to a device. */
 
 export const PHONE_ASSOC_KEY = 'pi-bot.phone.device.v2';
@@ -168,6 +169,7 @@ export function textProblem(text: string) {
   return '';
 }
 
-export function sessionEnded(message: string) {
-  return /会话已|连接已断开|正在被人工控制|已被占用/.test(message);
+export function sessionEnded(error: unknown) {
+  const code=errorInfo(error)?.code;
+  return code === "session_expired" || code === "session_occupied" || code === "transport_closed";
 }

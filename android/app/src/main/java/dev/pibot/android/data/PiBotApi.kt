@@ -116,8 +116,10 @@ data class ChatImage(val name: String, @SerialName("mime_type") val mimeType: St
 @Serializable
 data class MessageImage(val id: String, val name: String, @SerialName("mime_type") val mimeType: String)
 
+
 @Serializable
 data class Message(
+    val attachments: List<ReportAttachment> = emptyList(),
     val id: String,
     @SerialName("bot_id") val botId: String,
     @SerialName("run_id") val runId: String? = null,
@@ -220,7 +222,7 @@ private data class PasswordBody(@SerialName("old_password") val oldPassword: Str
 private class EmptyBody
 
 /** Server-side errors carry a Chinese `detail`; [unauthorized] means the session is gone. */
-class ApiException(val status: Int, message: String) : Exception(message) {
+class ApiException(val status: Int, message: String, val code: String? = null) : Exception(message) {
     val unauthorized: Boolean get() = status == 401
 }
 
@@ -273,6 +275,8 @@ class PiBotApi(private val http: OkHttpClient, private val json: Json = API_JSON
     fun uiAction(url: ServerUrl, token: String, botId: String, messageId: String, body: JsonObject): SendResult =
         call(url, "POST", "/bots/$botId/messages/$messageId/ui-actions", token, JsonObject(body + ("client" to kotlinx.serialization.json.JsonPrimitive("android"))))
 
+    fun reportOpen(url: ServerUrl, token: String, id: String): JsonObject = call(url,"POST","/reports/$id/open",token,EmptyBody())
+
     fun remoteArtifact(url: ServerUrl, token: String, id: String): JsonObject = call(url,"POST","/remote/artifacts/$id/open",token,EmptyBody())
 
     fun remoteDesktop(url: ServerUrl, token: String, botId: String): JsonObject = call(url,"POST","/remote/desktop/open",token, kotlinx.serialization.json.buildJsonObject { put("bot_id", kotlinx.serialization.json.JsonPrimitive(botId)) })
@@ -309,7 +313,7 @@ class PiBotApi(private val http: OkHttpClient, private val json: Json = API_JSON
         }
         response.use {
             val text = it.body.string()
-            if (!it.isSuccessful) throw ApiException(it.code, errorMessage(it.code, text))
+            if (!it.isSuccessful) throw ApiException(it.code, errorMessage(it.code, text), runCatching { (API_JSON.parseToJsonElement(text) as? JsonObject)?.get("error_info")?.let { info -> (info as? JsonObject)?.get("code")?.let { code -> (code as? JsonPrimitive)?.contentOrNull } } }.getOrNull())
             return json.decodeFromString(text)
         }
     }

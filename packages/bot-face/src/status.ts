@@ -1,3 +1,4 @@
+import { toolDescriptor } from "@pi-bot/runtime-contracts";
 import type { Mood } from "./spec.js";
 
 export type RunStatus =
@@ -18,7 +19,6 @@ export interface BotActivity {
   lastActiveAt?: number | null;
   now?: number;
 }
-const SEARCH_TOOLS = new Set(["web_search", "search_files", "list_files", "read_file"]);
 export const SLEEP_AFTER_MS = 3 * 86400_000;
 const AFTERGLOW_MS = 6000;
 
@@ -29,8 +29,7 @@ export function moodFor(a: BotActivity): Mood {
     case "queued":
       return "thinking";
     case "running":
-      if (a.tool === "ask_agent") return "waiting";
-      if (a.tool) return SEARCH_TOOLS.has(a.tool) ? "searching" : "working";
+      if (a.tool) return toolDescriptor(a.tool)?.activity ?? "working";
       return "thinking";
     case "waiting_approval":
       return "waiting";

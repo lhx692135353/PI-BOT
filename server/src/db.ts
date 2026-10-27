@@ -1,12 +1,15 @@
+import { httpErrorInfo, type AppError } from "@pi-bot/runtime-contracts";
 import { Pool, types, type PoolClient } from "pg";
 types.setTypeParser(20, (value) => Number(value));
 export type Row = Record<string, any>;
 export class HttpError extends Error {
+  readonly info: AppError;
   constructor(
     public status: number,
     public detail: unknown,
   ) {
     super(typeof detail === "string" ? detail : "请求失败");
+    this.info = httpErrorInfo(status, this.message);
   }
 }
 export const fail = (status: number, detail: unknown): never => {

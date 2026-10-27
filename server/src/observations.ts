@@ -58,6 +58,10 @@ export function sanitize(
     return value.slice(0, 100).map((x) => sanitize(x, secrets, depth + 1));
   if (value && typeof value === "object") {
     const media = value as Row;
+    // Content-bearing tool arguments never enter traces, including raw provider output.
+    if (media.name === "publish_report") {
+      return { ...media, arguments: "[report arguments omitted]", input: "[report arguments omitted]", content: "[report body omitted]" };
+    }
     const binary =
       /^(?:image|input_image|audio|input_audio|file|input_file|base64|buffer)$/i.test(
         String(media.type ?? ""),
@@ -241,6 +245,7 @@ export async function recordObservation(
   const parsed = observationSchema.safeParse(event);
   if (!parsed.success) return;
   const e = parsed.data;
+  if (e.name === "publish_report") e.input = { content: "[report body omitted]" };
   const start = new Date(e.started_at),
     end = new Date(e.ended_at);
   if (e.phase === "start") {

@@ -1,3 +1,5 @@
+import { errorInfo } from "@pi-bot/runtime-contracts";
+import { reportTools } from "@pi-bot/agent";
 import Fastify from "fastify";
 import { z } from "zod";
 import { imagesSchema } from './images.js';
@@ -24,7 +26,6 @@ const requestSchema = z.object({
     memory_context:z.string().max(50000).optional(),
     task_id:z.string().uuid().optional(),checkpoint_version:z.number().int().min(0).optional(),
     observation_enabled:z.boolean().default(false),
-    verify_execution_claims:z.boolean().default(false),
     lane: z.enum(["conversation", "task"]).default("task"),
     execution_policy: z.enum(["any", "device_only"]).default("any"),
     automation_readonly: z.boolean().default(false),
@@ -37,6 +38,7 @@ const requestSchema = z.object({
       name: z.string(),
       context_window: z.number().int().positive(),
       max_tokens: z.number().int().positive(),
+      capabilities:z.record(z.string(),z.unknown()).optional(),
     }),
     system: z.string(),
     history: z.array(z.object({ role: z.enum(["user", "assistant"]), content: z.string(), images: imagesSchema.optional() })),
@@ -132,6 +134,7 @@ export async function createRunner(options: { token: string; dir: string; factor
       ];
       if(p.run.lane === "task" && p.run.operation_target.startsWith("remote:")) tools.push(...remoteTools(api,()=>p.token,p.run.run_id));
       if(p.run.automation) tools.push(...automationTools(api,()=>p.token,p.run.run_id,true));
+      tools.push(...reportTools(api, () => p.token, p.run.run_id, p.run.lane === "task" && !p.run.automation));
       tools.push(...a2uiTools(messages => { emit({ type: "ui", messages }); }));
       state.agent = await factory({
         model: {
@@ -140,10 +143,9 @@ export async function createRunner(options: { token: string; dir: string; factor
           baseUrl: p.base_url,
           modelId: p.run.model.id,
           contextWindow: p.run.model.context_window,
-          maxTokens: p.run.model.max_tokens,
+          capabilities:p.run.model.capabilities, maxTokens: p.run.model.max_tokens,
         },
         readonly:p.run.automation_readonly,
-        verifyExecutionClaims:p.run.verify_execution_claims,
         apiKey: p.token,
         cwd,
         agentDir: join(options.dir, "pi", "bots", p.run.bot.id),
@@ -154,7 +156,8 @@ export async function createRunner(options: { token: string; dir: string; factor
         runId:p.run.run_id,
         memory:{baseUrl:api,token:()=>p.token,runId:p.run.run_id,lane:p.run.lane,context:p.run.memory_context??'',taskId:p.run.task_id,checkpointVersion:p.run.checkpoint_version},
         onObservation:p.run.observation_enabled?e=>emit({type:'observation',...e}):undefined,
-        onTool: (t) => emit({ type: "tool", ...t }),
+        onAction: (t) => emit({ type: "tool", ...t }),
+        onManifest: tools => emit({type:"manifest",tools}),
         onProgress: (lines) => emit({ type: "progress", lines }),
         onReply: p.run.automation ? undefined : reply => emit({ type: "reply", ...reply }),
       });
@@ -170,7 +173,8 @@ export async function createRunner(options: { token: string; dir: string; factor
       emit({
         type: "done",
         state: cancelled ? "cancelled" : "failed",
-        error: cancelled ? null : e instanceof Error && /模型|工具/.test(e.message) ? e.message : "模型请求失败，请稍后重试",
+        error: cancelled ? null : errorInfo(e)?.message ?? "模型请求失败，请稍后重试",
+        error_info: errorInfo(e),
       });
     } finally {
       if(p.run.operation_target.startsWith("remote:")) await fetch(`${p.base_url.replace(/\/llm\/v1\/?$/, "")}/agent/remote/release`,{method:"POST",headers:{Authorization:`Bearer ${p.token}`,"Content-Type":"application/json"},body:JSON.stringify({run_id:p.run.run_id}),signal:AbortSignal.timeout(5000)}).catch(()=>{});

@@ -1,3 +1,4 @@
+import { RuntimeError, errorInfo, httpErrorInfo } from "@pi-bot/runtime-contracts";
 import { Type } from "typebox";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 
@@ -7,6 +8,7 @@ interface AgentTask {
   mode: "wait" | "report";
   agent: { id: string; name: string };
   result: string | null;
+  attachments?:unknown[];
   error: string | null;
 }
 const TERMINAL = new Set(["completed", "failed", "cancelled"]);
@@ -36,7 +38,7 @@ export function askAgentTool(baseUrl: string, token: () => string, runId: string
     });
     if (!response.ok) {
       const error = (await response.json().catch(() => ({}))) as { detail?: unknown };
-      throw new Error(typeof error.detail === "string" ? error.detail.slice(0, 300) : "委托失败，请稍后重试或自己完成");
+      throw new RuntimeError(errorInfo(error) ?? httpErrorInfo(response.status,typeof error.detail === "string" ? error.detail.slice(0,300) : "委托失败，请稍后重试或自己完成","delegation"));
     }
     return (await response.json()) as AgentTask;
   };
@@ -81,7 +83,7 @@ export function askAgentTool(baseUrl: string, token: () => string, runId: string
         task = await call("GET", `/agent/tasks/${task.id}?wait=${poll}`, undefined, signal, (poll + 15) * 1000);
       }
       checkFailure(task);
-      const result = task.result?.trim() || "（对方没有返回文字结果）";
+      const result = (task.result?.trim() || "（对方没有返回文字结果）")+(task.attachments?.length ? "\n报告文件引用："+JSON.stringify(task.attachments) : "");
       return text(`「${name}」的结果：\n${result.length > RESULT_LIMIT ? `${result.slice(0, RESULT_LIMIT)}\n…（结果过长，已截断）` : result}`, task);
     },
   };

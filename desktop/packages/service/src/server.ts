@@ -1,3 +1,4 @@
+import { errorInfo, httpErrorInfo } from "@pi-bot/runtime-contracts";
 import { protectWindowsDirectory, nativeWindows } from './windows.js';
 import { createServer, type Socket, connect } from 'node:net';
 import { mkdirSync, chmodSync, readFileSync, writeFileSync, existsSync, unlinkSync, lstatSync } from 'node:fs';
@@ -53,7 +54,7 @@ const server = createServer(socket => {
         }
         if (typeof packet.id !== 'string' || packet.id.length > 100 || !Object.hasOwn(schemas, packet.method) || ++inFlight > 32) { socket.destroy(); return; }
         void Promise.resolve().then(() => application.call(packet.method as Method, parseInput(packet.method as Method, packet.input))).then(result => send(socket, { id: packet.id, result })).catch(error => {
-          send(socket, { id: packet.id, error: error instanceof Error ? error.message : '请求失败' });
+          send(socket, { id: packet.id, error: error instanceof Error ? error.message : '请求失败', error_info: errorInfo(error) ?? httpErrorInfo(500,'请求失败','local-service') });
         }).finally(() => { inFlight--; });
       } catch { socket.destroy(); return; }
     }

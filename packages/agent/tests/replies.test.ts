@@ -54,9 +54,9 @@ test("explicit replies publish before the final response, redact secrets and sur
   }
 });
 
-test("answers deduplicate exact final echoes and preserve additional detail", () => {
+test("explicit answers are authoritative independently of final text", () => {
   const replies = [{ phase: "answer" as const, text: "完成了。" }, { phase: "opening" as const, text: "先检查。" }];
   assert.equal(replyAnswer(replies, "完成了。"), "完成了。");
-  assert.equal(replyAnswer(replies, "下一步重测。"), "完成了。\n\n下一步重测。");
+  assert.equal(replyAnswer(replies, "下一步重测。"), "完成了。");
   assert.equal(replyAnswer([], "    print(1)\n"), "    print(1)\n", "Markdown indentation must survive publication");
 });

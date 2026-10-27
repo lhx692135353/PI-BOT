@@ -8,8 +8,19 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "noEmit": true,
-    "types": ["node"],
-    "lib": ["ES2023", "DOM"]
+    "types": [
+      "node"
+    ],
+    "lib": [
+      "ES2023",
+      "DOM"
+    ]
   },
-  "include": ["packages/**/*.ts", "server/src/**/*.ts", "server/tests/**/*.ts", "server/scripts/**/*.ts"]
+  "include": [
+    "packages/**/*.ts",
+    "server/src/**/*.ts",
+    "server/tests/**/*.ts",
+    "server/scripts/**/*.ts",
+    "scripts/evals/**/*.ts"
+  ]
 }

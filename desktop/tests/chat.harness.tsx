@@ -17,6 +17,7 @@ const user: Message = { ...reply, id: 'user', seq: 1, role: 'user', content: '�
 let requests = 0;
 window.agent = {
   call: async (method, input: any) => {
+    if(method === 'reportOpen')return {__runtime_reply:2,ok:true,result:{url:'https://report.test/preview'}};
     if (method !== 'taskConversation') return {};
     requests++;
     if (requests === 1) throw new Error('连接暂时中断');
@@ -27,11 +28,11 @@ window.agent = {
     ];
     return { task_id: TASK, status: 'completed', total: 3, bots: [{ id: A, name: bot.name, avatar: DEFAULT_AVATAR }, { id: B, name: '检查助手', avatar: DEFAULT_AVATAR }], messages: input.after ? entries.slice(2) : entries.slice(0, 2), next_after: input.after ? 3 : 2, has_more: !input.after };
   },
-  subscribe: () => () => {}, computerName: async () => '', defaultServerUrl: async () => '', openLibrary: async () => {}, openExternal: async () => {},
+  subscribe: () => () => {}, computerName: async () => '', defaultServerUrl: async () => '', openLibrary: async () => {}, openExternal: async url => { (window as any).__reportOpened=url; },
 };
 const root = createRoot(document.getElementById('root')!);
 function render() { root.render(<div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}><Timeline bot={bot} messages={[user, reply]} hasMore={false} mood="working" online onLoadMore={() => {}} onSent={() => {}} onOpenBot={() => {}} /></div>); }
 render();
 (window as any).__chatHarness = {
-  finish() { reply = { ...reply, content: answer.text, status: 'completed', reply_segments: [opening, answer], agent_tasks: reply.agent_tasks?.map(t => ({ ...t, status: 'completed' })) }; bot.activity = { status: null, tool: null, summary: null, running_count: 0, queued_count: 0 }; render(); },
+  finish() { reply = { ...reply, attachments:[{id:TASK,title:'服务状态与显存压力测试完整报告',name:'report.md',mime:'text/markdown',size:16400,created_at:now,status:'ready'}], content: answer.text, status: 'completed', reply_segments: [opening, answer], agent_tasks: reply.agent_tasks?.map(t => ({ ...t, status: 'completed' })) }; bot.activity = { status: null, tool: null, summary: null, running_count: 0, queued_count: 0 }; render(); },
 };

@@ -179,7 +179,6 @@ export async function maintainMemory(
             (x: unknown): x is string =>
               typeof x === "string" &&
               x.length <= 40 &&
-              !/[\d@/:]/.test(x) &&
               !scanContent(x),
           )
           .slice(0, 10);

@@ -1,0 +1,49 @@
+{
+  "version": 2,
+  "error_codes": [
+    "invalid_request",
+    "unauthorized",
+    "forbidden",
+    "not_found",
+    "conflict",
+    "unavailable",
+    "unsupported",
+    "timeout",
+    "session_expired",
+    "session_occupied",
+    "transport_closed",
+    "cancelled",
+    "result_unknown",
+    "internal"
+  ],
+  "artifact_fields": [
+    {
+      "name": "id",
+      "type": "string"
+    },
+    {
+      "name": "title",
+      "type": "string"
+    },
+    {
+      "name": "name",
+      "type": "string"
+    },
+    {
+      "name": "mime",
+      "type": "string"
+    },
+    {
+      "name": "size",
+      "type": "number"
+    },
+    {
+      "name": "created_at",
+      "type": "string"
+    },
+    {
+      "name": "status",
+      "type": "ready"
+    }
+  ]
+}

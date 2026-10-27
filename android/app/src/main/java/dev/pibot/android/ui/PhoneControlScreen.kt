@@ -258,7 +258,7 @@ fun PhoneControlScreen(repository: PiBotRepository, botId: String?, fixedDeviceI
                     if (deviceId == id) {
                         frame = null
                         previewLoading = false
-                        previewError = phonePreviewHelp(errorText(e))
+                        previewError = phonePreviewHelp(e)
                     }
                 }
                 delay(650)

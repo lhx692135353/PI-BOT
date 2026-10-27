@@ -1,3 +1,4 @@
+import { RuntimeError, errorInfo } from "@pi-bot/runtime-contracts";
 import type { DesktopBridge, Method } from '../../../packages/protocol/src/index.js';
 
 declare global { interface Window { agent: DesktopBridge } }
@@ -7,7 +8,17 @@ function agent(): DesktopBridge {
 }
 /** Resolved on use so renderer modules can be imported without a preload bridge. */
 export const bridge: DesktopBridge = {
-  call: (method, input) => agent().call(method, input),
+  call: async (method,input) => {
+    // Construct errors in the renderer. Electron strips custom Error properties
+    // when exceptions cross contextBridge, so IPC carries a plain envelope.
+    const result=await agent().call(method,input);
+    if(result && typeof result === "object" && "__runtime_reply" in result){
+      const reply=result as {__runtime_reply:unknown;ok?:boolean;result?:unknown;error_info?:unknown};
+      if(!reply.ok){const info=errorInfo(reply);if(info)throw new RuntimeError(info);throw new Error("操作失败");}
+      return reply.result;
+    }
+    return result;
+  },
   subscribe: listener => agent().subscribe(listener),
   computerName: () => agent().computerName(),
   defaultServerUrl: () => agent().defaultServerUrl(),

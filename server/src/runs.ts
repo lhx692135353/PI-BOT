@@ -1,3 +1,4 @@
+import { errorInfo } from "@pi-bot/runtime-contracts";
 import { taskMessage } from "./task-conversation.js";
 import { recordReply, replySchema } from "./replies.js";
 import { randomUUID } from "node:crypto";
@@ -57,6 +58,7 @@ export async function dispatchDevice(db: Database, s: Settings, hub: Hub, runId:
 
 const live = new Map<string, { content: string; written: number }>();
 const runEvent = z.discriminatedUnion("kind", [
+  z.object({kind:z.literal("manifest"),tools:z.array(z.string().max(100)).max(200)}),
   observationSchema.extend({kind:z.literal('observation')}),
   z.object({ kind: z.literal("started") }),
   replySchema.extend({ kind: z.literal("reply") }),
@@ -70,6 +72,7 @@ const runEvent = z.discriminatedUnion("kind", [
     name: z.string().max(80),
     state: z.enum(["running", "completed", "failed"]),
     summary: z.string().max(2000).optional(),
+    resource_id:z.string().max(200).optional(),target_id:z.string().max(200).optional(),
   }),
   z.object({
     kind: z.literal("approval"),
@@ -81,6 +84,7 @@ const runEvent = z.discriminatedUnion("kind", [
     kind: z.literal("done"),
     state: z.enum(["completed", "failed", "cancelled"]),
     error: z.string().max(500).nullish(),
+    error_info:z.unknown().optional(),
     text: z.string().max(400000).optional(),
   }),
 ]);
@@ -140,7 +144,7 @@ export async function handleRunEvent(
     live.delete(runId);
     await db.tx(async (tx) => {
       if (!(await own(tx))) return;
-      await finishRun(tx, runId, e.state, e.error ?? "电脑运行失败", content);
+      await finishRun(tx, runId, e.state, e.error ?? "电脑运行失败", content,new Date(),errorInfo(e));
     });
     return;
   }
@@ -152,6 +156,7 @@ export async function handleRunEvent(
       await tx.notify({ user_id: run.user_id, bot_id: run.bot_id });
       return null;
     }
+    if (e.kind === "manifest") { await tx.rows("UPDATE bot_runs SET tool_manifest=$2 WHERE run_id=$1",[run.run_id,JSON.stringify(e.tools)]);return null; }
     if (e.kind === "reply") { await recordReply(tx, run, e); return null; }
     if (e.kind === "ui") { await recordUi(tx,run,e.messages); return null; }
     if (e.kind === "tool") {

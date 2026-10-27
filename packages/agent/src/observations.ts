@@ -73,7 +73,7 @@ export function observationExtension(
       const started = new Date().toISOString();
       running.set(e.toolCallId, {
         name: e.toolName,
-        input: e.args,
+        input: e.toolName === "publish_report" ? { title: (e.args as any)?.title, summary: (e.args as any)?.summary, content: "[report body omitted]" } : e.args,
         started,
         generation,
       });
@@ -84,7 +84,7 @@ export function observationExtension(
         generation_id: generation,
         started_at: started,
         ended_at: started,
-        input: e.args,
+        input: e.toolName === "publish_report" ? { title: (e.args as any)?.title, summary: (e.args as any)?.summary, content: "[report body omitted]" } : e.args,
         incomplete: true,
         phase: "start",
       });

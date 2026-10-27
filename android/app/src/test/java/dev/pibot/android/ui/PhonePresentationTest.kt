@@ -4,26 +4,14 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class PhonePresentationTest {
-    @Test fun expiredPreviewDoesNotAskForTakeover() {
-        val help = phonePreviewHelp("人工控制会话已失效")
-        assertTrue(help.contains("版本"))
-        assertTrue(help.contains("无需先接管"))
-    }
-    @Test fun unknownMethodHasUpgradeGuidance() {
-        assertTrue(phonePreviewHelp("Unknown method phone.preview").contains("管理员"))
-    }
-    @Test fun offlineAndTimeoutOfferRecovery() {
-        assertTrue(phonePreviewHelp("device offline").contains("正在运行"))
-        assertTrue(phonePreviewHelp("request timeout").contains("超时"))
-    }
-    @Test fun authorizationDoesNotSuggestReinstall() {
-        assertTrue(phonePreviewHelp("403 unauthorized").contains("授权"))
-        assertFalse(phonePreviewHelp("403 unauthorized").contains("重装"))
-    }
-    @Test fun rawErrorsAreNeverDisplayed() {
-        val raw = "https://private.example/?token=secret device-id=private-id"
-        assertFalse(phonePreviewHelp(raw).contains(raw))
-        assertFalse(phonePreviewHelp(raw).contains("secret"))
+    @Test fun typedErrorsDoNotDependOnWording() {
+        fun error(code:String) = dev.pibot.android.data.ApiException(400,"arbitrary wording",code)
+        assertTrue(phonePreviewHelp(error("unsupported")).contains("检查"))
+        assertTrue(phonePreviewHelp(error("unavailable")).contains("离线"))
+        assertTrue(phonePreviewHelp(error("timeout")).contains("超时"))
+        assertTrue(phonePreviewHelp(error("forbidden")).contains("授权"))
+        assertFalse(phonePreviewHelp(Exception("token=secret")).contains("secret"))
+        assertEquals(phonePreviewHelp(Exception("会话已失效")),phonePreviewHelp(Exception("random")))
     }
     @Test fun availabilityExplainsEveryDisabledState() {
         assertTrue(phoneAvailabilityHint(false, false, false, false).contains("选择"))

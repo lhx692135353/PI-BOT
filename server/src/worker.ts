@@ -1,3 +1,4 @@
+import { errorInfo, type AppError } from "@pi-bot/runtime-contracts";
 import { recordReply } from "./replies.js";
 import { randomUUID } from "node:crypto";
 import { CONVERSATION_TIMEOUT_MS } from "@pi-bot/agent";
@@ -75,6 +76,7 @@ export class Worker {
     const controller = new AbortController();
     this.controllers.add(controller);
     const owner = await this.db.tx((tx) => tx.get("bot_runs", job.run_id));
+    let errorDetails:AppError|undefined;
     let content = "",
       state: "completed" | "failed" | "cancelled" = "failed",
       error: string | null = "模型请求失败，请稍后重试",
@@ -147,6 +149,8 @@ export class Worker {
           } else if(e.type === "observation") {
             const {type,...observation}=e;
             await this.db.tx(async tx=>{const r=await tx.get("bot_runs",job.run_id);if(ours(r))await recordObservation(tx,r,observation,this.s.tracingEnabled);}).catch(()=>{});
+          } else if (e.type === "manifest") {
+            await this.db.tx(async tx=>{const r=await tx.get("bot_runs",job.run_id);if(ours(r))await tx.rows("UPDATE bot_runs SET tool_manifest=$2 WHERE run_id=$1",[r.run_id,JSON.stringify(e.tools)]);});
           } else if (e.type === "reply") {
             await this.db.tx(async tx => { const r = await tx.get("bot_runs", job.run_id); if (ours(r)) await recordReply(tx, r, e); });
           } else if (e.type === "instruction_ack") {
@@ -173,6 +177,7 @@ export class Worker {
             sawDone = true;
             state = e.state;
             error = e.error ?? null;
+            errorDetails=errorInfo(e);
             if (typeof e.text === "string") content = e.text;
           }
         }
@@ -194,7 +199,7 @@ export class Worker {
       await this.db.tx(async (tx) => {
         const r = await tx.get("bot_runs", job.run_id);
         if (!ours(r)) return;
-        await finishRun(tx, job.run_id, state, error, content);
+        await finishRun(tx, job.run_id, state, error, content,new Date(),errorDetails);
       });
   }
 

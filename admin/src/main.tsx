@@ -391,6 +391,16 @@ function ModelForm({ model, onClose, onSaved }: { model?: Model; onClose: () => 
           </label>
         )}
         {known && <p className="muted small">{form.provider === "xai" ? "打开后，任务里的联网搜索使用 xAI，检索网页和 X。" : "打开后，任务里的联网搜索使用百炼的网页检索。模型需要支持这项能力。"}</p>}
+        <label className="check"><input type="checkbox" checked={form.capabilities?.vision ?? true} onChange={e=>set({capabilities:{chat:true,voice:false,tools:true,reasoning:"unknown",...form.capabilities,vision:e.target.checked}})}/>支持图片输入</label>
+        <label className="check"><input type="checkbox" checked={form.capabilities?.tools ?? true} onChange={e=>set({capabilities:{chat:true,vision:true,voice:false,reasoning:"unknown",...form.capabilities,tools:e.target.checked}})}/>支持原生工具调用</label>
+        <label>推理模式
+          <select value={form.capabilities?.reasoning ?? "unknown"} onChange={e => set({capabilities:{chat:true,vision:true,voice:false,tools:true,...form.capabilities,reasoning:e.target.value as "none"|"configurable"|"required"|"unknown"}})}>
+            <option value="unknown">未确认，遵循服务商默认</option><option value="none">无推理模式</option><option value="configurable">可配置</option><option value="required">必须开启</option>
+          </select>
+        </label>
+        {form.capabilities?.reasoning === "configurable" && <label>聊天关闭推理的参数（JSON，按服务商文档填写）
+          <input defaultValue={JSON.stringify(form.capabilities.reasoning_off ?? {})} onBlur={e=>{try{const value=JSON.parse(e.target.value);if(value && typeof value==="object"&&!Array.isArray(value))set({capabilities:{...form.capabilities!,reasoning_off:value}});}catch{e.target.setCustomValidity("请输入 JSON 对象");}}}/>
+        </label>}
         {locked ? (
           <p className="muted small">上下文 {fmt(form.context_window)}，单次输出上限 {fmt(form.max_tokens)}。这两项来自所选模型。</p>
         ) : (
@@ -432,11 +442,11 @@ function ModelsPage() {
   const load = useCallback(() => api.models(), []);
   const { data, error, reload } = useLoad<Model[]>(load);
   const [editing, setEditing] = useState<Model | "new" | null>(null);
-  const [tests, setTests] = useState<Record<string, string>>({});
+  const [tests, setTests] = useState<Record<string, {state:"pending"|"ok"|"error";text:string}>>({});
   const test = async (m: Model) => {
-    setTests((t) => ({ ...t, [m.id]: "测试中…" }));
+    setTests((t) => ({ ...t, [m.id]: {state:"pending",text:"测试中…"} }));
     const r = await api.testModel(m.id).catch((e) => ({ ok: false, error: message(e), latency_ms: 0 }));
-    setTests((t) => ({ ...t, [m.id]: r.ok ? `✓ 可用 · ${r.latency_ms} ms` : `✗ ${"error" in r ? r.error : "失败"}` }));
+    setTests((t) => ({ ...t, [m.id]: {state:r.ok?"ok":"error",text:r.ok?`可用 · ${r.latency_ms} ms` : `${"error" in r ? r.error : "失败"}`} }));
   };
   return (
     <>
@@ -471,7 +481,7 @@ function ModelsPage() {
                 {fmt(m.context_window)} / 输出 {fmt(m.max_tokens)}
               </dd>
             </dl>
-            {tests[m.id] && <p className={tests[m.id].startsWith("✗") ? "error small" : "ok small"}>{tests[m.id]}</p>}
+            {tests[m.id] && <p className={tests[m.id].state === "error" ? "error small" : "ok small"}>{tests[m.id].text}</p>}
             <div className="actions">
               <button className="ghost" onClick={() => test(m)}>
                 测试

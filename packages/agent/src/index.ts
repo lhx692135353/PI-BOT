@@ -1,3 +1,6 @@
+import { reportContextExtension } from "./reports.js";
+export { reportTools } from "./reports.js";
+import { internalTool, toolDescriptor, type ModelCapabilities, RuntimeError } from "@pi-bot/runtime-contracts";
 import { mkdirSync } from "node:fs";
 import { MODEL_TIMEOUT_MS } from "./timeouts.js";
 export { CONVERSATION_TIMEOUT_MS, MODEL_TIMEOUT_MS } from "./timeouts.js";
@@ -15,7 +18,7 @@ import {
   InMemoryCredentialStore,
   InMemoryModelsStore,
 } from "@earendil-works/pi-ai";
-import { ExecutionReceipts, RECEIPT_CORRECTION } from "./execution-receipts.js";
+
 import { replyTool, replyAnswer, type ReplyEvent } from "./replies.js";
 export { replyAnswer, type ReplyEvent, type ReplySegment } from "./replies.js";
 import { TASK_TOOL_NAMES } from "./tasks.js";
@@ -33,6 +36,7 @@ export interface ModelConfig {
   name: string;
   baseUrl: string;
   modelId: string;
+  capabilities?: Partial<ModelCapabilities>;
   contextWindow: number;
   maxTokens: number;
 }
@@ -46,6 +50,8 @@ export interface ToolActivity {
   name: string;
   state: "running" | "completed" | "failed";
   summary?: string;
+  resource_id?: string;
+  target_id?: string;
 }
 export interface BotAgentOptions {
   model: ModelConfig;
@@ -65,8 +71,10 @@ export interface BotAgentOptions {
   skills?: SkillOptions;
   redactSecrets?: string[];
   onTool?: (activity: ToolActivity) => void;
+  onManifest?: (tools: string[]) => void;
+  onAction?: (activity: ToolActivity) => void;
   onReply?: (reply: ReplyEvent) => void | Promise<void>;
-  verifyExecutionClaims?: boolean;
+
   /** Completed, brief remarks before tool use, kept separate from the answer. */
   onProgress?: (lines: string[]) => void;
   /** Stop a model stream that sends no events; running tools are exempt. */
@@ -128,7 +136,6 @@ export class PiAgent implements AgentHandle {
     private privateSkills = false,
     private replies: ReplyEvent[] = [],
     private replyClock = { started: 0 },
-    private receipts?: ExecutionReceipts,
   ) {
     this.tools = session.getActiveToolNames();
   }
@@ -138,8 +145,8 @@ export class PiAgent implements AgentHandle {
   async prompt(text: string, onText: (text: string) => void, images?: ChatImage[]) {
     this.replies.length = 0;
     this.cancelled = false;
-    this.receipts?.reset();
     this.replyClock.started = performance.now();
+    let reportSummary: string | undefined;
     let content = "",
       failed = false,
       aborted = false,
@@ -159,24 +166,26 @@ export class PiAgent implements AgentHandle {
       if (e.type === "tool_execution_end" && e.toolName === "show_ui" && !e.isError) renderedUi = true;
       if (e.type === "tool_execution_end") {
         runningTools.delete(String(e.toolCallId ?? e.toolName));
-        if (!e.isError) this.receipts?.record(e.toolName, e.result);
+        if (!e.isError && e.toolName === "publish_report" && e.result?.details?.artifact?.id) reportSummary = String(e.result.details.summary);
       }
       armIdleTimer();
       if (event.type === "message_start" && event.message.role === "assistant") {
         content = "";
       }
-      if (e.type === "tool_execution_start" && !isInternalTool(e.toolName) && !TASK_TOOL_NAMES.has(e.toolName) && e.toolName !== "send_reply")
+      if (e.type === "tool_execution_start" )
         this.onTool?.({
           id: String(e.toolCallId ?? e.toolName),
           name: e.toolName,
           state: "running",
-          summary: this.redact(summarize(e.args)),
+          summary: e.toolName === "publish_report" || internalTool(e.toolName) ? undefined : this.redact(summarize(e.args)),
         });
-      if (e.type === "tool_execution_end" && !isInternalTool(e.toolName) && !TASK_TOOL_NAMES.has(e.toolName) && e.toolName !== "send_reply")
+      if (e.type === "tool_execution_end" )
         this.onTool?.({
           id: String(e.toolCallId ?? e.toolName),
           name: e.toolName,
           state: e.isError ? "failed" : "completed",
+          resource_id: e.result?.details?.task?.id ?? e.result?.details?.artifact?.id ?? e.result?.details?.id,
+          target_id: e.result?.details?.task?.agent?.id ?? e.result?.details?.agent?.id,
         });
       if (
         event.type === "message_update" &&
@@ -186,7 +195,7 @@ export class PiAgent implements AgentHandle {
         // Tool calls may arrive after the opening text. Buffer private-skill
         // sessions until the message is classified, so management remarks
         // cannot leak through transient WebSocket deltas.
-        if (!this.privateSkills && !this.receipts) onText(this.redact(content));
+        if (!this.privateSkills) onText(this.redact(content));
       }
       if (event.type === "message_end" && event.message.role === "assistant") {
         const msg = event.message;
@@ -197,18 +206,15 @@ export class PiAgent implements AgentHandle {
         // Goal operations are hidden from the tool log, but their user-facing
         // opening reply must survive just like a task-status query. Private
         // skill/memory/checkpoint remarks still stay out of the conversation.
-        const privateRemark = msg.content.some(c => c.type === "toolCall" && isInternalTool(c.name) && c.name !== "goal_manage") || msg.content.some(c => c.type === "toolCall" && c.name === "send_reply");
-        const unsupported = this.receipts?.unsupported(content) ?? false;
-        if (this.receipts && unsupported) this.receipts.rejected = true;
-        if (!privateRemark && !unsupported) {
-          if (this.receipts && content.trim() && !msg.content.some(c => c.type === "toolCall")) this.receipts.rejected = false;
+        const privateRemark = reportSummary !== undefined || msg.content.some(c=>c.type === "toolCall" && toolDescriptor(c.name)?.fileOutput) || msg.content.some(c => c.type === "toolCall" && isInternalTool(c.name) && c.name !== "goal_manage") || msg.content.some(c => c.type === "toolCall" && c.name === "send_reply");
+        if (!privateRemark) {
           onText(this.redact(content));
         }
         failed = msg.stopReason === "error";
         aborted = msg.stopReason === "aborted";
         if (!failed && !aborted && msg.content.some((c) => c.type === "toolCall")) {
           const remark = this.redact(content).trim().slice(0, PROGRESS_CHARS);
-          if (!privateRemark && !unsupported && remark && !progress.includes(remark) && progress.length < PROGRESS_SEGMENTS) {
+          if (!privateRemark && remark && !progress.includes(remark) && progress.length < PROGRESS_SEGMENTS) {
             progress.push(remark);
             this.onProgress?.([...progress]);
           }
@@ -219,22 +225,15 @@ export class PiAgent implements AgentHandle {
       }
       if (event.type === "agent_settled") settled = true;
     });
-    const unfulfilledRelay = () => this.receipts?.unfulfilledRelay([content, ...this.replies.map(r => r.text)].join("\n")) ?? false;
     try {
       await this.session.prompt(text, { expandPromptTemplates: false, images: modelImages(images) });
       if (!settled) await this.session.waitForIdle();
       if (this.cancelled) throw new Error(CANCELLED);
-      if (!failed && !aborted && this.receipts && (this.receipts.rejected || this.receipts.unsupported(content) || unfulfilledRelay())) {
-        content = ""; settled = false;
-        await this.session.prompt(RECEIPT_CORRECTION, { expandPromptTemplates: false });
-        if (!settled) await this.session.waitForIdle();
-        if (this.receipts.rejected || this.receipts.unsupported(content) || unfulfilledRelay()) throw new Error("模型未取得真实任务回执，无法确认已启动、已发送或已执行，请重试");
-      }
-      if (timedOut) throw new Error("模型长时间没有响应，已停止本次任务，请稍后重试");
+      if (timedOut) throw new RuntimeError({code:"timeout",scope:"model",retryable:true,outcome:"unknown",message:"模型长时间没有响应，已停止本次任务，请稍后重试"});
       if (aborted || this.cancelled) throw new Error(CANCELLED);
-      if (failed) throw new Error("模型请求失败，请稍后重试或联系管理员检查模型配置");
-      content = replyAnswer(this.replies, content);
-      if (!content && !renderedUi && !this.replies.length) throw new Error("模型未返回文本");
+      if (failed) throw new RuntimeError({code:"unavailable",scope:"model",retryable:true,outcome:"unknown",message:"模型请求失败，请稍后重试或联系管理员检查模型配置"});
+      content = reportSummary ?? replyAnswer(this.replies, content);
+      if (!content && !renderedUi && !this.replies.length) throw new RuntimeError({code:"internal",scope:"model",retryable:false,outcome:"unknown",message:"模型未返回文本"});
       return this.redact(content);
     } finally {
       clearTimeout(idleTimer);
@@ -254,15 +253,13 @@ export class PiAgent implements AgentHandle {
 }
 
 export const createBotAgent: AgentFactory = async (o) => {
-  if (o.tools.some(tool => isInternalTool(tool.name) && !["goal_manage", "goal_finish"].includes(tool.name))) throw new Error("内部工具名称不能由外部工具覆盖");
+  if(o.model?.capabilities?.tools === false)throw new RuntimeError({code:"unsupported",scope:"model",retryable:false,outcome:"not_started",message:"当前模型未启用原生工具调用，请配置支持工具调用的模型"});
+  if (o.tools.some(tool => toolDescriptor(tool.name)?.platformOwned && tool.name !== "send_reply")) throw new Error("内部工具名称不能由外部工具覆盖");
   if (o.tools.some(t => t.name === "send_reply")) throw new Error("公开回复工具不能由外部工具覆盖");
   const replies: ReplyEvent[] = [];
-  const receipts = o.verifyExecutionClaims ? new ExecutionReceipts() : undefined;
   const replyClock = { started: 0 };
   const redact = redactor([o.apiKey, ...(o.redactSecrets ?? [])]);
   const tools = [...o.tools, ...(o.onReply ? [replyTool(async reply => {
-    if (receipts?.unsupported(reply.text)) { receipts.rejected = true; throw new Error(RECEIPT_CORRECTION); }
-    if (receipts && reply.phase === "answer") receipts.rejected = false;
     const safe = { ...reply, text: redact(reply.text), elapsed_ms: Math.max(0, Math.round(performance.now() - replyClock.started)) };
     if (replies.some(r => r.id === safe.id)) return;
     await o.onReply!(safe);
@@ -286,7 +283,7 @@ export const createBotAgent: AgentFactory = async (o) => {
         id: o.model.modelId,
         name: o.model.name,
         reasoning: false,
-        input: ["text", "image"],
+        input: o.model.capabilities?.vision === false ? ["text"] : ["text", "image"],
         contextWindow: o.model.contextWindow,
         maxTokens: o.model.maxTokens,
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
@@ -323,7 +320,7 @@ export const createBotAgent: AgentFactory = async (o) => {
     cwd: o.cwd, agentDir: o.agentDir, settingsManager, systemPrompt: o.systemPrompt,
     noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true,
     appendSystemPromptOverride: () => [],
-    extensionFactories: [...(o.skills ? [{ name: "bot-skills", factory: skillsExtension(o.skills) }] : []),...(o.memory?[{name:"bot-memory",factory:memoryExtension(o.memory)}]:[]),...(o.runId?[{name:"bot-observation",factory:observationExtension(o.runId,o.onObservation)}]:[])],
+    extensionFactories: [{name:"report-context",factory:reportContextExtension},...(o.skills ? [{ name: "bot-skills", factory: skillsExtension(o.skills) }] : []),...(o.memory?[{name:"bot-memory",factory:memoryExtension(o.memory)}]:[]),...(o.runId?[{name:"bot-observation",factory:observationExtension(o.runId,o.onObservation)}]:[])],
   });
   await resourceLoader.reload();
   if (resourceLoader.getExtensions().errors.length) throw new Error("内部能力插件加载失败");
@@ -346,18 +343,18 @@ export const createBotAgent: AgentFactory = async (o) => {
     session.dispose();
     throw new Error("工具隔离校验失败");
   }
+  o.onManifest?.(active);
   return new PiAgent(
     session,
     runtime,
     provider,
     redactor([o.apiKey, ...(o.redactSecrets ?? [])]),
-    o.onTool,
+    activity => { o.onAction?.(activity); if(!internalTool(activity.name))o.onTool?.(activity); },
     o.onProgress,
     o.modelIdleTimeoutMs,
     !!o.skills || !!o.onReply,
     replies,
     replyClock,
-    receipts,
   );
 };
 

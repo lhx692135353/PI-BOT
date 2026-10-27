@@ -58,7 +58,6 @@ test("opening persists while running, retries do not duplicate, answers replay o
   const followup = await parent();
   await db.tx(async tx => {
     const context = await buildContext(tx, s, await tx.get("bot_runs", followup.run_id));
-    assert.equal(context.verify_execution_claims, true);
     assert.equal(context.history.filter(h => h.content === "服务正常。").length, 1);
     assert.ok(!context.history.some(h => h.content.includes("不能公开")));
     await finishRun(tx, followup.run_id, "completed", null, "好。");

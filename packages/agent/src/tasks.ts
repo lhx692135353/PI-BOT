@@ -1,3 +1,4 @@
+import { RuntimeError, errorInfo, httpErrorInfo } from "@pi-bot/runtime-contracts";
 import { Type } from "typebox";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 
@@ -11,10 +12,10 @@ export function taskTools(baseUrl: string, token: () => string, runId: string): 
       body: body ? JSON.stringify(body) : undefined, redirect: "error", signal: AbortSignal.timeout(15000),
     });
     const data = await r.json();
-    if (!r.ok) throw new Error(typeof data.detail === "string" ? data.detail : "任务操作失败，请稍后重试");
+    if (!r.ok) throw new RuntimeError(errorInfo(data) ?? httpErrorInfo(r.status,typeof data.detail === "string" ? data.detail : "任务操作失败，请稍后重试","task"));
     return data;
   };
-  const result = (data: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(data) }], details: {} });
+  const result = (data: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(data) }], details: data });
   return [
     {
       name: "start_task", label: "安排后台任务",

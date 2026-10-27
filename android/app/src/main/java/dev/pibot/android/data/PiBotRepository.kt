@@ -90,6 +90,12 @@ class PiBotRepository(
     /** A call failure to show once, after the call itself has gone. */
     val voiceNotice: StateFlow<String?> = _voiceNotice.asStateFlow()
 
+    suspend fun reportOpen(id: String): String {
+        val account = _session.value ?: error("请先登录")
+        val result = withContext(io) { api.reportOpen(ServerUrl(account.serverUrl),account.token,id) }
+        return account.serverUrl.trimEnd('/') + (result["url"]?.jsonPrimitive?.content ?: error("结果不可用"))
+    }
+
     suspend fun remoteArtifact(id: String): String {
         val account = _session.value ?: error("请先登录")
         val result = withContext(io) { api.remoteArtifact(ServerUrl(account.serverUrl),account.token,id) }

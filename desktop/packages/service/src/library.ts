@@ -1,3 +1,4 @@
+import { toolDescriptor } from "@pi-bot/runtime-contracts";
 import { StringDecoder } from 'node:string_decoder';
 import { libraryFolder, powerShellArgs, validateWindowsPath, windowsHelper } from './windows.js';
 import { spawn } from 'node:child_process';
@@ -257,7 +258,7 @@ export function libraryTools(sandbox: Sandbox, hooks: ToolHooks): ToolDefinition
       },
     },
   ] as ToolDefinition[];
-  return tools.map(tool => ['write_file', 'edit_file', 'run_command'].includes(tool.name) ? {
+  return tools.map(tool => toolDescriptor(tool.name)?.effect === 'write' ? {
     ...tool,
     execute: (id, args, signal, update, ctx) => withLibraryMutation(sandbox.root, signal, () => tool.execute(id, args, signal, update, ctx)),
   } : tool);

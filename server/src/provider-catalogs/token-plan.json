@@ -1,0 +1,195 @@
+{
+  "version": 1,
+  "source": "Token Plan seed; administrators can enter any model ID",
+  "models": [
+    {
+      "id": "auto",
+      "context_window": null,
+      "max_tokens": null,
+      "capabilities": {
+        "chat": true,
+        "voice": false
+      }
+    },
+    {
+      "id": "qwen3.8-max",
+      "context_window": null,
+      "max_tokens": null,
+      "capabilities": {
+        "chat": true,
+        "voice": false
+      }
+    },
+    {
+      "id": "qwen3.8-flash",
+      "context_window": null,
+      "max_tokens": null,
+      "capabilities": {
+        "chat": true,
+        "voice": false
+      }
+    },
+    {
+      "id": "qwen3.7-max",
+      "context_window": null,
+      "max_tokens": null,
+      "capabilities": {
+        "chat": true,
+        "voice": false
+      }
+    },
+    {
+      "id": "qwen3.7-plus",
+      "context_window": null,
+      "max_tokens": null,
+      "capabilities": {
+        "chat": true,
+        "voice": false
+      }
+    },
+    {
+      "id": "qwen3.6-plus",
+      "context_window": null,
+      "max_tokens": null,
+      "capabilities": {
+        "chat": true,
+        "voice": false
+      }
+    },
+    {
+      "id": "qwen3.6-flash",
+      "context_window": null,
+      "max_tokens": null,
+      "capabilities": {
+        "chat": true,
+        "voice": false
+      }
+    },
+    {
+      "id": "deepseek-v4.1-flash",
+      "context_window": null,
+      "max_tokens": null,
+      "capabilities": {
+        "chat": true,
+        "voice": false
+      }
+    },
+    {
+      "id": "deepseek-v4.1-flash-1017",
+      "context_window": null,
+      "max_tokens": null,
+      "capabilities": {
+        "chat": true,
+        "voice": false
+      }
+    },
+    {
+      "id": "deepseek-v4-pro",
+      "context_window": null,
+      "max_tokens": null,
+      "capabilities": {
+        "chat": true,
+        "voice": false
+      }
+    },
+    {
+      "id": "deepseek-v4-pro-0813",
+      "context_window": null,
+      "max_tokens": null,
+      "capabilities": {
+        "chat": true,
+        "voice": false
+      }
+    },
+    {
+      "id": "deepseek-v4-flash-0731",
+      "context_window": null,
+      "max_tokens": null,
+      "capabilities": {
+        "chat": true,
+        "voice": false
+      }
+    },
+    {
+      "id": "kimi-k2.7-code",
+      "context_window": null,
+      "max_tokens": null,
+      "capabilities": {
+        "chat": true,
+        "voice": false
+      }
+    },
+    {
+      "id": "kimi-k2.6",
+      "context_window": null,
+      "max_tokens": null,
+      "capabilities": {
+        "chat": true,
+        "voice": false
+      }
+    },
+    {
+      "id": "kimi-k2.5",
+      "context_window": null,
+      "max_tokens": null,
+      "capabilities": {
+        "chat": true,
+        "voice": false
+      }
+    },
+    {
+      "id": "glm-5.3",
+      "context_window": null,
+      "max_tokens": null,
+      "capabilities": {
+        "chat": true,
+        "voice": false
+      }
+    },
+    {
+      "id": "glm-5.2",
+      "context_window": null,
+      "max_tokens": null,
+      "capabilities": {
+        "chat": true,
+        "voice": false
+      }
+    },
+    {
+      "id": "glm-5.1",
+      "context_window": null,
+      "max_tokens": null,
+      "capabilities": {
+        "chat": true,
+        "voice": false
+      }
+    },
+    {
+      "id": "glm-5",
+      "context_window": null,
+      "max_tokens": null,
+      "capabilities": {
+        "chat": true,
+        "voice": false
+      }
+    },
+    {
+      "id": "MiniMax-M2.5",
+      "context_window": null,
+      "max_tokens": null,
+      "capabilities": {
+        "chat": true,
+        "voice": false
+      }
+    },
+    {
+      "id": "qwen-audio-3.0-realtime-plus",
+      "context_window": null,
+      "max_tokens": null,
+      "capabilities": {
+        "chat": false,
+        "voice": true
+      }
+    }
+  ]
+}

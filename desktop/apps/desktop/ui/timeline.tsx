@@ -24,7 +24,7 @@ const Markdown = memo(function Markdown({ text }: { text: string }) {
 
 function Progress({ lines }: { lines: string[] }) {
   // Older servers and saved history may still include the retired placeholder.
-  const remarks = lines.filter(line => line.replace(/\s/gu, '') !== '好，我来看看，稍后把结果给你。');
+  const remarks = lines;
   if (!remarks.length) return null;
   return (
     <div className="progress" aria-label="任务进度">
@@ -91,16 +91,24 @@ function ConversationDialog({ bot, task, onClose, onOpenBot }: { bot: Bot; task:
   </dialog>;
 }
 
+function ReportFiles({ message }: { message: Message }) {
+  const [error,setError]=useState('');
+  const [opening,setOpening]=useState<string|null>(null);
+  if(!message.attachments?.length)return null;
+  return <div className="report-files">{message.attachments.map(file=><button type="button" className="report-file" key={file.id} disabled={opening===file.id} onClick={()=>{setError('');setOpening(file.id);void call<{url:string}>('reportOpen',{id:file.id}).then(r=>bridge.openExternal(r.url)).catch(e=>setError(errorText(e))).finally(()=>setOpening(null));}}>
+    <span className="report-file-icon" aria-hidden="true">▤</span><span className="report-file-info"><strong>{file.title}</strong><span>Markdown · {file.size<1024 ? `${file.size} B` : `${(file.size/1024).toFixed(1)} KB`} · {time(file.created_at)}</span></span><span className="report-file-action">{opening===file.id?'打开中…':'打开报告 ›'}</span>
+  </button>)}{error&&<p role="alert" className="error">{error}</p>}</div>;
+}
+
 function ReplyBubbles({ message }: { message: Message }) {
   const segments = message.reply_segments ?? [];
-  const texts = new Set(segments.map(s => s.text));
-  const legacy = (message.progress ?? []).filter(t => !texts.has(t));
-  const answers = segments.filter(s => s.phase === 'answer').map(s => s.text).join('\n\n');
-  const tail = message.content && message.content !== answers && !texts.has(message.content) ? message.content : '';
+  const legacy = segments.length ? [] : (message.progress ?? []);
+  const tail = segments.some(s=>s.phase === 'answer') ? '' : message.content;
   return <>
     <Progress lines={legacy} />
     {segments.map(s => <div className="reply-segment" key={s.id}><div className="bubble markdown"><Markdown text={s.text} /></div><time className="meta">{time(s.created_at)}</time></div>)}
     {tail ? <div className="bubble markdown"><Markdown text={tail} /></div> : !segments.length && message.status === 'running' ? <div className="typing"><i /><i /><i /></div> : null}
+    <ReportFiles message={message} />
   </>;
 }
 
@@ -113,6 +121,7 @@ function RelayMessage({ m, onOpenBot }: { m: Message & { from_bot: FromBot }; on
         <span>{from.kind === 'report' ? `${from.name} 的回报` : `来自 ${from.name} 的委托`}</span>
       </button>
       <div className="bubble markdown"><Markdown text={m.content} /></div>
+      <ReportFiles message={m} />
       <span className="meta">{time(m.created_at)}</span>
     </div>
   );

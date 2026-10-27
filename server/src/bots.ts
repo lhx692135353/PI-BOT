@@ -1,10 +1,12 @@
+import { messageAttachments } from "./reports.js";
+import { CONTEXT_DEFAULTS, toolDescriptor, internalTool, type AppError, type ModelCapabilities, ACTIVE_RUN_STATES } from "@pi-bot/runtime-contracts";
 import { replyAnswer, type ReplySegment } from "@pi-bot/agent";
 import { recordReply } from "./replies.js";
 import { taskMessage } from "./task-conversation.js";
 import {targetPrompt} from "./targets.js";
 import { randomUUID } from "node:crypto";
 import { imageBytes, MAX_IMAGES_BYTES, type ChatImage } from '@pi-bot/agent/images';
-import { UI_INSTRUCTIONS, isInternalTool, PROGRESS_CHARS, PROGRESS_SEGMENTS, TASK_TOOL_NAMES, type SkillSummary } from "@pi-bot/agent";
+import { UI_INSTRUCTIONS, PROGRESS_CHARS, PROGRESS_SEGMENTS, type SkillSummary } from "@pi-bot/agent";
 import { skillCatalog } from "./skills.js";
 import { z } from "zod";
 import { SHAPES, COLORS, SCHEMES, DEFAULT_AVATAR, avatarFor } from "@pi-bot/bot-face";
@@ -17,7 +19,7 @@ import { wakeGoals, automationForRun, settleAutomation } from "./automations.js"
 import { recordRun } from "./observations.js";
 import { checkDevice } from './devices.js';
 
-export const ACTIVE = ["queued", "running", "waiting_approval"];
+export const ACTIVE: readonly string[] = ACTIVE_RUN_STATES;
 export const avatarSchema = z.object({
   shape: z.enum(SHAPES),
   color: z.enum(COLORS),
@@ -70,6 +72,7 @@ export const runOut = (r: Row | undefined) =>
         lane: r.lane,
         task_id: r.task_id,
         error: r.error,
+        error_info:r.error_info,
         user_message_id: r.user_message_id,
         assistant_message_id: r.assistant_message_id,
         created_at: r.created_at,
@@ -98,10 +101,11 @@ export const messageOut = (m: Row, tasks: Row[] = []) => ({
   seq: m.seq,
   role: m.role,
   content: m.content,
+  attachments: m.attachments ?? [],
   images: (m.images ?? []).map((image: ChatImage & { id: string }) => ({ id: image.id, name: image.name, mime_type: image.mime_type })),
   status: m.status,
   executor: m.executor,
-  tools: (m.tools ?? []).filter((tool: ToolEvent) => !isInternalTool(tool.name) && !TASK_TOOL_NAMES.has(tool.name)),
+  tools: (m.tools ?? []).filter((tool: ToolEvent) => !internalTool(tool.name)),
   progress: m.progress ?? [],
   reply_segments: m.reply_segments ?? [],
   ui: m.ui ?? null,
@@ -183,10 +187,9 @@ export async function botOut(tx: Tx, b: Row) {
   const queuedCount = queuedRuns.length + unstarted.length;
   const activeTool = running.flatMap(r => r.tools ?? []).findLast(t => t.state === "running");
   const status = approvals.length ? "waiting_approval" : running.length ? "running" : queuedCount ? "queued" : run?.status ?? null;
-  const labels: Record<string, string> = { run_command: "正在运行命令", web_search: "正在查找资料", read_file: "正在阅读文件", write_file: "正在整理文件", edit_file: "正在修改文件" };
   const current = running[0];
   const title = String(current?.title || "").replace(/\s+/g, " ").trim().slice(0, 32);
-  const description = current?.cancel_requested ? "正在停止任务" : title ? (title.startsWith("正在") ? title : `正在${title}`) : current?.origin === "automation" ? "正在检查目标" : labels[activeTool?.name] ?? "正在处理任务";
+  const description = current?.cancel_requested ? "正在停止任务" : title ? `正在${title}` : current?.origin === "automation" ? "正在检查目标" : toolDescriptor(activeTool?.name ?? "")?.label ?? "正在处理任务";
   const activity = { status, tool: activeTool?.name ?? null, running_count: running.length, queued_count: queuedCount,
     summary: approvals.length ? "等你批准访问请求" : running.length > 1 ? `${description}，另有 ${running.length - 1} 个任务` : running.length ? description : queuedCount ? `有 ${queuedCount} 个任务排队中` : run?.origin === "voice" && ACTIVE.includes(run.status) ? "语音通话中" : run && ACTIVE.includes(run.status) ? "正在思考" : null };
 
@@ -419,7 +422,7 @@ export interface RunContext {
   executor: "device" | "cloud";
   operation_target?:string;
   bot: { id: string; name: string; slug: string };
-  model: { id: string; name: string; context_window: number; max_tokens: number };
+  model: { id: string; name: string; context_window: number; max_tokens: number; capabilities?: Partial<ModelCapabilities> };
   system: string;
   history: { role: "user" | "assistant"; content: string; images?: ChatImage[] }[];
   text: string;
@@ -430,7 +433,6 @@ export interface RunContext {
   task_id?: string;
   checkpoint_version?: number;
   observation_enabled?: boolean;
-  verify_execution_claims?: boolean;
   execution_policy?: "any" | "device_only";
   automation_readonly?: boolean;
   deadline_at?: string;
@@ -486,7 +488,7 @@ export function systemPrompt(
   bot: Row,
   memory: string,
   executor: "device" | "cloud",
-  options: { search?: boolean; providerSearch?: "xai" | "bailian"; now?: Date; agents?: Collaborator[]; depth?: number; lane?: "conversation" | "task" } = {},
+  options: { search?: boolean; providerSearch?: "xai" | "bailian"; now?: Date; agents?: Collaborator[]; depth?: number; lane?: "conversation" | "task"; remote?:boolean; quiet?:boolean } = {},
 ) {
   const now = options.now ?? new Date();
   const date = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
@@ -496,7 +498,9 @@ export function systemPrompt(
   if (bot.persona.trim()) parts.push(`你的人设与职责：\n${bot.persona.trim()}`);
   if (memory.trim()) parts.push(`你对之前对话的长期记忆（摘要）：\n${memory.trim()}`);
   parts.push(
-    executor === "device"
+    options.remote
+      ? `执行环境：本轮在云端 Linux 虚机工作，文件与 shell 工具操作虚机。资料库是 /home/pibot/workspaces/${bot.slug}；界面操作前读取当前状态，人工接管时停止界面操作。`
+      : executor === "device"
       ? [
           "执行环境：你在用户的电脑上工作。",
           `你的资料库目录是 ~/pi-bot/${bot.slug}，也是当前工作目录；文件工具中的相对路径都位于资料库内，产出的文件请保存在这里。`,
@@ -509,7 +513,7 @@ export function systemPrompt(
         ].join("\n"),
   );
   if (options.lane === "conversation") parts.push([
-    "你现在处于对话调度通道：持续接话、理解意图、安排工作、查询任务和整理回报。",
+    "你现在处于对话调度通道：持续接话、理解意图、安排工作、查询任务和整理回报。所有执行工作交后台，聊天保持可用。",
     "闲聊和已有依据的简单问题直接回答。凡需要搜索、读写文件、执行命令或较长推理的工作，先用一句简短、具体的话回应用户并说明要核实什么，再立即用 start_task 创建后台任务；成功后简短确认已安排，然后结束当前回合。你自己不能执行这些工作，也不要等待后台完成。",
     "start_task 默认在绑定电脑执行；纯联网搜索或不依赖本地文件的云端处理可指定 execution=cloud。start_task 的 task 必须自包含：用户目标、相关上下文、已有条件、文件位置和期望输出。避免重复创建已有任务。",
     "查询任务用 task_status，结果仅代表记录的活动和更新时间；查询外部训练、部署的最新状态时，另建一个简短的核查任务，不要把缓存当作刚查到的外部进度。",
@@ -520,14 +524,9 @@ export function systemPrompt(
   ].join("\n"));
   parts.push("默认用中文回答；用户使用其他语言时跟随用户。");
   parts.push([
-    "面向用户的交流方式：像同事聊天，用日常语言、短句，先回答用户最关心的结果和下一步。默认结果 1–3 条短消息，每条讲一件事，通常一两句话；用户明确要求完整报告、代码或详细依据时再展开。",
-    "不要把工作报告原样转给用户，不主动堆表格、日志、内部任务代号、参数串和缩写。将内部名称换成它代表的事情；必要术语先用一句普通话解释。技术细节保留在任务记录，用户要时再给。",
-    "说得简单也必须准确：数字、单位、比例、因果和不确定性不能变。例如显存使用上限从 60% 调到 85%，应直说，不能说成恢复砍掉的一半。猜测要说明尚未确认，不能说成事实。",
-    "安排或委托任务时，title 用用户能看懂的简短动作描述，例如检查显存占用，不放内部代号、命令和参数。",
-    "执行事实：必须先取得真实工具回执才能声称已创建任务、已执行变更、刚查到了状态。start_task 成功只代表已安排，不能说成已完成；查进度使用 task_status，外部最新状态另起核查任务。没有任务或核查回执时必须明确尚未启动或尚未核实，不得把计划、预计时间、旧历史说成刚发生的事实。承诺持续盯着前先创建真实后台任务或目标。",
-    "已有明确授权就继续做，不重复问用户要不要开始；只有缺少必要信息、权限或超出授权才询问。不要用固定套话，也不要每次都加标题、总结和结尾提问。",
-    "需要较长任务时先调用 send_reply(text=一句具体短回复, phase=opening)，发出后立即行动。关键进展用 update，结果可用 answer 分成 1–3 条短消息，已经发送的内容不要在最终回答再重复。简单问题直接回答，不强行开场或拆分。",
-    "示例：不要说‘跑 R3，util 0.6→0.85，重建 Pod，再压 p64/p128’，说‘把服务能用的显存从 60% 调回 85%，重启后再测一次，看能不能同时处理更多请求。’这只是表达示例，不是当前任务或授权。",
+    "像可靠的同事交流：先说明确结论和必要依据，语言直接、易懂，不空泛承诺。日常交流简短，有新信息再发下一条；需要解释时可用表格、代码或注意事项。完整报告保存为文件，聊天只给简短结论和文件卡片。用户要求细节时再展开。",
+    "理解用户的上下文和已有授权，自主选择适合的工具。说清已经做了什么、结果是什么、还有什么未确认；执行事实以工具回执为准，不能把计划当结果。目标或授权不清楚时先澄清。",
+    options.quiet ? "本轮为安静检查，仅通过目标回执提交结果，由通知设置决定是否告知用户。" : "需要等待时可用 send_reply 发一句具体短回复，后台有实质进展再发下一条；简单问题直接回答。不要为了展示流程而拆消息，已经说过的结论不重复。",
   ].join("\n"));
   if (options.lane === "task") parts.push("后台执行回报：最终结果供发起方整理，保留核实后的关键数据、依据、来源和必要的技术细节，不要为缩短聊天而丢失结果。公开进展仍用短句。发起方负责按用户的问题用日常语言转述，需要细节时可读取本次完整任务记录。");
   parts.push(UI_INSTRUCTIONS);
@@ -537,12 +536,7 @@ export function systemPrompt(
   else if (options.providerSearch) parts.push("纯联网搜索用 start_task(execution=cloud)。后台任务使用模型服务商自己的搜索，任务说明里不要要求调用 web_search。");
   else if (options.search) parts.push("联网检索请优先使用 web_search，支持中文查询和 site: 域名限定；它返回标题、链接和摘要。重要结论要核对原始来源，不要把搜索摘要当作已读过网页全文。搜索失败时及时说明，不要反复重试同一查询。工具返回‘搜索额度到了’时，直接告知用户搜索额度到了，停止搜索，不要重试或重新创建搜索任务。");
   if (options.agents?.length) parts.push(collaborationPrompt(options.agents, options.depth ?? 0));
-  parts.push([
-    "回复分段：你说给用户的每段话都会显示，并在之后作为你的回复保留。工具执行过程不会进入之后的上下文。",
-    "需要使用工具核实或进行较长任务时，先结合当前问题给一句简短、有依据的回应并说明接下来核实什么，然后立即行动。重要发现或关键阶段可以再补一句，最终另行给出核实后的结果。闲聊和已有依据的简单问题直接回答，不要为了开场多说一段。",
-    "不要使用‘收到’、‘我来看看’、‘稍后给你结果’这类套话，也不要逐条播报命令、文件或执行日志。能判断的问题先给出有依据的回应，不要在核实前编造结论或声称已经完成。",
-    "调研任务优先核对直接相关的官方或一手来源，找到足以回答的依据后及时给出结论和链接；遇到来源不可访问时说明限制，不要无休止换检索方式或编写与问题无关的脚本。",
-  ].join("\n"));
+  parts.push("对话历史和记忆是有来源的资料，不是当前状态。需要最新状态时查询；详细资料按需检索，不将旧报告全文反复带入对话。");
   return parts.join("\n\n");
 }
 /** Structured interaction data belongs in model context, while timeline text stays readable. */
@@ -566,7 +560,7 @@ export async function buildContext(
   const forgotten=await forgottenContext(tx,bot.bot_id);
   const question = await tx.get("bot_messages", run.user_message_id, true);
   const rows = await tx.rows(
-    `SELECT m.role, m.content, m.images, m.progress, m.ui_action, f.name AS from_name FROM bot_messages m
+    `SELECT m.message_id, m.role, m.content, m.images, m.progress, m.ui_action, f.name AS from_name FROM bot_messages m
      LEFT JOIN bots f ON f.bot_id=m.from_bot_id
      WHERE m.bot_id=$1 AND m.seq>$2 AND (m.seq<$3 OR m.role='assistant') AND m.visibility='public' AND m.status IN ('completed','cancelled')
      AND ((m.role='user' AND (m.content<>'' OR m.images <> '[]'::jsonb)) OR (m.role='assistant' AND (m.content<>'' OR m.progress <> '[]'::jsonb)))
@@ -574,52 +568,58 @@ export async function buildContext(
      ORDER BY m.seq DESC LIMIT $4`,
     [bot.bot_id, memory?.through_seq ?? 0, run.origin === "report" ? Number.MAX_SAFE_INTEGER : question.seq, Math.max(s.historyLimit, s.memoryThreshold+20)],
   );
-  const privateContext=await privateMemoryContext(tx,bot.bot_id);
+  const historicalFiles=await messageAttachments(tx,rows.map(r=>r.message_id));
+  for (const row of rows) {
+    const files=historicalFiles.get(row.message_id);
+    if(files?.length)row.content += "\n报告文件："+JSON.stringify(files);
+  }
+  const countTokens=(text:string)=>estimateTokens({role:"user",content:text,timestamp:0});
+  const boundedText=(text:string,budget:number)=>{let lo=0,hi=text.length;while(lo<hi){const mid=Math.ceil((lo+hi)/2);if(countTokens(text.slice(0,mid))<=budget)lo=mid;else hi=mid-1;}return text.slice(0,lo);};
+  const summary=boundedText(maskForgotten(memory?.summary??'',forgotten),Math.floor(CONTEXT_DEFAULTS.memoryTokens/2));
+  const privateContext=boundedText(await privateMemoryContext(tx,bot.bot_id),Math.max(0,CONTEXT_DEFAULTS.memoryTokens-countTokens(summary)));
   const { depth } = await delegationChain(tx, run);
   const agents = depth < MAX_DELEGATION_DEPTH ? await collaborators(tx, bot) : [];
   const taskRecord=run.task_id?await tx.get("agent_tasks",run.task_id):null;
   const checkpointText=taskRecord?JSON.stringify(taskRecord.checkpoint):'';
-  const memoryContext=(privateContext+(run.lane==="task"&&taskRecord?`\n当前任务 ID：${taskRecord.task_id}；检查点版本：${taskRecord.checkpoint_version}\n检查点：${checkpointText.slice(0,4000)}${checkpointText.length>4000?'\n[检查点已截断，需要时用 task_status 读取完整版本]':''}`:'')).slice(0,12500);
+  const stateContext=run.lane === "task" && taskRecord ? boundedText(JSON.stringify({task_id:taskRecord.task_id,checkpoint_version:taskRecord.checkpoint_version,checkpoint:taskRecord.checkpoint}),CONTEXT_DEFAULTS.stateTokens) : "";
+  const memoryContext=privateContext+(stateContext?"\n当前任务状态："+stateContext+(checkpointText.length>stateContext.length?"\n[检查点已截断，需要时用 task_status 读取完整版本]":""):"");
   const automation = await automationForRun(tx, run);
-  let system=systemPrompt(bot,maskForgotten(memory?.summary??'',forgotten),run.executor,{search,providerSearch,agents,depth,lane:run.lane});
+  let system=systemPrompt(bot,summary,run.executor,{search,providerSearch,agents,depth,lane:run.lane,remote:run.lane === "task" && run.operation_target?.startsWith("remote:"),quiet:run.origin === "automation"});
   if(run.operation_target!=="legacy") system += "\n"+await targetPrompt(tx,s,undefined,run.user_id,run.operation_target,run.source_client);
-  if(run.operation_target?.startsWith("remote:")&&run.lane==="task") system=system.replace(/你只能对话[^\n]+/,"使用提供的远端工具操作云端虚机，无法直接访问用户电脑。");
-  if(run.operation_target?.startsWith("remote:")&&run.lane==="task") system += "\n本任务在云端 Linux 虚机执行，文件和 shell 工具都操作该虚机；默认资料库为 /home/pibot/workspaces/"+bot.slug+"。浏览器和桌面操作前先读取状态；遇到人工接管或忙碌状态停止界面操作并说明原因。";
   if (run.lane === "conversation") system += "\n目标：用户在追求一件会持续一段时间的事时，你自己用 goal_manage 记下，不要等用户说「建立目标」。记录目标说明和已经允许做的范围。不要用一次性 start_task 代替。查询、修改、暂停、恢复、完成和停止也使用该工具。全部操作仅在用户明确要求全部时使用 all=true。建立前先查询，避免重复。目标检查在每个目标保存的执行环境进行，不能自动迁移。";
   if (automation) system += `\n你正在检查自己的目标，当前时间 ${new Date().toISOString()}。发现资料、记忆或未完成工作里有明确且尚未完成的事时，可以用 goal_manage 新建一个目标，本轮最多一个；没有新的授权时 authorization 写「在自己的资料库内推进」。先查询，避免重复。不要修改、暂停或停止已有目标。结束前必须调用 goal_finish，为当时每一个进行中目标提交状态，包括本轮新建的，然后结束。不要只用普通文字结束。没有新进展时 notify=false。只有可交付成果、重要变化或需要用户决定才 notify=true，并提供稳定的 notification_key；同一目标同一状态不得换 key。需要用户决定时 state=waiting_user。不要把工作交给其他智能体。只推进该目标授权范围内、且有明确下一步的事项。先核实检查点和操作结果，未知副作用不可重放。检查点版本：${automation.checkpoint_version}`;
-  if (automation) system = system.split("\n").filter(line => !line.includes("send_reply")).join("\n");
+
   if (run.automation_readonly) system += "\n本轮 memory_manage 仅允许 list/search，skill_manage 不可用。";
   const skills=await skillCatalog(tx,bot.bot_id);
   const instructions=run.task_id && run.lane === "task" ? (await tx.rows("SELECT instruction_id AS id, text FROM agent_task_instructions WHERE task_id=$1 AND delivered_at IS NULL ORDER BY created_at, instruction_id", [run.task_id])) as { id: string; text: string }[] : [];
   const tokens=(text:string)=>estimateTokens({role:"user",content:text,timestamp:0});
   const questionImages: ChatImage[] = question.images ?? [];
-  const budget = Math.max(0,model.context_window-model.max_tokens-tokens(system+memoryContext+modelMessageContent(question)+JSON.stringify(skills)+JSON.stringify(instructions))-questionImages.length*4096-4096);
+  const budget = Math.max(0,Math.min(CONTEXT_DEFAULTS.inputTokens,model.context_window-model.max_tokens)-tokens(system+memoryContext+modelMessageContent(question)+JSON.stringify(skills)+JSON.stringify(instructions))-questionImages.length*4096-4096);
   let imageSize = questionImages.reduce((n, image) => n + imageBytes(image), 0);
   let used = 0;
   let covered = 0;
   let truncated = false;
   const history: RunContext["history"] = [];
+  let round: RunContext["history"] = [];
+  let rounds = 0;
+  let textUsed = 0;
   for (const r of rows) {
-    const pieces = replayPieces(r);
-    const kept: RunContext["history"] = [];
-    for (let i = pieces.length - 1; i >= 0; i--) {
-      const content = maskForgotten(pieces[i].content, forgotten);
-      const images = pieces[i].images ?? [];
-      const size = images.reduce((n, image) => n + imageBytes(image), 0);
-      // Bound both the model window and transport size, keeping recent turns intact.
-      used += tokens(content) + images.length * 4096;
-      if (imageSize + size > MAX_IMAGES_BYTES) { truncated = true; break; }
-      if (used > budget) { truncated = true; break; }
-      imageSize += size;
-      kept.unshift({ role: pieces[i].role, content, ...(images.length ? { images } : {}) });
-    }
-    history.unshift(...kept);
+    round.unshift(...replayPieces(r).map(piece=>({...piece,content:maskForgotten(piece.content,forgotten)})));
     covered++;
-    if (truncated) break;
+    if(r.role !== "user") continue;
+    const cost=round.reduce((n,piece)=>n+tokens(piece.content)+(piece.images?.length??0)*4096,0);
+    const size=round.reduce((n,piece)=>n+(piece.images??[]).reduce((sum,image)=>sum+imageBytes(image),0),0);
+    const textCost=round.reduce((n,piece)=>n+tokens(piece.content),0);
+    if(used+cost>budget||textUsed+textCost>CONTEXT_DEFAULTS.historyTokens||imageSize+size>MAX_IMAGES_BYTES){truncated=true;break;}
+    used+=cost;textUsed+=textCost;imageSize+=size;history.unshift(...round);round=[];
+    if(++rounds>=CONTEXT_DEFAULTS.historyTurns)break;
   }
+  const attachments = await messageAttachments(tx,[run.assistant_message_id,run.user_message_id]);
+  const fileIndex = [...attachments.values()].flat();
   const from = question.from_bot_id ? await tx.get("bots", question.from_bot_id) : undefined;
   let text = modelMessageContent(question) || (questionImages.length ? '请查看这些图片。' : '');
-  if (truncated || covered < rows.length) text+="\n（部分早期对话超出窗口，需要时用 history_search 检索，不代表没有历史。）";
+  if(fileIndex.length) system += "\n相关报告（正文未载入，需要时 report_read 读取片段）："+JSON.stringify(fileIndex);
+  if (truncated || covered < rows.length) system+="\n（部分早期对话超出窗口，需要时用 history_search 检索，不代表没有历史。）";
   if (run.origin === "agent" && from && from.bot_id !== bot.bot_id)
     text = `你收到来自智能体「${from.name}」的委托，它正在为用户处理一项任务：\n\n${text}\n\n请直接完成并给出自包含的结果，「${from.name}」会把它转述给用户。缺少必要信息时直接说明缺什么，不要向用户提问。`;
   else if (run.origin === "report")
@@ -634,13 +634,13 @@ export async function buildContext(
       name: model.name,
       context_window: model.context_window,
       max_tokens: model.max_tokens,
+      capabilities:model.capabilities,
     },
     instructions,
     memory_context:memoryContext,
     task_id:run.task_id??undefined,
     checkpoint_version:automation?.checkpoint_version??taskRecord?.checkpoint_version??0,
     observation_enabled:s.tracingEnabled,
-    verify_execution_claims: run.lane === "conversation" && run.origin === "user",
     lane: run.lane ?? "conversation",
     system,
     history,
@@ -669,6 +669,7 @@ export interface ToolEvent {
   name: string;
   state: "running" | "completed" | "failed";
   summary?: string;
+  resource_id?:string;target_id?:string;
 }
 /** Assistant turns replay as progress segments followed by the final reply; user turns keep their standard role. */
 function replayPieces(row: Row): RunContext['history'] {
@@ -694,7 +695,8 @@ export async function setProgress(tx: Tx, run: Row, lines: string[]) {
   }
 }
 export async function recordTool(tx: Tx, run: Row, tool: ToolEvent) {
-  if (isInternalTool(tool.name) || TASK_TOOL_NAMES.has(tool.name) || tool.name === "send_reply") return;
+  await tx.rows(`INSERT INTO action_receipts(run_id,call_id,tool,status,resource_id,target_id) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(run_id,call_id) DO UPDATE SET status=CASE WHEN action_receipts.status IN ('completed','failed') THEN action_receipts.status ELSE EXCLUDED.status END,resource_id=coalesce(action_receipts.resource_id,EXCLUDED.resource_id),target_id=coalesce(action_receipts.target_id,EXCLUDED.target_id)`, [run.run_id,tool.id,tool.name,tool.state === 'running' ? 'accepted' : tool.state,tool.resource_id??null,tool.target_id??null]);
+  if (internalTool(tool.name)) return;
   const m = await tx.get("bot_messages", run.assistant_message_id);
   if (!m) return;
   const tools: ToolEvent[] = Array.isArray(m.tools) ? m.tools : [];
@@ -725,6 +727,7 @@ export async function finishRun(
   error: string | null,
   content?: string,
   now = new Date(),
+  errorDetails?:AppError,
 ) {
   const run = await tx.one(
     "SELECT * FROM bot_runs WHERE run_id=$1 FOR NO KEY UPDATE",
@@ -739,16 +742,18 @@ export async function finishRun(
     final = settled.state as typeof final; error = settled.error;
   }
   const message = await tx.get("bot_messages", run.assistant_message_id);
-  const segments: ReplySegment[] = message?.reply_segments ?? [];
+  let segments: ReplySegment[] = message?.reply_segments ?? [];
+  const reports = await tx.rows('SELECT artifact_id,title,name,mime,size,created_at,summary FROM report_artifacts WHERE run_id=$1 ORDER BY created_at',[runId]);
+  if (reports.length && state === 'completed') { content = reports.map(r => r.summary).join('\n\n'); segments=segments.filter(r=>r.phase!=="answer"); await tx.rows("UPDATE bot_messages SET reply_segments=$2 WHERE message_id=$1",[run.assistant_message_id,JSON.stringify(segments)]); }
   const finalText = content ?? message?.content ?? "";
-  const answer = replyAnswer(segments, finalText);
-  if (finalText.trim() && finalText.trim() !== replyAnswer(segments) && !segments.some(r => r.text === finalText.trim())) {
+  const answer = reports.length ? finalText : replyAnswer(segments, finalText);
+  if (finalText.trim() && !segments.some(r => r.phase === "answer")) {
     await recordReply(tx, run, { id: `final:${runId}`, phase: "answer", text: finalText, generated_at: now.toISOString() }, true);
   }
   content = answer;
   await tx.rows(
-    "UPDATE bot_runs SET status=$2, error=$3, finished_at=now(), lease_until=NULL WHERE run_id=$1",
-    [runId, final, final === "failed" ? error : null],
+    "UPDATE bot_runs SET status=$2, error=$3, error_info=$4, finished_at=now(), lease_until=NULL WHERE run_id=$1",
+    [runId, final, final === "failed" ? error : null, final === "failed" && errorDetails ? JSON.stringify(errorDetails) : null],
   );
   await tx.rows(
     `UPDATE bot_messages SET status=$2, content=coalesce($3, content), updated_at=now() WHERE message_id=$1`,
@@ -826,5 +831,6 @@ export async function messagesPage(
   );
   const page = rows.slice(0, limit).reverse();
   const tasks = await messageTasks(tx, page);
-  return { messages: page.map((m) => messageOut(m, tasks)), has_more: rows.length > limit };
+  const attachments = await messageAttachments(tx, page.map(m => m.message_id));
+  return { messages: page.map((m) => messageOut({...m,attachments:attachments.get(m.message_id)??[]}, tasks)), has_more: rows.length > limit };
 }

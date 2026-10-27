@@ -16,10 +16,10 @@ test("catalog splits chat and voice and keeps parameters the provider returned",
   const catalog = classifyModels(parseCatalog({
     data: [
       { id: "grok-4", context_length: 256000, max_output_tokens: 32000 },
-      { id: "grok-imagine-image", context_length: 1024 },
-      { id: "grok-voice-latest", context_length: 32000 },
+      { id: "grok-imagine-image", capabilities:{chat:false}, context_length: 1024 },
+      { id: "grok-voice-latest", capabilities:{chat:false,voice:true}, context_length: 32000 },
     ],
-    models: [{ id: "qwen3-max", context_window: 128000, max_tokens: 8192 }, { id: "qwen3.5-omni-flash-realtime" }, { id: "qwen3-asr-flash" }],
+    models: [{ id: "qwen3-max", context_window: 128000, max_tokens: 8192 }, { id: "qwen3.5-omni-flash-realtime", capabilities:{chat:false,voice:true} }, { id: "qwen3-asr-flash", capabilities:{chat:false} }],
   }));
   assert.deepEqual(catalog.chat.map((model) => model.id), ["grok-4", "qwen3-max"]);
   assert.equal(catalog.chat[0].context_window, 256000);
@@ -33,8 +33,8 @@ test("bailian catalog reads the native model id and nested limits", () => {
     output: {
       models: [
         { model: "qwen3.8-max", model_info: { context_window: 131072, max_output_tokens: 16384 } },
-        { model: "qwen3.5-omni-flash-realtime" },
-        { model: "qwen-image-3.0-pro" },
+        { model: "qwen3.5-omni-flash-realtime", capabilities:{chat:false,voice:true} },
+        { model: "qwen-image-3.0-pro", capabilities:{chat:false} },
       ],
     },
   }));

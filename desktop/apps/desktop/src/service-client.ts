@@ -1,3 +1,4 @@
+import { errorInfo, RuntimeError, httpErrorInfo } from "@pi-bot/runtime-contracts";
 import { type Socket } from 'node:net';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
@@ -43,7 +44,7 @@ export class ServiceClient {
             const pending = this.pending.get(packet.id);
             if (pending) {
               clearTimeout(pending.timer); this.pending.delete(packet.id);
-              if (packet.error) pending.reject(new Error(packet.error)); else pending.resolve(packet.result);
+              if (packet.error) pending.reject(new RuntimeError(errorInfo(packet) ?? httpErrorInfo(500,packet.error,"local-service"))); else pending.resolve(packet.result);
             }
           }
           this.flush();
@@ -54,7 +55,7 @@ export class ServiceClient {
     socket.on('close', () => {
       if (this.socket !== socket) return;
       this.socket = undefined; this.connected = false; this.inFlight.clear();
-      for (const pending of this.pending.values()) { clearTimeout(pending.timer); pending.reject(new Error('本地服务连接中断，请重连后检查运行状态')); }
+      for (const pending of this.pending.values()) { clearTimeout(pending.timer); pending.reject(new RuntimeError({code:'transport_closed',scope:'local-service',retryable:false,outcome:'unknown',message:'本地服务连接中断，请重连后检查运行状态'})); }
       this.pending.clear(); this.emit({ type: 'service.status', connected: false }); this.schedule();
     });
   }
@@ -71,13 +72,13 @@ export class ServiceClient {
     }
   }
   call(method: Method, input: unknown): Promise<unknown> {
-    if (!this.connected || !this.socket || this.stopped) return Promise.reject(new Error('本地服务尚未连接'));
+    if (!this.connected || !this.socket || this.stopped) return Promise.reject(new RuntimeError(httpErrorInfo(503,'本地服务尚未连接','local-service')));
     return new Promise((resolve, reject) => {
       const id = randomUUID();
       const timer = setTimeout(() => {
         this.pending.delete(id);
         // Keep the slot until the service replies; timeout does not cancel a mutation.
-        reject(new Error('请求超时，请检查服务和运行状态')); this.flush();
+        reject(new RuntimeError({code:'timeout',scope:'local-service',retryable:false,outcome:'unknown',message:'请求超时，请检查服务和运行状态'})); this.flush();
       }, 150000);
       this.pending.set(id, { resolve, reject, timer, packet: JSON.stringify({ id, method, input }) + '\n', sent: false });
       this.flush();

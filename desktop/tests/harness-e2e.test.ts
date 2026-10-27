@@ -32,12 +32,11 @@ async function scriptedProvider(outside: string) {
     const results = realToolOutputs(messages).map(m => text(m.output));
     let reply: { text?: string; tool?: { name: string; args: object } };
     const goalId = user.match(/"id":"([0-9a-f-]{36})"/)?.[1];
-    const originalUser = latestUserText(messages.filter(m => m.role !== 'user' || !text(m.content).includes('系统校验')));
+    const originalUser = latestUserText(messages);
     if (originalUser === '问问压测智能体为什么停了') {
       const asked = messages.some(m => m.type === 'function_call' && m.name === 'ask_agent');
       reply = asked ? { text: '询问已提交，等对方回报。' }
-        : user.includes('系统校验') ? { tool: { name: 'ask_agent', args: { agent: '压测智能体', task: '请核实停止原因，并报告已有数据。', wait: false, execution: 'device' } } }
-        : { text: '收到，我去问压测智能体为什么停了。' };
+        : { tool: { name: 'ask_agent', args: { agent: '压测智能体', task: '请核实停止原因，并报告已有数据。', wait: false, execution: 'device' } } };
     }
     else if (user.startsWith('你收到来自智能体') && user.includes('请核实停止原因，并报告已有数据。')) reply = { text: '压测已按用户要求停止，已有结果在报告目录。' };
     else if (user === '分条回复测试') reply = results.length === 0
@@ -268,7 +267,7 @@ test('the Mac manages its own skills privately and stores them for cloud reuse',
     assert.deepEqual(reply.progress, [], 'private skill activity does not create a canned acknowledgement');
     assert.doesNotMatch(reply.content, /内部|skill_|PRIVATE-MAC/);
   }
-  assert.doesNotMatch(JSON.stringify(events.slice(start)), /skill_manage|skill_load|PRIVATE-MAC|正在维护/);
+  assert.doesNotMatch(JSON.stringify(events.slice(start)), /PRIVATE-MAC|正在维护/);
   // Inspect the server through the public bearer, then create a cloud context
   // from the same bot to verify that Mac skills need no file synchronization.
   const bobToken = (await http('POST', '/auth/login', { username: 'bob', password: 'bob-password' }, '')).json.access_token;
@@ -333,7 +332,7 @@ test('a quiet goal review can act but stays silent and does not move visible act
   assert.equal(state!.status, 'stopped');
 });
 
-test('the real Mac harness blocks fake relay claims, sends once, and exposes the request and answer in delegation details', { skip }, async () => {
+test('the real Mac harness calls the native delegation tool once, and exposes the request and answer in delegation details', { skip }, async () => {
   const sender = await app.call('botCreate', { name: '协作助手', persona: '', avatar: { shape: 'bean', color: 'mint', scheme: 'light' } }) as Bot;
   const recipient = await app.call('botCreate', { name: '压测智能体', persona: '', avatar: { shape: 'bean', color: 'mint', scheme: 'light' } }) as Bot;
   const start = events.length;

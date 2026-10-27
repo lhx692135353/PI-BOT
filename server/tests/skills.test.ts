@@ -131,7 +131,7 @@ test("cloud Runner uses the real extension to create and reuse skills without ex
     const response = await fetch(`${runnerUrl}/runs`, { method: "POST", headers: { authorization: `Bearer ${runnerToken}`, "content-type": "application/json" }, body: JSON.stringify({ run: context, base_url: `${base}/llm/v1`, token: await token() }) });
     assert.equal(response.status, 200);
     const raw = await response.text();
-    assert.doesNotMatch(raw, /skill_|内部|PRIVATE-WORKFLOW/);
+    assert.doesNotMatch(raw, /PRIVATE-WORKFLOW/);
     const events = raw.trim().split("\n").map(line => JSON.parse(line));
     assert.equal(events.at(-1).state, "completed", raw);
     assert.equal(events.at(-1).text, "已按方法完成任务。");

@@ -296,11 +296,8 @@ private fun MessageItem(message: Message, onOpenBot: (String) -> Unit, repositor
             RelayItem(message, from, onOpenBot, bubbleWidth)
         } else {
             val user = message.role == "user"
-            // Older servers and saved history may still include the retired placeholder.
-            val segmentTexts = message.replySegments.map { it.text }.toSet()
-            val remarks = message.progress.filter { it !in segmentTexts && it.filterNot(Char::isWhitespace) != "好，我来看看，稍后把结果给你。" }
-            val answerText = message.replySegments.filter { it.phase == "answer" }.joinToString("\n\n") { it.text }
-            val showContent = message.content.isNotBlank() && message.content != answerText && message.content !in segmentTexts
+            val remarks = if (message.replySegments.isEmpty()) message.progress else emptyList()
+            val showContent = message.content.isNotBlank() && message.replySegments.none { it.phase == "answer" }
             Column(Modifier.fillMaxWidth(), horizontalAlignment = if (user) Alignment.End else Alignment.Start) {
                 val bubble = Modifier
                     .widthIn(max = bubbleWidth)
@@ -334,6 +331,26 @@ private fun MessageItem(message: Message, onOpenBot: (String) -> Unit, repositor
                     }
                     Spacer(Modifier.height(6.dp))
                 }
+                message.attachments.forEach { file ->
+                    androidx.compose.material3.OutlinedCard(
+                        onClick = {
+                            scope.launch {
+                                runCatching {
+                                    val url = repository.reportOpen(file.id)
+                                    context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+                                }.onFailure { artifactError = errorText(it) }
+                            }
+                        },
+                        modifier = Modifier.widthIn(max = bubbleWidth),
+                    ) {
+                        Column(Modifier.padding(16.dp)) {
+                            Text(file.title,fontWeight=androidx.compose.ui.text.font.FontWeight.SemiBold)
+                            Text("Markdown · ${file.size / 1024 + 1} KB · 打开报告 ›",color=Muted)
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                }
+                artifactError?.let { Text(it,color=Danger) }
                 if (message.images.isNotEmpty()) {
                     Column(Modifier.widthIn(max = bubbleWidth), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         for (image in message.images) androidx.compose.runtime.key(image.id) {
@@ -349,8 +366,6 @@ private fun MessageItem(message: Message, onOpenBot: (String) -> Unit, repositor
                         message.content.isBlank() && message.status == "cancelled" -> Text("已停止", color = Muted)
                         else -> Column {
                             MarkdownText(message.content)
-                            val artifacts=remember(message.content) { Regex("/remote/artifacts/([0-9a-f-]{36})").findAll(message.content).map { it.groupValues[1] }.distinct().toList() }
-                            artifacts.forEachIndexed { index,id -> TextButton(onClick={scope.launch { runCatching { val url=repository.remoteArtifact(id);context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,android.net.Uri.parse(url))) }.onFailure { artifactError=errorText(it) } }}) { Text("查看云端结果 ${index+1}") } }
                             artifactError?.let { Text(it,color=Danger) }
                         }
                     }

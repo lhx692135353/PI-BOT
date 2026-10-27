@@ -237,3 +237,14 @@ button.menu-backdrop:hover { background: transparent; }
 .conversation-sender time { color: var(--muted); font-size: 11px; margin-left: auto; }
 .conversation-messages .bubble { background: var(--panel); border-radius: 14px; padding: 10px 14px; overflow-wrap: anywhere; }
 @media (max-width: 560px) { .conversation-dialog { width: calc(100vw - 16px); } .conversation-panel header, .conversation-panel footer { padding: 12px; } .conversation-meta { padding-left: 12px; } .conversation-messages { padding: 4px 12px 12px; } }
+
+.report-files { display:grid; gap:8px; width:min(100%,520px); margin:10px 0; }
+.report-file { display:flex; align-items:center; gap:12px; width:100%; text-align:left; padding:16px; border:1px solid var(--border,#deded9); background:var(--surface,#fff); border-radius:12px; color:inherit; cursor:pointer; }
+.report-file:hover { border-color:var(--accent,#d48862); }
+.report-file:focus-visible { outline:2px solid var(--accent,#d48862); outline-offset:3px; }
+.report-file-icon { font-size:28px; color:var(--muted,#73736d); }
+.report-file-info { flex:1; min-width:0; display:grid; gap:4px; overflow-wrap:anywhere; }
+.report-file-info strong { font-size:14px; font-weight:600; }
+.report-file-info>span,.report-file-action { font-size:12px; color:var(--muted,#73736d); }
+.report-file-action { white-space:nowrap; }
+@media(max-width:480px){.report-file{padding:12px;gap:10px}.report-file-action{max-width:62px;white-space:normal}}

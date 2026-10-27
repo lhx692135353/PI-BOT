@@ -1,3 +1,5 @@
+import { reportTools } from "@pi-bot/agent";
+import { toolDescriptor, errorInfo } from "@pi-bot/runtime-contracts";
 import { randomUUID } from 'node:crypto';
 import type { ChatImage } from '@pi-bot/agent/images';
 import { join } from 'node:path';
@@ -14,12 +16,11 @@ export interface RunContext {
   lane?: 'conversation' | 'task';
   execution_policy?: 'any' | 'device_only';
   automation_readonly?: boolean;
-  verify_execution_claims?: boolean;
   deadline_at?: string;
   automation?: { id: string; kind: 'review'; version: number; checkpoint_version: number; checkpoint: Record<string, unknown> };
   instructions?: { id: string; text: string }[];
   bot: { id: string; name: string; slug: string };
-  model: { id: string; name: string; context_window: number; max_tokens: number };
+  model: { id: string; name: string; context_window: number; max_tokens: number; capabilities?: Partial<import("@pi-bot/runtime-contracts").ModelCapabilities> };
   system: string;
   history: { role: 'user' | 'assistant'; content: string; images?: ChatImage[] }[];
   text: string;
@@ -54,7 +55,6 @@ interface Active {
   approvals: Map<string, string>;
   early: Map<string, boolean>;
 }
-const SEARCH = new Set(['list_files', 'read_file', 'search_files', 'web_search']);
 const TOKEN_REFRESH_MS = 10 * 60 * 1000;
 
 export class Executor {
@@ -105,7 +105,7 @@ export class Executor {
           event({ kind: 'approval', request_id: requestId, path, reason });
         }),
       });
-      if (run.automation_readonly) tools = tools.filter(t => ['list_files', 'read_file', 'search_files'].includes(t.name));
+      if (run.automation_readonly) tools = tools.filter(t => toolDescriptor(t.name)?.readonly);
       tools = tools.map(tool => tool.name !== 'run_command' ? tool : {
         ...tool, description: tool.description + (phone ? ' 也支持内置受控 phone-adb 命令；exec-out screencap -p 会返回图片。' : ''),
         execute: async (id, args, signal, update, ctx) => {
@@ -131,7 +131,7 @@ export class Executor {
       });
       const api = this.deps.proxyUrl.replace(/\/llm\/v1\/?$/, '');
       if (run.execution_policy === 'device_only' && !run.automation_readonly) tools = tools.map(tool => {
-        if (!['write_file', 'edit_file', 'run_command'].includes(tool.name)) return tool;
+        if (toolDescriptor(tool.name)?.effect !== 'write') return tool;
         return { ...tool, execute: async (id, args, signal, update, ctx) => {
           const journal = async (phase: 'start' | 'end', confirmed?: boolean, result?: string) => {
             const response = await fetch(`${api}/agent/automations/effect`, {
@@ -158,17 +158,17 @@ export class Executor {
       if (run.automation) tools.push(...automationTools(api, () => token, run.run_id, true));
       if (run.lane !== "conversation" && run.search_enabled) tools.push(webSearchTool(api, () => token));
       if (run.agents_enabled) tools.push(askAgentTool(api, () => token, run.run_id, { conversation: run.lane === "conversation" }));
+      tools.push(...reportTools(api, () => token, run.run_id, run.lane === "task" && !run.automation));
       tools.push(...a2uiTools(messages => { event({ kind: 'ui', messages }); }));
       const onTool = (t: ToolActivity) => {
         event({ kind: 'tool', ...t });
-        const mood: Mood = t.name === 'ask_agent' ? 'waiting' : SEARCH.has(t.name) ? 'searching' : 'working';
+        const mood: Mood = toolDescriptor(t.name)?.activity ?? 'working';
         this.deps.activity(run, t.state === 'running' ? t.name : null, t.state === 'running' ? mood : 'thinking');
       };
       state.agent = await (this.deps.factory ?? createBotAgent)({
-        model: { id: run.model.id, name: run.model.name, baseUrl: this.deps.proxyUrl, modelId: run.model.id, contextWindow: run.model.context_window, maxTokens: run.model.max_tokens },
+        model: { id: run.model.id, name: run.model.name, baseUrl: this.deps.proxyUrl, modelId: run.model.id, contextWindow: run.model.context_window, capabilities:run.model.capabilities, maxTokens: run.model.max_tokens },
         apiKey: token,
         readonly: run.automation_readonly,
-        verifyExecutionClaims: run.verify_execution_claims,
         cwd: sandbox.root,
         agentDir: join(this.deps.agentDir, 'bots', run.bot.id),
         systemPrompt: `${run.system}\n实际执行环境：${process.platform}；shell：${commandShell()}；资料库绝对路径：${sandbox.root}。${phoneEnvironment}${process.platform === 'win32' ? ' 使用非交互 PowerShell 语法，不使用 bash/cmd 语法；含空格路径必须加引号，调用带引号的程序路径使用 &。输出为 UTF-8（旧程序可能使用其他代码页）。' : ''}`,
@@ -178,7 +178,8 @@ export class Executor {
         runId:run.run_id,
         memory:{baseUrl:api,token:()=>token,runId:run.run_id,lane:run.lane??'task',context:run.memory_context??'',taskId:run.task_id,checkpointVersion:run.checkpoint_version,readonly:run.automation_readonly},
         onObservation:run.observation_enabled?e=>event({kind:'observation',...e}):undefined,
-        onTool,
+        onAction: onTool,
+        onManifest: tools => event({kind:"manifest",tools}),
         onReply: run.automation ? undefined : reply => { event({ kind: "reply", ...reply }); },
         onProgress: lines => {
           clearTimeout(pendingText); pendingText = undefined;
@@ -205,7 +206,7 @@ export class Executor {
       clearTimeout(pendingText);
       const cancelled = !timedOut && (state.cancelled || (error instanceof Error && error.message === CANCELLED));
       const message = timedOut ? (run.automation ? '自动轮次超过执行时限' : '对话响应超时，请重新发送') : error instanceof Error && !cancelled ? error.message.slice(0, 300) : null;
-      event({ kind: 'done', state: cancelled ? 'cancelled' : 'failed', error: message ?? '运行失败', text: latest || undefined });
+      event({ kind: 'done', state: cancelled ? 'cancelled' : 'failed', error: message ?? '运行失败', error_info: errorInfo(error), text: latest || undefined });
       this.deps.activity(run, null, cancelled ? null : 'error');
     } finally {
       clearTimeout(deadline);

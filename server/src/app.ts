@@ -1,3 +1,4 @@
+import { reportViewer } from "./reports.js";
 import {RemoteService} from "./remote/service.js";
 import {remoteWeb} from "./remote/web.js";
 import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
@@ -104,7 +105,7 @@ export async function createApp(
   await migrate(db);
   await bootstrapAdmin(db, s);
   await failOrphanedDeviceRuns(db);
-  const app = Fastify({ logger: false, bodyLimit: 8 * 1024 * 1024 });
+  const app = Fastify({ logger: false, bodyLimit: 16 * 1024 * 1024 });
   app.removeContentTypeParser("application/json");
   app.addContentTypeParser(
     "application/json",
@@ -113,7 +114,7 @@ export async function createApp(
   );
   app.setErrorHandler((error, _req, reply) => {
     if (error instanceof HttpError)
-      return reply.code(error.status).send({ detail: error.detail });
+      return reply.code(error.status).send({ detail: error.detail, error_info: error.info });
     const e = error as Row;
     if (e.code === "23505") return reply.code(409).send({ detail: "记录冲突" });
     if (e.statusCode === 413) return reply.code(413).send({ detail: "请求体过大" });
@@ -127,6 +128,7 @@ export async function createApp(
     app.route({
       method: route.method,
       url: route.path,
+      bodyLimit: route.path === "/agent/reports" ? 64 * 1024 * 1024 : 16 * 1024 * 1024,
       handler: async (req, reply) => {
         const raw = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
         let json: unknown = {};
@@ -161,6 +163,8 @@ export async function createApp(
       },
     });
 
+  app.get("/reports/view/:id", async (_req, reply) => reply.header("cache-control","no-store").header("content-security-policy", "default-src 'self'; style-src 'unsafe-inline'; script-src 'self'; frame-ancestors 'none'; base-uri 'none'").type("text/html").send(reportViewer));
+  app.get("/reports/view/viewer.js", async (_req, reply) => reply.type("text/javascript").send(await readFile(new URL("../dist/report-viewer.js",import.meta.url))));
   app.get("/openapi.json", async () => openapi());
 
   const root = adminRoot(s);

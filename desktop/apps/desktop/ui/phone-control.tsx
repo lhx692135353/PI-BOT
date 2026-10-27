@@ -303,7 +303,7 @@ export function PhoneDock({
       } catch (error) {
         if (cancelled || sessionRef.current?.id !== session.id || !mayApplyPhoneResponse(scope, snapshot(), 'frame')) return;
         const message = errorText(error);
-        if (sessionEnded(message) || ++failures >= 5) finish(sessionEnded(message) ? message : '连续没有取到画面，已释放接管');
+        if (sessionEnded(error) || ++failures >= 5) finish(sessionEnded(error) ? message : '连续没有取到画面，已释放接管');
         else setFrameNotice('暂时没有取到画面');
       }
       if (!cancelled && sessionRef.current?.id === session.id && mayApplyPhoneResponse(scope, snapshot(), 'frame')) {
@@ -380,7 +380,7 @@ export function PhoneDock({
     } catch (error) {
       if (!mountedRef.current || sessionRef.current?.id !== session.id || epoch !== epochRef.current) return false;
       const message = errorText(error);
-      if (sessionEnded(message)) dropControl(message);
+      if (sessionEnded(error)) dropControl(message);
       else setActionNotice('操作没有送到手机');
       return false;
     }

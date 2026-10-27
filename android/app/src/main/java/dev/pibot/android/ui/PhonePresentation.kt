@@ -1,16 +1,14 @@
 package dev.pibot.android.ui
 
+import dev.pibot.android.data.RuntimeErrorCodes
+
 /** User-facing guidance only: never echo raw backend errors, identifiers or credentials. */
-internal fun phonePreviewHelp(message: String): String = when {
-    message.contains("会话已失效") || message.contains("phone.preview", ignoreCase = true) ->
-        "手机服务版本可能需要更新。请联系管理员检查执行电脑；无需先接管手机。"
-    message.contains("离线") || message.contains("offline", ignoreCase = true) ->
-        "执行电脑暂时离线。请确认电脑上的 Pi Bot 正在运行，再重试。"
-    message.contains("授权") || message.contains("401") || message.contains("403") ->
-        "连接授权需要确认。请返回检查登录状态和这台电脑的授权。"
-    message.contains("timeout", ignoreCase = true) || message.contains("超时") ->
-        "读取画面超时。请检查网络，稍后重试。"
-    else -> "暂时无法读取画面。请检查网络和执行电脑上的手机服务，再重试。"
+internal fun phonePreviewHelp(error: Throwable): String = when ((error as? dev.pibot.android.data.ApiException)?.code) {
+    RuntimeErrorCodes.UNSUPPORTED, RuntimeErrorCodes.SESSION_EXPIRED -> "手机服务可能需要更新。请检查执行电脑上的 Pi Bot。"
+    RuntimeErrorCodes.UNAVAILABLE, RuntimeErrorCodes.TRANSPORT_CLOSED -> "执行电脑暂时离线，连接恢复后再试。"
+    RuntimeErrorCodes.UNAUTHORIZED, RuntimeErrorCodes.FORBIDDEN -> "请检查登录状态和这台电脑的授权。"
+    RuntimeErrorCodes.TIMEOUT -> "读取画面超时，稍后重试。"
+    else -> "暂时无法读取画面，请检查网络和执行电脑。"
 }
 
 internal fun phoneAvailabilityHint(hasDevice: Boolean, online: Boolean, available: Boolean, occupied: Boolean): String = when {

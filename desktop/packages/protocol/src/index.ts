@@ -1,3 +1,5 @@
+import type { ArtifactRef } from "@pi-bot/runtime-contracts";
+export type { ArtifactRef } from "@pi-bot/runtime-contracts";
 import { z } from 'zod';
 import { validImages, IMAGE_TYPES, MAX_IMAGES, MAX_IMAGE_BYTES, IMAGE_LIMIT_HINT, type MessageImage } from '@pi-bot/agent/images';
 import type { UiDocument } from '@pi-bot/a2ui';
@@ -24,6 +26,7 @@ export const schemas = {
   phoneInput: z.object({...phoneSession,event:phoneInputEvent}).strict(),
   phoneRelease: z.object(phoneSession).strict(),
   remoteArtifact:z.object({id}),
+  reportOpen:z.object({id}),
   remoteDesktop:z.object({botId:id}),
   status: z.object({}),
   login: z.object({ serverUrl: z.string().url(), username: z.string().trim().min(1).max(64), password: z.string().min(1).max(200), label: z.string().trim().min(1).max(80) }),
@@ -66,7 +69,7 @@ export interface FromBot { id: string; name: string; avatar: Avatar | null; kind
 export interface ReplySegment { id: string; text: string; phase: 'opening' | 'update' | 'answer'; created_at: string; generated_at: string }
 export interface TaskConversation { task_id: string; status: RunStatus; bots: { id: string; name: string; avatar: Avatar }[]; messages: { id: string; seq: number; from_bot_id: string; to_bot_id: string; kind: string; content: string; created_at: string | null }[]; total: number; has_more: boolean; next_after: number }
 export interface AgentTaskRef { message_count?: number; operation_target?:string; id: string; bot_id: string; bot_name: string; status: 'queued' | 'running' | 'waiting_approval' | 'completed' | 'failed' | 'cancelled'; mode: 'wait' | 'report'; kind?: 'background' | 'delegation'; title?: string; updated_at?: string; activity?: string | null }
-export interface Message { reply_segments?: ReplySegment[]; task_id?: string | null; id: string; bot_id: string; run_id: string | null; seq: number; role: 'user' | 'assistant'; content: string; images?: MessageImage[]; status: 'completed' | 'running' | 'failed' | 'cancelled'; executor: 'device' | 'cloud' | null; tools: ToolEntry[]; progress?: string[]; ui?: UiDocument | null; from_bot?: FromBot | null; agent_tasks?: AgentTaskRef[]; created_at: string; updated_at: string }
+export interface Message { attachments?: ArtifactRef[]; reply_segments?: ReplySegment[]; task_id?: string | null; id: string; bot_id: string; run_id: string | null; seq: number; role: 'user' | 'assistant'; content: string; images?: MessageImage[]; status: 'completed' | 'running' | 'failed' | 'cancelled'; executor: 'device' | 'cloud' | null; tools: ToolEntry[]; progress?: string[]; ui?: UiDocument | null; from_bot?: FromBot | null; agent_tasks?: AgentTaskRef[]; created_at: string; updated_at: string }
 export interface Approval { id: string; run_id: string; bot_id: string; kind: 'outside_access'; path: string; reason: string; status: string; expires_at: string }
 export interface Bot { execution_device_id?: string | null; active_tasks?: AgentTaskRef[]; activity?: { status: RunStatus | null; tool: string | null; summary: string | null; running_count: number; queued_count: number }; id: string; name: string; slug: string; persona: string; model_id: string | null; avatar: Avatar; is_main?: boolean; created_at: string; last_active_at: string; latest_run: Run | null; last_message: { role: string; preview: string; status: string; created_at: string } | null; pending_approvals: Approval[] }
 export interface ModelOption { id: string; name: string; is_default: boolean }

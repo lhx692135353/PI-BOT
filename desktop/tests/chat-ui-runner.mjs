@@ -24,6 +24,9 @@ app.whenReady().then(async () => {
     await js('window.__chatHarness.finish()');
     await until(() => js('document.querySelectorAll(".reply-segment").length === 2 && !document.querySelector(".task-activity")'), 'finished task kept its activity or lost answer');
     await check('document.querySelectorAll(".msg.bot .bubble").length === 2', 'final answer echoed twice');
+    await check('!!document.querySelector(".report-file")', 'report attachment missing');
+    await js('document.querySelector(".report-file").click()');
+    await until(()=>js('window.__reportOpened === "https://report.test/preview"'),'report did not open');
     await screenshot('chat-wide.png');
     await js('document.querySelector(".delegation").click()');
     await until(() => js('!!document.querySelector("dialog[open] .error")'), 'missing load failure state');
@@ -37,6 +40,7 @@ app.whenReady().then(async () => {
     win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
     win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
     await until(() => js('!document.querySelector("dialog")'), 'Escape did not close details');
+    await check('document.querySelector(".report-file").getBoundingClientRect().right <= innerWidth','report card overflows narrow viewport');
     await screenshot('chat-narrow.png');
     writeFileSync(join(dir, 'result.json'), JSON.stringify({ ok: true }));
     win.destroy(); app.exit(0);

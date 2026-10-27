@@ -12,6 +12,7 @@ export async function recordReply(tx: Tx, run: Row, input: ReplyEvent, final = f
   const reply = (final ? replySchema.extend({ text: z.string().min(1).max(400000).refine(text => !!text.trim()) }) : replySchema).parse(input);
   // Quiet goal reviews never publish, even if an outdated/misbehaving executor asks.
   if (run.origin === "automation" || !["queued", "running", "waiting_approval"].includes(run.status)) return;
+  if(!final && run.lane === 'task' && await tx.one('SELECT artifact_id FROM report_artifacts WHERE run_id=$1 LIMIT 1',[run.run_id])) return;
   const current = await tx.one("SELECT * FROM bot_runs WHERE run_id=$1 FOR NO KEY UPDATE", [run.run_id]);
   if (!current || current.origin === "automation" || !["queued", "running", "waiting_approval"].includes(current.status)) return;
   run = current;

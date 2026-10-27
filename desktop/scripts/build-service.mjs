@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 export const workspace = { name:'pi-bot-workspace', setup(build) {
   build.onResolve({filter:/^@pi-bot\/agent\/images$/},()=>({path:resolve('../packages/agent/src/images.ts')}));
   build.onResolve({filter:/^zod$/},args=>args.importer.replaceAll('\\','/').includes('packages/a2ui/')?{path:createRequire(resolve('../packages/a2ui/package.json')).resolve('zod')}:undefined);
-  build.onResolve({filter:/^@pi-bot\/(agent|bot-face|a2ui)$/},args=>({path:resolve('../packages',args.path.split('/')[1],'src/index.ts')}));
+  build.onResolve({filter:/^@pi-bot\/(agent|bot-face|a2ui|runtime-contracts)$/},args=>({path:resolve('../packages',args.path.split('/')[1],'src/index.ts')}));
 } };
 export async function buildService() {
   await build({entryPoints:{server:'packages/service/src/server.ts',cli:'packages/service/src/cli.ts',paths:'packages/service/src/paths.ts'},outdir:'packages/service/dist',outExtension:{'.js':'.mjs'},plugins:[workspace],bundle:true,platform:'node',format:'esm',packages:'external',sourcemap:true});

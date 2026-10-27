@@ -1,3 +1,4 @@
+import { RuntimeError, errorInfo } from "@pi-bot/runtime-contracts";
 import { Client, type SFTPWrapper, type ClientChannel } from "ssh2";
 import { createHash } from "node:crypto";
 import type { Duplex } from "node:stream";
@@ -53,7 +54,7 @@ export async function connectSsh(
       client
         .once("ready", resolve)
         .once("error", () =>
-          reject(new Error("SSH 连接失败，请检查网络、凭据和主机指纹")),
+          reject(new RuntimeError({code:"transport_closed",scope:"ssh",retryable:false,outcome:"not_started",message:"SSH 连接失败，请检查网络、凭据和主机指纹"})),
         )
         .connect({
           host: config.host,
@@ -96,7 +97,7 @@ export async function connectSsh(
       const abort = () => {
         channel?.signal("TERM");
         channel?.destroy();
-        finish(new Error("操作已取消，未确认结果的操作不可重放"));
+        finish(new RuntimeError({code:"result_unknown",scope:"ssh",retryable:false,outcome:"unknown",message:"操作已取消，未确认结果的操作不可重放"}));
       };
       const timer = setTimeout(() => {
         abort();
@@ -117,16 +118,16 @@ export async function connectSsh(
           }
         });
         stream.on("error", () =>
-          finish(new Error("SSH 通道中断，操作结果未知，请核实后继续")),
+          finish(new RuntimeError({code:"transport_closed",scope:"ssh",retryable:false,outcome:"unknown",message:"SSH 通道中断，操作结果未知，请核实后继续"})),
         );
         stream.on("close", () => {
           try {
             const data = JSON.parse(output);
-            if (data.error) finish(new Error(String(data.error).slice(0, 400)));
+            if (data.error) finish(new RuntimeError(errorInfo(data) ?? {code:"internal",scope:"remote",retryable:false,outcome:"unknown",message:String(data.error).slice(0,400)}));
             else finish(undefined, data.result ?? data);
           } catch {
             finish(
-              new Error("远端组件连接中断或返回无效结果，操作结果需要核实"),
+              new RuntimeError({code:"transport_closed",scope:"ssh",retryable:false,outcome:"unknown",message:"远端组件连接中断或返回无效结果，操作结果需要核实"}),
             );
           }
         });

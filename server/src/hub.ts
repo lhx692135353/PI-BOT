@@ -1,3 +1,4 @@
+import { errorInfo } from "@pi-bot/runtime-contracts";
 import { randomUUID } from "node:crypto";
 import { HttpError, type Row } from "./db.js";
 
@@ -91,12 +92,12 @@ export class Hub {
     if (message.ok) p.resolve(message.result);
     else
       p.reject(
-        new HttpError(
+        Object.assign(new HttpError(
           400,
           typeof message.error === "string"
             ? message.error.slice(0, 300)
             : "电脑无法完成请求",
-        ),
+        ), {info:errorInfo(message) ?? new HttpError(400,"电脑无法完成请求").info}),
       );
   }
   subscribe(userId: string, listener: (event: UserEvent) => void) {

@@ -22,7 +22,7 @@ test("Qwen chat and report requests explicitly disable default thinking without 
   const db = { tx: async (fn: any) => fn({ insert: async () => ({}) }) } as unknown as Database;
   const app = Fastify();
   await new Promise<void>(resolve => provider.listen(0, "127.0.0.1", resolve));
-  const model = { model_id: "model", provider: "bailian", provider_model: "qwen3.8-flash", max_tokens: 1000,
+  const model = { model_id: "model", provider: "bailian", provider_model: "qwen3.8-flash", capabilities:{reasoning:"configurable",reasoning_off:{reasoning:{effort:"none"}}}, max_tokens: 1000,
     base_url: `http://127.0.0.1:${(provider.address() as any).port}/v1`, secret: new Vault(s.vaultFile).seal("sk-test", "model") };
   app.post<{ Params: { lane: string }; Body: Record<string, unknown> }>("/:lane", (req, reply) =>
     proxyResponses(db, s, { sub: "user", src: "device" }, model, req.body, reply, new AbortController().signal,
@@ -41,6 +41,7 @@ test("Qwen chat and report requests explicitly disable default thinking without 
       for (const [key, value] of Object.entries(override)) assert.deepEqual(requests.at(-1)[key], value);
       if (!("reasoning" in override)) assert.equal(requests.at(-1).reasoning, undefined);
     }
+    model.capabilities.reasoning = "required";
     model.provider_model = "qwen3.8-2.4t-a95b";
     await app.inject({ method: "POST", url: "/conversation", payload: input });
     assert.equal(requests.at(-1).reasoning, undefined, "thinking-only models must keep their supported parameters");

@@ -35,7 +35,7 @@ test('independent computers route files, delegation, approvals and offline queue
         await tool('start_task',{title:'Cloud search',task:'cloud:search',execution:'cloud'}); return 'queued cloud search';
       }
       if ((text.startsWith('write:') || text.startsWith('outside:')) && o.tools.some(t=>t.name==='start_task')) {
-        await tool('start_task',{title:text,task:text}); return 'queued';
+        await tool('start_task',{title:text.slice(0,80),task:text}); return 'queued';
       }
       const command = text.split('\n').find(line=>/^(write|outside):/.test(line)) ?? text;
       if (command.startsWith('write:')) {

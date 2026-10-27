@@ -1,3 +1,4 @@
+import { errorInfo, httpErrorInfo, RuntimeError } from "@pi-bot/runtime-contracts";
 import { PhoneController } from './phone.js';
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync, rmSync } from 'node:fs';
@@ -133,11 +134,11 @@ export class Application {
           const result = typeof m.method === 'string' && m.method.startsWith('phone.') ? await this.phone.call(m.method, p)
             : m.method === 'files.list' ? await previewList(this.o.libraryRoot, String(p.slug), String(p.path ?? ''))
             : m.method === 'files.read' ? await previewRead(this.o.libraryRoot, String(p.slug), String(p.path ?? ''))
-            : (() => { throw new Error('不支持的请求'); })();
+            : (() => { throw new RuntimeError(httpErrorInfo(501,'不支持的请求','device')); })();
           if (generation === this.connectionGeneration && socket === this.socket) socket?.send({ type: 'rpc_result', id: m.id, ok: true, result });
         } catch (e) {
           const missing = (e as NodeJS.ErrnoException).code === 'ENOENT';
-          if (generation === this.connectionGeneration && socket === this.socket) socket?.send({ type: 'rpc_result', id: m.id, ok: false, error: missing ? '文件不存在' : e instanceof Error ? e.message : '读取失败' });
+          if (generation === this.connectionGeneration && socket === this.socket) socket?.send({ type: 'rpc_result', id: m.id, ok: false, error: missing ? '文件不存在' : e instanceof Error ? e.message : '读取失败', error_info:errorInfo(e)??httpErrorInfo(missing?404:500,e instanceof Error?e.message:'读取失败','device') });
         }
         return;
       }
@@ -204,6 +205,7 @@ export class Application {
       case 'phoneFrame': return this.cloud('POST', `/devices/${input.deviceId}/phone/frame`, {sessionId:input.sessionId});
       case 'phoneInput': return this.cloud('POST', `/devices/${input.deviceId}/phone/input`, {sessionId:input.sessionId,event:input.event});
       case 'phoneRelease': return this.cloud('POST', `/devices/${input.deviceId}/phone/release`, {sessionId:input.sessionId});
+      case 'reportOpen': { const result=await this.cloud<{url:string}>('POST',`/reports/${input.id}/open`,{}); return {url:this.account!.serverUrl.replace(/\/$/,'')+result.url}; }
       case 'remoteArtifact':{const result=await this.cloud<{url:string}>('POST',`/remote/artifacts/${input.id}/open`,{});return {url:this.account!.serverUrl.replace(/\/+$/,'')+result.url};}
       case 'remoteDesktop': {const result=await this.cloud<{url:string}>('POST','/remote/desktop/open',{bot_id:input.botId});return {url:this.account!.serverUrl.replace(/\/+$/,'')+result.url};}
       case 'status': return { ...this.state(), activities: [...this.activities.values()] };
@@ -234,7 +236,7 @@ export class Application {
       case 'cancel': this.executor?.cancel(input.runId); return this.cloud('POST', `/runs/${input.runId}/cancel`);
       case 'decide': return this.cloud('POST', `/approvals/${input.approvalId}`, { decision: input.decision });
     }
-    throw new Error('未知方法');
+    throw new RuntimeError(httpErrorInfo(501,'未知方法','local-service'));
   }
   async shutdown() { this.connectionGeneration++; this.phone.close(); this.executor?.stopAll(); this.socket?.stop(); for (const timer of this.afterglow.values()) clearTimeout(timer); this.afterglow.clear(); }
 }

@@ -1,3 +1,5 @@
+import tokenPlanCatalog from "./provider-catalogs/token-plan.json" with { type: "json" };
+import { type ModelCapabilities } from "@pi-bot/runtime-contracts";
 import { fail, HttpError } from "./db.js";
 
 export type Provider = "xai" | "bailian" | "custom";
@@ -6,10 +8,8 @@ export interface CatalogModel {
   id: string;
   context_window: number | null;
   max_tokens: number | null;
+  capabilities?: Partial<ModelCapabilities>;
 }
-
-const VOICE_ID = /grok-voice|(?:^|[-_])realtime(?:$|[-_])|omni-.+realtime|realtime-(?:plus|flash)/i;
-const SKIP_CHAT = /embed|rerank|tts|asr|whisper|image|imagine|wanx|cosyvoice|paraformer|sambert|translat/i;
 
 /** Server-side search tools. The provider runs them inside the Responses request. */
 export function providerSearchTools(provider: string): { type: string }[] {
@@ -35,42 +35,20 @@ export function applyProviderSearch(body: Record<string, unknown>, model: { prov
 /** Pi's non-reasoning model flag omits the parameter; Qwen then enables thinking by default. */
 export function applyConversationReasoning(
   body: Record<string, unknown>,
-  model: { provider?: string | null; provider_model?: string | null },
+  model: { provider?: string | null; provider_model?: string | null; capabilities?: Partial<ModelCapabilities> },
   lane?: string | null,
 ) {
-  if (lane !== "conversation" || model.provider !== "bailian"
-    || !/^qwen3\.8-(?:flash|max|27b)(?:-|$)/i.test(model.provider_model ?? "")
+  const capabilities = model.capabilities;
+  if (lane !== "conversation" || capabilities?.reasoning !== "configurable" || !capabilities.reasoning_off
     || body.reasoning !== undefined || body.enable_thinking !== undefined) return body;
-  return { ...body, reasoning: { effort: "none" } };
+  return { ...body, ...capabilities.reasoning_off };
 }
 
 export const TOKEN_PLAN_BASE = "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1";
 export const BAILIAN_VOICE_MODEL = "qwen-audio-3.0-realtime-plus";
 
 /** Token Plan has no model-list API. These are the text and realtime models on that plan. */
-const TOKEN_PLAN_MODELS = [
-  "auto",
-  "qwen3.8-max",
-  "qwen3.8-flash",
-  "qwen3.7-max",
-  "qwen3.7-plus",
-  "qwen3.6-plus",
-  "qwen3.6-flash",
-  "deepseek-v4.1-flash",
-  "deepseek-v4.1-flash-1017",
-  "deepseek-v4-pro",
-  "deepseek-v4-pro-0813",
-  "deepseek-v4-flash-0731",
-  "kimi-k2.7-code",
-  "kimi-k2.6",
-  "kimi-k2.5",
-  "glm-5.3",
-  "glm-5.2",
-  "glm-5.1",
-  "glm-5",
-  "MiniMax-M2.5",
-  BAILIAN_VOICE_MODEL,
-];
+
 
 export function providerBase(provider: string): string | null {
   if (provider === "xai") return "https://api.x.ai/v1";
@@ -112,7 +90,7 @@ export function parseCatalog(payload: unknown): CatalogModel[] {
     const contextWindow = context !== null && context >= 1024 && context <= 4_000_000 ? context : null;
     if (contextWindow && max !== null && max >= contextWindow) max = contextWindow - 1;
     const maxTokens = max !== null && max >= 16 && max <= 1_000_000 && (contextWindow === null || max < contextWindow) ? max : null;
-    out.push({ id, context_window: contextWindow, max_tokens: maxTokens });
+    out.push({ id, context_window: contextWindow, max_tokens: maxTokens, capabilities: flat.capabilities && typeof flat.capabilities === "object" ? flat.capabilities as Partial<ModelCapabilities> : undefined });
   }
   return out;
 }
@@ -124,8 +102,8 @@ export function classifyModels(models: CatalogModel[]) {
   for (const model of models) {
     if (seen.has(model.id)) continue;
     seen.add(model.id);
-    if (VOICE_ID.test(model.id)) voice.push(model);
-    else if (!SKIP_CHAT.test(model.id)) chat.push(model);
+    if (model.capabilities?.voice === true) voice.push(model);
+    if (model.capabilities?.chat !== false) chat.push(model);
   }
   return { chat, voice };
 }
@@ -139,7 +117,7 @@ export async function listCatalog(provider: "xai" | "bailian", key: string) {
     const all = await readJson("https://api.x.ai/v1/models", key);
     return classifyModels([...parseCatalog(language), ...parseCatalog(all)]);
   }
-  return classifyModels(TOKEN_PLAN_MODELS.map((id) => ({ id, context_window: null, max_tokens: null })));
+  return classifyModels(tokenPlanCatalog.models);
 }
 
 function text(value: unknown) {
