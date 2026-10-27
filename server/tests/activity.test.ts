@@ -5,7 +5,7 @@ import { Database, type Row, type Tx } from "../src/db.js";
 import { migrate } from "../src/migrate.js";
 import { botOut, createBot, finishRun, insertRun } from "../src/bots.js";
 import { conversation as transcript } from "../src/task-conversation.js";
-import { AgentDispatcher, readTask } from "../src/agents.js";
+import { AgentDispatcher, messageTask, readTask } from "../src/agents.js";
 import { Hub } from "../src/hub.js";
 import { settings } from "../src/config.js";
 import { resetDatabase, TEST_DB } from "./helpers.js";
@@ -126,5 +126,40 @@ test("reconciliation repairs a missing task link without failing a live executor
     assert.equal((await view(tx, a)).activity.running_count, 1);
     await finishRun(tx, record.child.run_id, "completed", null, "完成。");
     assert.equal((await view(tx, a)).activity.summary, null);
+  });
+});
+
+test("delegation follow-ups distinguish queued, pending, acknowledged and finished delivery without duplicate messages", { skip }, async () => {
+  await db.tx(async tx => {
+    const original = await conversation(tx);
+    const { t, child } = await task(tx, original, b, "核实压测停止原因");
+    const control = await insertRun(tx, { userId: user, botId: a.bot_id, requestId: randomUUID(), text: "问问他为什么停了", computer: null });
+    await tx.rows("UPDATE bot_runs SET status='running' WHERE run_id=$1", [control.run_id]);
+    const claims = { sub: user, bot: a.bot_id, src: "cloud" as const };
+    const instruction = { run_id: control.run_id, request_id: "relay-followup", text: "为什么停了，数据保存在哪？" };
+
+    await tx.update("agent_tasks", t.task_id, { child_run_id: null, status: "queued" });
+    const queued = await messageTask(tx, user, claims, t.task_id, instruction);
+    assert.equal(queued.delivery, "queued");
+    assert.ok(queued.instruction_id);
+    await tx.update("agent_tasks", t.task_id, { child_run_id: child.run_id, status: "running" });
+    const pending = await messageTask(tx, user, claims, t.task_id, instruction);
+    assert.equal(pending.delivery, "pending");
+    assert.equal(pending.instruction_id, queued.instruction_id);
+    await tx.rows("UPDATE agent_task_instructions SET delivered_at=now() WHERE instruction_id=$1", [pending.instruction_id]);
+    const delivered = await messageTask(tx, user, claims, t.task_id, instruction);
+    assert.equal(delivered.delivery, "delivered");
+    assert.equal(delivered.instruction_id, queued.instruction_id);
+    assert.equal((await tx.rows("SELECT * FROM agent_task_instructions WHERE task_id=$1", [t.task_id])).length, 1);
+    let messages = (await transcript(tx, user, a.bot_id, t.task_id)).messages;
+    assert.equal(messages.filter(m => m.kind === "instruction" && m.content === instruction.text).length, 1);
+
+    await finishRun(tx, child.run_id, "cancelled", null);
+    const finished = await messageTask(tx, user, claims, t.task_id, { ...instruction, request_id: "after-stop" });
+    assert.equal(finished.delivery, "finished");
+    assert.equal((await tx.rows("SELECT * FROM agent_task_instructions WHERE task_id=$1", [t.task_id])).length, 1);
+    messages = (await transcript(tx, user, a.bot_id, t.task_id)).messages;
+    assert.equal(messages.filter(m => m.kind === "instruction").length, 1);
+    await finishRun(tx, control.run_id, "completed", null, "原任务已结束，需要重新询问。");
   });
 });

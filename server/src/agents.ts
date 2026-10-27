@@ -224,10 +224,11 @@ export async function messageTask(tx: Tx, userId: string, claims: LlmClaims, tas
   if (TERMINAL.includes(task.status)) return { task: agentTaskOut(task), delivery: "finished" };
   await tx.rows(`INSERT INTO agent_task_instructions(instruction_id,task_id,request_id,text)
     VALUES($1,$2,$3,$4) ON CONFLICT(task_id,request_id) DO NOTHING`, [randomUUID(), taskId, body.request_id, body.text]);
+  const instruction = (await tx.one("SELECT instruction_id,delivered_at FROM agent_task_instructions WHERE task_id=$1 AND request_id=$2", [taskId, body.request_id]))!;
   await taskMessage(tx, task, `instruction:${body.request_id}`, "instruction", body.text, true);
   await tx.notify({ user_id: userId, bot_id: task.parent_bot_id });
   await tx.notify({ user_id: userId, bot_id: task.target_bot_id });
-  return { task: agentTaskOut(task), delivery: task.child_run_id ? "pending" : "queued" };
+  return { task: agentTaskOut(task), instruction_id: instruction.instruction_id, delivery: instruction.delivered_at ? "delivered" : task.child_run_id ? "pending" : "queued" };
 }
 /** The delegating tool gave up (its run stopped); nothing is reported back afterwards. */
 export async function cancelTask(tx: Tx, hub: Hub, userId: string, claims: LlmClaims, taskId: string) {

@@ -30,7 +30,7 @@ export function taskTools(baseUrl: string, token: () => string, runId: string): 
     },
     {
       name: "task_message", label: "补充任务要求",
-      description: "向指定任务发送补充或变更要求。运行中在当前工具结束后生效；排队任务启动时读取。返回 finished 时任务已结束，请根据原结果创建后续任务。",
+      description: "向指定任务发送补充、问题或变更要求。运行中在当前工具结束后生效；排队任务启动时读取。delivery=queued/pending 只表示已保存待送达，不能说对方已收到；delivered 才表示执行器确认收到，不代表已执行或已回答。finished 表示任务已结束，本条消息未发送，应结合原结果用 ask_agent 重新提问或创建后续任务。",
       parameters: Type.Object({ task_id: Type.String({ format: "uuid" }), text: Type.String({ minLength: 1, maxLength: 8000 }) }),
       execute: async (id, args: any) => result(await call("POST", `/${args.task_id}/messages`, { run_id: runId, text: args.text, request_id: id })),
     },
