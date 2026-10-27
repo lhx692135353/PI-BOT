@@ -17,36 +17,14 @@ on:
       - ".github/workflows/server-image.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   test:
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: pibot
-          POSTGRES_PASSWORD: pibot
-          POSTGRES_DB: pibot
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U pibot -d pibot"
-          --health-interval 5s --health-timeout 5s --health-retries 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-          cache: npm
-      - run: npm ci --ignore-scripts
-      - name: Validate Ubuntu deployment scripts
-        run: |
-          bash -n server/deploy/ubuntu/install.sh server/deploy/ubuntu/deploy.sh
-          python3 -m unittest discover -s server/deploy/ubuntu -p 'test_*.py' -v
-      - run: npm run typecheck
-      - run: npm test
-        env:
-          PI_BOT_TEST_DATABASE_URL: postgresql://pibot:pibot@127.0.0.1:5432/pibot
-      - run: npm run build
+    # Reuse the PR checks, including Electron installation and the Xvfb display.
+    # Keeping a second test job here previously missed the UI runtime setup.
+    uses: ./.github/workflows/ci.yml
   build:
     needs: test
     runs-on: ubuntu-latest
