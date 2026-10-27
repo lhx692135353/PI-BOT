@@ -1,0 +1,40 @@
+packages/agent/src/execution-receipts.ts
+  s_3dec9b2fb72731::t_6f6508723eacfc 8-9,11,14,16,18-28,48,51-52,65
+  s_3dec9b2fb72731::t_edb007cc076ae5 49-50
+  s_3dec9b2fb72731::t_afbb85e7986e25 53-55
+packages/agent/tests/relay-receipts.test.ts
+  s_3dec9b2fb72731::t_9b41edabb4dd90 1-121
+desktop/tests/harness-e2e.test.ts
+  s_3dec9b2fb72731::t_b8aa28eb58506d 35-41,43,69,245,336-357,359
+  s_3dec9b2fb72731::t_94e5d767813445 42,358
+  s_3dec9b2fb72731::t_8bbe34e95d87e7 360-361
+packages/agent/src/tasks.ts
+  s_3dec9b2fb72731::t_96bfcbd7733d73 33
+packages/agent/README.md
+  s_3dec9b2fb72731::t_94e5d767813445 59-60
+server/src/bots.ts
+  s_3dec9b2fb72731::t_96bfcbd7733d73 517
+packages/agent/src/ask-agent.ts
+  s_3dec9b2fb72731::t_96bfcbd7733d73 43-47,52,65-66,74,83,85
+server/src/agents.ts
+  s_3dec9b2fb72731::t_96bfcbd7733d73 227,231
+server/tests/activity.test.ts
+  s_3dec9b2fb72731::t_505deb2e8ac900 8,131-163
+  s_3dec9b2fb72731::t_e8172ec5522c5a 164-165
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d9b24c9ea10086ab833847cb2bd8e2b85e934051",
+  "prompts": {},
+  "sessions": {
+    "s_3dec9b2fb72731": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17cac-3377-7513-b423-85458b72c6f8",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
