@@ -1,0 +1,27 @@
+desktop/tests/windows.test.ts
+  s_3dec9b2fb72731::t_51f5f7a53f06e3 13-14,31-39,154-159,171
+desktop/README.md
+  s_3dec9b2fb72731::t_51f5f7a53f06e3 20-21
+desktop/packages/service/src/paths.ts
+  s_3dec9b2fb72731::t_51f5f7a53f06e3 11-18
+desktop/packages/service/src/server.ts
+  s_3dec9b2fb72731::t_51f5f7a53f06e3 62
+desktop/scripts/smoke-windows-runtime.mjs
+  s_3dec9b2fb72731::t_51f5f7a53f06e3 6,15-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fc78bc9182e5c6bb33c31f6817c769ea183c25ab",
+  "prompts": {},
+  "sessions": {
+    "s_3dec9b2fb72731": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17cac-3377-7513-b423-85458b72c6f8",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
