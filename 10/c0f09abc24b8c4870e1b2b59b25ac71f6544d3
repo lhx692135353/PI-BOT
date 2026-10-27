@@ -1,0 +1,23 @@
+.github/workflows/server-image.yml
+  s_cc42ddd46dcf1e::t_37a0b92f8cf45e 20-22,25-27
+desktop/tests/activity-ui.test.ts
+  s_cc42ddd46dcf1e::t_37a0b92f8cf45e 5,18,20-23
+desktop/tests/chat-ui.test.ts
+  s_cc42ddd46dcf1e::t_37a0b92f8cf45e 5,17,19-22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "10c0f09abc24b8c4870e1b2b59b25ac71f6544d3",
+  "prompts": {},
+  "sessions": {
+    "s_cc42ddd46dcf1e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17d6e-013d-7681-b9fd-a34852441b94",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
