@@ -1,3 +1,7 @@
+class PhoneError extends Error {
+  readonly info;
+  constructor(code:string,message:string){super(message);this.info={code,scope:"phone",retryable:false,outcome:"failed",message};}
+}
 import { randomUUID } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { z } from 'zod';
@@ -42,7 +46,7 @@ export class PhoneController {
     this.pending++;
     const generation = this.generation;
     const task = this.queue.catch(() => {}).then(() => {
-      if (generation !== this.generation) throw new Error('手机连接已断开');
+      if (generation !== this.generation) throw new PhoneError('transport_closed','手机连接已断开');
       return this.handle(method, raw, generation);
     });
     this.queue = task.then(() => {}, () => {}); return task.finally(() => { this.pending--; });
@@ -58,18 +62,18 @@ export class PhoneController {
     const now = Date.now();
     if (this.lease !== lease || lease.expires <= now || lease.idle <= now) {
       if (this.lease === lease) this.release();
-      throw new Error('人工控制会话已结束');
+      throw new PhoneError('session_expired','人工控制会话已结束');
     }
     lease.idle = Math.min(lease.expires, now + 45000);
   }
   private async handle(method: string, raw: unknown, generation: number): Promise<unknown> {
-    if (!['phone.status', 'phone.preview', 'phone.acquire', 'phone.frame', 'phone.input', 'phone.release'].includes(method)) throw new Error('不支持的手机请求');
+    if (!['phone.status', 'phone.preview', 'phone.acquire', 'phone.frame', 'phone.input', 'phone.release'].includes(method)) throw new PhoneError('unsupported','不支持的手机请求');
     const parsed = request.safeParse(raw);
     if (!parsed.success) throw new Error('手机请求参数无效');
     const p = parsed.data;
     // Release must still work after the administrator disables/removes configuration.
     if (method === 'phone.release') {
-      if (!this.lease || p.sessionId !== this.lease.id) throw new Error('人工控制会话已失效');
+      if (!this.lease || p.sessionId !== this.lease.id) throw new PhoneError('session_expired','人工控制会话已失效');
       this.release(); return { released: true };
     }
     let c: Config;
@@ -80,7 +84,7 @@ export class PhoneController {
     }
     if (this.lease && JSON.stringify(c) !== JSON.stringify(this.lease.config)) {
       this.release();
-      throw new Error('手机配置已变更，请重新确认设备并接管');
+      throw new PhoneError('session_expired','手机配置已变更，请重新确认设备并接管');
     }
     if (method === 'phone.status') {
       const target = { phoneId: 'google-play-validation', label: `Android · ${c.serial} · ADB ${c.adbPort}` };
@@ -95,20 +99,20 @@ export class PhoneController {
       // Owner-authenticated observation only: no flock, automation hook or lease renewal.
       if (p.sessionId || p.event) throw new Error('只读预览不接受控制参数');
       const frame = await this.capture(c);
-      if (generation !== this.generation) throw new Error('手机连接已断开');
+      if (generation !== this.generation) throw new PhoneError('transport_closed','手机连接已断开');
       return frame;
     }
     if (method === 'phone.acquire') {
-      if (this.lease) throw new Error('手机正在被人工控制');
+      if (this.lease) throw new PhoneError('session_occupied','手机正在被人工控制');
       await this.adb(c, ['get-state']);
-      if (generation !== this.generation) throw new Error('手机连接已断开');
+      if (generation !== this.generation) throw new PhoneError('transport_closed','手机连接已断开');
       const lease: NonNullable<PhoneController['lease']> = { id: randomUUID(), expires: Date.now() + 600000, idle: Date.now() + 45000, config: c };
       this.lease = lease;
       try {
         // Stop this executor's commands before taking the lock they may hold.
         // The provisional lease also restores commands on every failed acquisition.
         try { await this.hooks?.acquired(); } catch { throw new Error('无法暂停自动化，未授予人工控制'); }
-        if (this.lease !== lease) throw new Error('人工控制会话已结束');
+        if (this.lease !== lease) throw new PhoneError('session_expired','人工控制会话已结束');
         const lock = spawn('/usr/bin/flock', ['-n', '-E', '75', c.lockPath, '/bin/sh', '-c', 'printf ready; cat >/dev/null'], { stdio: ['pipe', 'pipe', 'ignore'] });
         lease.lock = lock;
         lock.on('exit', () => { if (this.lease === lease) this.release(); });
@@ -118,9 +122,9 @@ export class PhoneController {
           lock.once('exit', () => { clearTimeout(t); reject(new Error('手机已被占用')); });
           lock.stdout!.once('data', () => { clearTimeout(t); resolve(); });
         });
-        if (this.lease !== lease || generation !== this.generation) throw new Error('手机连接已断开');
+        if (this.lease !== lease || generation !== this.generation) throw new PhoneError('transport_closed','手机连接已断开');
         try { if (JSON.stringify(this.config()) !== JSON.stringify(c)) throw new Error(); }
-        catch { throw new Error('手机配置已变更，请重新确认设备并接管'); }
+        catch { throw new PhoneError('session_expired','手机配置已变更，请重新确认设备并接管'); }
         return { sessionId: lease.id, expiresAt: lease.expires };
       } catch (e) {
         if (this.lease === lease) this.release();
@@ -128,7 +132,7 @@ export class PhoneController {
       }
     }
     const lease = this.lease;
-    if (!lease || p.sessionId !== lease.id || lease.expires <= Date.now() || lease.idle <= Date.now()) throw new Error('人工控制会话已失效');
+    if (!lease || p.sessionId !== lease.id || lease.expires <= Date.now() || lease.idle <= Date.now()) throw new PhoneError('session_expired','人工控制会话已失效');
     if (method === 'phone.frame') {
       const frame = await this.capture(c);
       this.touch(lease);
@@ -142,6 +146,6 @@ export class PhoneController {
       this.touch(lease);
       return { ok: true };
     }
-    throw new Error('不支持的手机请求');
+    throw new PhoneError('unsupported','不支持的手机请求');
   }
 }
