@@ -1,0 +1,19 @@
+extras/virtual-phone/src/index.ts
+  s_3dec9b2fb72731::t_831fae1bf53838 1-4,49,65,70,76,87,102,106,108,115,125,127,135,149
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "83745be9f7c3d1cc20a7d068cd61c4f2f34a81c6",
+  "prompts": {},
+  "sessions": {
+    "s_3dec9b2fb72731": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17cac-3377-7513-b423-85458b72c6f8",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
