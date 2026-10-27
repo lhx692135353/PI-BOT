@@ -37,7 +37,7 @@ async function scriptedProvider(outside: string) {
       const asked = messages.some(m => m.type === 'function_call' && m.name === 'ask_agent');
       reply = asked ? { text: '询问已提交，等对方回报。' }
         : user.includes('系统校验') ? { tool: { name: 'ask_agent', args: { agent: '压测智能体', task: '请核实停止原因，并报告已有数据。', wait: false, execution: 'device' } } }
-        : { text: '问了，刚发出去。我给他发了消息问为什么停。' };
+        : { text: '收到，我去问压测智能体为什么停了。' };
     }
     else if (user.startsWith('你收到来自智能体') && user.includes('请核实停止原因，并报告已有数据。')) reply = { text: '压测已按用户要求停止，已有结果在报告目录。' };
     else if (user === '分条回复测试') reply = results.length === 0
@@ -344,8 +344,8 @@ test('the real Mac harness blocks fake relay claims, sends once, and exposes the
   });
   assert.equal(reply.executor, 'device');
   assert.equal(reply.content, '询问已提交，等对方回报。');
-  assert.equal(reply.agent_tasks.length, 1);
-  const taskId = reply.agent_tasks[0].id;
+  assert.equal(reply.agent_tasks?.length, 1);
+  const taskId = reply.agent_tasks![0].id;
   const saved = await serverDb.tx(tx => tx.get('agent_tasks', taskId));
   assert.equal(saved.target_bot_id, recipient.id);
   assert.equal(saved.execution, 'device');

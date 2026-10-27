@@ -219,15 +219,16 @@ export class PiAgent implements AgentHandle {
       }
       if (event.type === "agent_settled") settled = true;
     });
+    const unfulfilledRelay = () => this.receipts?.unfulfilledRelay([content, ...this.replies.map(r => r.text)].join("\n")) ?? false;
     try {
       await this.session.prompt(text, { expandPromptTemplates: false, images: modelImages(images) });
       if (!settled) await this.session.waitForIdle();
       if (this.cancelled) throw new Error(CANCELLED);
-      if (!failed && !aborted && this.receipts && (this.receipts.rejected || this.receipts.unsupported(content))) {
+      if (!failed && !aborted && this.receipts && (this.receipts.rejected || this.receipts.unsupported(content) || unfulfilledRelay())) {
         content = ""; settled = false;
         await this.session.prompt(RECEIPT_CORRECTION, { expandPromptTemplates: false });
         if (!settled) await this.session.waitForIdle();
-        if (this.receipts.rejected || this.receipts.unsupported(content)) throw new Error("模型未取得真实任务回执，无法确认已启动或已执行，请重试");
+        if (this.receipts.rejected || this.receipts.unsupported(content) || unfulfilledRelay()) throw new Error("模型未取得真实任务回执，无法确认已启动、已发送或已执行，请重试");
       }
       if (timedOut) throw new Error("模型长时间没有响应，已停止本次任务，请稍后重试");
       if (aborted || this.cancelled) throw new Error(CANCELLED);

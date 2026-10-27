@@ -45,7 +45,7 @@ test("a finished task cannot receive a follow-up and pending instructions cannot
   assert.equal(receipts.unsupported("补充已送达。"), false);
 });
 
-type Scenario = "repeat" | "recover" | "explicit" | "finished" | "failed" | "queued-received";
+type Scenario = "repeat" | "promise" | "opening-only" | "recover" | "explicit" | "finished" | "failed" | "queued-received";
 async function scenario(kind: Scenario) {
   const published: string[] = [], displayed: string[] = [], calls: { path: string; body: any }[] = [];
   let modelCalls = 0;
@@ -62,6 +62,9 @@ async function scenario(kind: Scenario) {
     const correcting = body.input.some((m: any) => m.role === "user" && JSON.stringify(m.content).includes("系统校验"));
     const invoked = (name: string) => body.input.some((m: any) => m.type === "function_call" && m.name === name);
     if (kind === "repeat") stream.text(falseClaim);
+    else if (kind === "promise" && !correcting) stream.text("收到，我去问压测智能体为什么停了。");
+    else if (kind === "opening-only" && !invoked("send_reply")) stream.tool("send_reply", { phase: "opening", text: "我去问压测智能体为什么停了。" }, "opening");
+    else if (kind === "opening-only" && !correcting) { /* Ending after an opening does not send anything. */ }
     else if (kind === "explicit" && !invoked("send_reply")) stream.tool("send_reply", { phase: "answer", text: falseClaim }, "unsupported-reply");
     else if (kind === "finished" && !invoked("task_message")) stream.tool("task_message", { task_id: TASK, text: "为什么停了？" }, "old-task");
     else if ((kind === "recover" || kind === "finished") && !correcting) stream.text(falseClaim);
@@ -99,7 +102,7 @@ test("the screenshot's repeated unbacked relay claim never reaches the chat", as
   assert.ok(data.displayed.every(text => !text.includes("发出去")));
 });
 
-for (const kind of ["recover", "explicit", "finished", "queued-received"] as const) {
+for (const kind of ["promise", "opening-only", "recover", "explicit", "finished", "queued-received"] as const) {
   test(`real agent corrects ${kind} with a durable delegation receipt and no duplicate send`, async () => {
     const data = await scenario(kind);
     assert.equal(data.error, undefined);

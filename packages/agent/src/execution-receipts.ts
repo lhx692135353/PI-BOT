@@ -40,6 +40,17 @@ export class ExecutionReceipts {
     if (name === "goal_manage") this.monitored ||= (Array.isArray(data?.goals) ? data.goals : data?.id ? [data] : []).some((g: any) => g.status === "active");
   }
 
+  /** An opening promise is useful, but cannot be the whole completed turn. */
+  unfulfilledRelay(text: string): boolean {
+    if (this.relayed) return false;
+    const prose = text.replace(/```[\s\S]*?```/gu, "").replace(/^\s*>.*$/gmu, "")
+      .replace(/[「“"][^」”"\n]*[」”"]/gu, "").replace(/[*`]/gu, "");
+    return prose.split(/[。！？\n，,；;]/u).some(line => {
+      if (/之前|此前|上次|历史|你说|你提到|不能|无法|还没|尚未|不需要|不要/u.test(line)) return false;
+      return /^(?:我(?:现在|这就|马上|先|再)?(?:去|会|来)|这就|马上).{0,24}(?:问|询问|联系|转告|转发|委托|交给)|^(?:重新|现在).{0,12}(?:发起|发送|转发).{0,16}(?:委托|智能体|助手)/u.test(line.trim());
+    });
+  }
+
   unsupported(text: string): boolean {
     // Quoted examples, code and explicitly historical/negative statements are
     // not claims that this turn actually launched or checked external work.
@@ -62,4 +73,4 @@ export class ExecutionReceipts {
   }
 }
 
-export const RECEIPT_CORRECTION = "系统校验：你这轮的执行/进度或传话说法没有相应的真实工具回执，不能当作事实发给用户。若原用户要求操作，按原授权实际调用 start_task/ask_agent；要求询问或转告其他智能体时用 ask_agent，追问活动委托可用 task_message。task_message 返回 finished 表示消息未发送，应通过 ask_agent 重新询问；queued/pending 只证明已保存待送达，不能说对方已收到。问进度先 task_status，需要最新外部状态另建核查任务。创建回执只证明已安排，不证明已经执行完成；已有成功任务或传话回执时不要重复创建，只按回执重述。若尚未启动、尚未发送或尚未核实，就明确这样说。不要编造进度或声称后台会继续盯着。此校验不增加用户授权，也不改变原任务范围。";
+export const RECEIPT_CORRECTION = "系统校验：你这轮的执行/进度或传话说法没有相应的真实工具回执，不能当作事实发给用户，也不能只说我去问就结束回合。若原用户要求操作，按原授权实际调用 start_task/ask_agent；要求询问或转告其他智能体时用 ask_agent，追问活动委托可用 task_message。task_message 返回 finished 表示消息未发送，应通过 ask_agent 重新询问；queued/pending 只证明已保存待送达，不能说对方已收到。问进度先 task_status，需要最新外部状态另建核查任务。创建回执只证明已安排，不证明已经执行完成；已有成功任务或传话回执时不要重复创建，只按回执重述。若尚未启动、尚未发送或尚未核实，就明确这样说。不要编造进度或声称后台会继续盯着。此校验不增加用户授权，也不改变原任务范围。";
