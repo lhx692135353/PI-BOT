@@ -1,0 +1,33 @@
+server/src/llm.ts
+  s_3dec9b2fb72731::t_8f46febf47929c 2,137
+server/ARCHITECTURE.md
+  s_3dec9b2fb72731::t_8f46febf47929c 103
+server/src/worker.ts
+  s_3dec9b2fb72731::t_8f46febf47929c 2,116
+desktop/tests/executor.test.ts
+  s_3dec9b2fb72731::t_a7b2d4d576e35f 1-55
+packages/agent/src/timeouts.ts
+  s_3dec9b2fb72731::t_8f46febf47929c 1-5
+packages/agent/src/index.ts
+  s_3dec9b2fb72731::t_8f46febf47929c 2-3,121,273
+desktop/packages/service/src/executor.ts
+  s_3dec9b2fb72731::t_8f46febf47929c 4,80
+desktop/ARCHITECTURE.md
+  s_3dec9b2fb72731::t_8f46febf47929c 103
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "44b31c005c89247fceb0baa76457e15c7985c50c",
+  "prompts": {},
+  "sessions": {
+    "s_3dec9b2fb72731": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17cac-3377-7513-b423-85458b72c6f8",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
