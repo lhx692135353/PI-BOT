@@ -29,6 +29,8 @@ stringData:
   PI_BOT_INTERNAL_URL: http://pibot:8000
   PI_BOT_VAULT_FILE: /run/secrets/pibot/vault.json
   PI_BOT_TAVILY_API_KEY: ""
+  # Enable in this shared Secret after configuring the Worker-only pibot-langfuse Secret.
+  LANGFUSE_TRACING_ENABLED: "false"
   PI_BOT_REMOTE_BACKEND: none
   # KubeVirt: mount a projected service account token and CA in the API pod.
   # PI_BOT_K8S_SERVER: https://kubernetes.default.svc
@@ -162,6 +164,10 @@ spec:
           envFrom:
             - secretRef:
                 name: pibot
+          env:
+            - name: LANGFUSE_TRACING_ENABLED
+              valueFrom:
+                secretKeyRef: { name: pibot, key: LANGFUSE_TRACING_ENABLED }
           readinessProbe:
             httpGet: { path: /health, port: 8000, scheme: HTTP }
             initialDelaySeconds: 20
@@ -222,6 +228,11 @@ spec:
             - secretRef:
                 name: pibot-langfuse
                 optional: true
+          env:
+            # Override any accidental switch in the credential Secret with the shared switch.
+            - name: LANGFUSE_TRACING_ENABLED
+              valueFrom:
+                secretKeyRef: { name: pibot, key: LANGFUSE_TRACING_ENABLED }
           resources:
             limits: { cpu: "1", memory: 1Gi }
             requests: { cpu: "200m", memory: 256Mi }

@@ -127,6 +127,7 @@ export function observationBody(
     endTime: end.toISOString(),
     input: bounded(input),
     output: bounded(output),
+    ...extra,
     metadata: {
       user_id: run.user_id,
       bot_id: run.bot_id,
@@ -135,7 +136,6 @@ export function observationBody(
       executor: run.executor,
       ...extra.metadata,
     },
-    ...extra,
   };
 }
 export async function recordRun(tx: Tx, run: Row, enabled: boolean) {
@@ -307,6 +307,7 @@ export async function recordGeneration(
     id: string;
     parentTool?: string;
     started: Date;
+    ended?: Date;
     firstToken?: Date;
     input: unknown;
     output: unknown;
@@ -322,7 +323,7 @@ export async function recordGeneration(
     spanId(`${run.run_id}:generation:${data.id}`),
     "LLM Call",
     data.started,
-    new Date(),
+    data.ended ?? new Date(),
     bounded(data.input, data.secrets),
     bounded(data.output, data.secrets),
     {
@@ -357,6 +358,13 @@ export async function recordGeneration(
     )
     .catch(() => {});
 }
+export type MaintenancePhase = {
+  name: "model" | "validate" | "usage" | "persist";
+  started: Date;
+  ended: Date;
+  error?: string;
+};
+
 export async function recordMaintenance(
   db: Database,
   s: Settings,
@@ -370,6 +378,8 @@ export async function recordMaintenance(
     error?: string;
     model: Row;
     usage?: Row | null;
+    phases: MaintenancePhase[];
+    secrets?: string[];
   },
 ) {
   if (!s.tracingEnabled) return;
@@ -380,6 +390,14 @@ export async function recordMaintenance(
     bot_id: data.bot.bot_id,
     executor: "cloud",
   };
+  const ended = new Date();
+  const failurePhase = data.phases.find((phase) => phase.error)?.name;
+  const phaseMs = Object.fromEntries(
+    data.phases.map((phase) => [
+      phase.name,
+      phase.ended.getTime() - phase.started.getTime(),
+    ]),
+  );
   await db
     .tx(async (tx) => {
       await enqueue(tx, stableId(`maintenance:${data.id}`), {
@@ -400,21 +418,58 @@ export async function recordMaintenance(
           spanId(data.id),
           data.name,
           data.started,
-          new Date(),
-          data.input,
-          data.output,
-          { level: data.error ? "ERROR" : "DEFAULT" },
+          ended,
+          bounded(data.input, data.secrets),
+          bounded(data.output, data.secrets),
+          {
+            level: data.error ? "ERROR" : "DEFAULT",
+            statusMessage: data.error,
+            metadata: {
+              job_type: data.name,
+              failure_phase: failurePhase ?? null,
+              phase_ms: phaseMs,
+            },
+          },
         ),
       });
+      for (const phase of data.phases.filter(
+        (phase) => phase.name !== "model",
+      )) {
+        await enqueue(
+          tx,
+          stableId(`maintenance-phase:${data.id}:${phase.name}`),
+          {
+            type: "span-create",
+            body: observationBody(
+              run,
+              spanId(`${data.id}:${phase.name}`),
+              `memory.${phase.name}`,
+              phase.started,
+              phase.ended,
+              undefined,
+              undefined,
+              {
+                parentObservationId: spanId(data.id),
+                level: phase.error ? "ERROR" : "DEFAULT",
+                statusMessage: phase.error,
+              },
+            ),
+          },
+        );
+      }
     })
     .catch(() => {});
+  const modelPhase = data.phases.find((phase) => phase.name === "model");
+  if (!modelPhase) return;
   await recordGeneration(db, s, run, {
     id: data.id,
-    started: data.started,
+    started: modelPhase.started,
+    ended: modelPhase.ended,
     input: data.input,
     output: data.output,
     model: data.model,
     usage: data.usage,
-    error: data.error,
+    error: modelPhase.error,
+    secrets: data.secrets,
   });
 }

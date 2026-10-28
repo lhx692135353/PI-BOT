@@ -100,6 +100,8 @@ test("one-shot Responses requests parse all output messages and reject failed or
     assert.deepEqual(requests[0], { path: "/v1/responses", authorization: "Bearer sk-test", body: { model: "grok-test", input, max_output_tokens: 1000, stream: false, store: false } });
     result = { status: "failed", error: { message: "provider secret" } };
     await assert.rejects(complete(model, "sk-test", input, 16), /^Error: 模型生成失败$/);
+    result = { status: "failed", error: { code: "rate_limit_exceeded", message: "private provider message" } };
+    await assert.rejects(complete(model, "sk-test", input, 16), /^Error: 模型生成失败 \(rate_limit_exceeded\)$/);
     result = { status: "incomplete", output: [], incomplete_details: { reason: "max_output_tokens" } };
     await assert.rejects(complete(model, "sk-test", input, 16), /已达到输出 token 上限（思考内容也计入额度）/);
     result = { status: "incomplete", output: [], incomplete_details: { reason: "content_filter" } };
@@ -107,5 +109,50 @@ test("one-shot Responses requests parse all output messages and reject failed or
   } finally {
     server.closeAllConnections();
     await new Promise<void>(resolve => server.close(() => resolve()));
+  }
+});
+
+test("one-shot failures retain safe timeout/network diagnostics and omit invalid response payloads", async () => {
+  const nativeFetch = globalThis.fetch;
+  const model = {
+    base_url: "http://127.0.0.1/v1",
+    provider_model: "test",
+    max_tokens: 2000,
+  };
+  try {
+    globalThis.fetch = async () => {
+      throw new DOMException("private timeout URL", "TimeoutError");
+    };
+    await assert.rejects(
+      complete(model, "sk-test", [], 2000),
+      /^Error: 模型请求超时$/,
+    );
+    globalThis.fetch = async () => {
+      throw new Error("private endpoint", { cause: { code: "ECONNREFUSED" } });
+    };
+    await assert.rejects(
+      complete(model, "sk-test", [], 2000),
+      /^Error: 无法连接模型服务 \(ECONNREFUSED\)$/,
+    );
+    globalThis.fetch = async () =>
+      new Response("PRIVATE-PROVIDER-BODY sk-test", { status: 200 });
+    await assert.rejects(
+      complete(model, "sk-test", [], 2000),
+      /^Error: 模型服务返回的响应不是有效 JSON$/,
+    );
+    globalThis.fetch = async () => {
+      const response = new Response();
+      response.json = async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        throw new DOMException("private body timeout", "AbortError");
+      };
+      return response;
+    };
+    await assert.rejects(
+      complete(model, "sk-test", [], 2000, 5),
+      /^Error: 模型请求超时$/,
+    );
+  } finally {
+    globalThis.fetch = nativeFetch;
   }
 });

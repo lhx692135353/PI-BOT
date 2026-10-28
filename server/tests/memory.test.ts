@@ -469,3 +469,177 @@ test("maintenance rechecks a newly committed lease after reading a stale candida
   assert.equal(stored.lease_owner, winner);
   assert.equal(stored.through_seq, 0);
 });
+
+test(
+  "maintenance diagnostics identify the failed phase without blaming a successful model or leaking payloads",
+  { skip },
+  async (t) => {
+    const nativeFetch = globalThis.fetch;
+    const nativeWarn = console.warn;
+    const scenarios = [
+      { name: "HTTP failure", phase: "model", status: 429, error: /HTTP 429/ },
+      {
+        name: "output budget exhausted",
+        phase: "model",
+        status: 200,
+        response: {
+          status: "incomplete",
+          incomplete_details: { reason: "max_output_tokens" },
+        },
+        error: /输出 token 上限/,
+      },
+      {
+        name: "invalid review JSON",
+        phase: "validate",
+        status: 200,
+        text: "PRIVATE-MODEL-OUTPUT sk-memory-test {",
+        learn: true,
+        error: /invalid review JSON/,
+      },
+      {
+        name: "database failure",
+        phase: "persist",
+        status: 200,
+        text: "PRIVATE-MODEL-OUTPUT",
+        error: /23514/,
+      },
+    ];
+    try {
+      for (const scenario of scenarios)
+        await t.test(scenario.name, async () => {
+          const bot = (await api("/bots", { name: scenario.name })).data.id;
+          for (let i = 0; i < 4; i++) {
+            const id = await send(bot, "PRIVATE-CONVERSATION");
+            await db.tx((tx) => finishRun(tx, id, "completed", null, "已记录"));
+          }
+          await db.tx(async (tx) => {
+            await tx.rows(
+              "UPDATE bots SET archived_at=now() WHERE bot_id<>$1",
+              [bot],
+            );
+            await tx.rows(
+              "UPDATE bots SET knowledge_dirty=true WHERE bot_id=$1",
+              [bot],
+            );
+            await tx.rows("UPDATE models SET base_url=$1", [provider.url]);
+          });
+          if (scenario.phase === "persist")
+            await db.tx((tx) =>
+              tx.rows(`
+        CREATE FUNCTION test_memory_save_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+          PERFORM pg_sleep(0.03);
+          RAISE EXCEPTION 'PRIVATE-CONVERSATION PRIVATE-MODEL-OUTPUT sk-memory-test' USING ERRCODE='23514';
+        END $$;
+        CREATE TRIGGER test_memory_save_failure BEFORE UPDATE OF through_seq,learned_seq ON bot_memories
+          FOR EACH ROW EXECUTE FUNCTION test_memory_save_failure();
+      `),
+            );
+          const warnings: string[] = [];
+          console.warn = (...args) => warnings.push(args.join(" "));
+          globalThis.fetch = async (url, init) => {
+            assert.equal(String(url), `${provider.url}/responses`);
+            assert.equal(JSON.parse(String(init?.body)).stream, false);
+            return new Response(
+              JSON.stringify(
+                scenario.response ?? {
+                  status: "completed",
+                  output: [
+                    {
+                      type: "message",
+                      content: [{ type: "output_text", text: scenario.text }],
+                    },
+                  ],
+                  usage: { input_tokens: 30, output_tokens: 6 },
+                },
+              ),
+              {
+                status: scenario.status,
+                headers: { "content-type": "application/json" },
+              },
+            );
+          };
+          try {
+            assert.equal(
+              await maintainMemory(
+                db,
+                { ...s, tracingEnabled: true },
+                randomUUID(),
+                scenario.learn,
+              ),
+              true,
+            );
+          } finally {
+            globalThis.fetch = nativeFetch;
+            console.warn = nativeWarn;
+            if (scenario.phase === "persist")
+              await db.tx((tx) =>
+                tx.rows(
+                  "DROP TRIGGER test_memory_save_failure ON bot_memories; DROP FUNCTION test_memory_save_failure();",
+                ),
+              );
+          }
+          assert.equal(warnings.length, 1);
+          const log = JSON.parse(warnings[0]);
+          assert.equal(log.event, "memory.maintenance.failed");
+          assert.equal(log.phase, scenario.phase);
+          assert.match(log.error, scenario.error);
+          assert.doesNotMatch(
+            warnings[0],
+            /PRIVATE-CONVERSATION|PRIVATE-MODEL-OUTPUT|sk-memory-test/,
+          );
+          assert.ok(log.phase_ms[scenario.phase] >= 0);
+          const stored = await db.tx((tx) => tx.get("bot_memories", bot));
+          assert.equal(stored.through_seq, 0);
+          assert.equal(stored.learned_seq, 0);
+          assert.equal(stored.failures, 1);
+          const events = await db.tx((tx) =>
+            tx.rows(
+              "SELECT payload FROM observation_outbox WHERE payload->'body'->'metadata'->>'run_id'=$1",
+              [log.job_id],
+            ),
+          );
+          const root = events.find(
+            (row) => row.payload.body.name === log.job_type,
+          )!.payload.body;
+          const generation = events.find(
+            (row) => row.payload.type === "generation-create",
+          )!.payload.body;
+          assert.equal(root.level, "ERROR");
+          assert.equal(root.statusMessage, log.error);
+          assert.equal(root.metadata.bot_id, bot);
+          assert.equal(root.metadata.failure_phase, scenario.phase);
+          assert.deepEqual(root.metadata.phase_ms, log.phase_ms);
+          assert.equal(
+            generation.level,
+            scenario.phase === "model" ? "ERROR" : "DEFAULT",
+          );
+          if (scenario.phase !== "model") {
+            assert.equal(generation.statusMessage, undefined);
+            assert.deepEqual(generation.usage, { input: 30, output: 6 });
+            const failed = events.find(
+              (row) => row.payload.body.name === `memory.${scenario.phase}`,
+            )!.payload.body;
+            assert.equal(failed.level, "ERROR");
+            assert.ok(
+              Date.parse(generation.endTime) <= Date.parse(failed.startTime),
+            );
+            assert.equal(
+              (
+                await db.tx((tx) =>
+                  tx.rows(
+                    "SELECT * FROM usage_logs WHERE bot_id=$1 AND source='memory'",
+                    [bot],
+                  ),
+                )
+              ).length,
+              1,
+            );
+          }
+          assert.ok(!JSON.stringify(events).includes("sk-memory-test"));
+        });
+    } finally {
+      globalThis.fetch = nativeFetch;
+      console.warn = nativeWarn;
+    }
+  },
+);

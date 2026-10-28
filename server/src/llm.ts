@@ -205,9 +205,13 @@ export async function complete(
   maxTokens: number,
   timeoutMs = 60000,
 ) {
+  const signal = AbortSignal.timeout(timeoutMs);
   const response = await fetch(endpoint(model), {
     method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${key}`,
+    },
     body: JSON.stringify({
       model: model.provider_model,
       input: messages,
@@ -215,18 +219,36 @@ export async function complete(
       stream: false,
       store: false,
     }),
-    signal: AbortSignal.timeout(timeoutMs),
+    signal,
     redirect: "error",
-  }).catch(() => {
-    throw new Error("无法连接模型服务");
+  }).catch((error: unknown) => {
+    if (
+      signal.aborted ||
+      (error instanceof Error && error.name === "TimeoutError")
+    )
+      throw new Error("模型请求超时");
+    const code = (error as { cause?: { code?: unknown } } | null)?.cause?.code;
+    throw new Error(
+      `无法连接模型服务${typeof code === "string" && /^[A-Z0-9_]{1,40}$/.test(code) ? ` (${code})` : ""}`,
+    );
   });
-  if (!response.ok) throw new Error(`模型服务返回错误（HTTP ${response.status}）`);
-  const data = (await response.json()) as Row;
-  if (data.status === "failed" || data.error)
-    throw new Error("模型生成失败");
+  if (!response.ok)
+    throw new Error(`模型服务返回错误（HTTP ${response.status}）`);
+  const data = (await response.json().catch(() => {
+    if (signal.aborted) throw new Error("模型请求超时");
+    throw new Error("模型服务返回的响应不是有效 JSON");
+  })) as Row;
+  if (data.status === "failed" || data.error) {
+    const code = data.error?.code;
+    throw new Error(
+      `模型生成失败${typeof code === "string" && /^[A-Za-z0-9_.-]{1,80}$/.test(code) ? ` (${code})` : ""}`,
+    );
+  }
   if (data.status === "incomplete") {
     if (data.incomplete_details?.reason === "max_output_tokens")
-      throw new Error("模型输出不完整：已达到输出 token 上限（思考内容也计入额度）");
+      throw new Error(
+        "模型输出不完整：已达到输出 token 上限（思考内容也计入额度）",
+      );
     throw new Error("模型输出不完整");
   }
   return {

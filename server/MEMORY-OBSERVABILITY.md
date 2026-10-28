@@ -28,6 +28,17 @@ LANGFUSE_TRACING_ENVIRONMENT=production
 
 Kubernetes：共享 `pibot` Secret 只放开关；地址、AK/SK、environment 放独立 `pibot-langfuse` Secret（从仅含这四项的 env 文件创建），部署模板仅让 Worker 挂载它。不要把这四项写入共享 Secret。
 
+启用 Kubernetes 追踪时，配置好 Worker 凭据后设置共享开关，并同时重启 API、Worker（Secret 环境变量不会热更新）：
+
+```sh
+kubectl -n pibot patch secret pibot --type merge -p '{"stringData":{"LANGFUSE_TRACING_ENABLED":"true"}}'
+kubectl -n pibot rollout restart deployment/pibot deployment/pibot-worker
+kubectl -n pibot rollout status deployment/pibot
+kubectl -n pibot rollout status deployment/pibot-worker
+```
+
+升级已有集群时，先创建共享开关字段，再应用新的 Deployment 配置；停用追踪时字段值设为 `false`。两个 Deployment 都要求该字段存在，避免 Worker 的凭据 Secret 意外覆盖开关。检查两个容器中的 `LANGFUSE_TRACING_ENABLED` 均为 `true`。只重启 Worker 会产生后台维护 trace，但 API 不会采集新对话的模型及工具观测。重启本身不会更新 Deployment 模板。
+
 原版 Pi Langfuse 插件会在执行进程直连，本项目不在客户端加载它。执行端只通过既有云端通道回传中性工具事件，模型输入输出及用量在云端代理采集，Worker 动态加载官方 `@langfuse/client`，使用 batch ingestion 将 PostgreSQL outbox 发送至实例。
 
 用户运行建立根 trace，后台任务、跨 Bot 委托和回报继承 trace；run/generation/tool ID 建立父子关系。新的用户续接产生新 trace，并保留旧任务引用。独立记忆维护有单独 trace。费用未知时不填 0，缓存与 reasoning Token 单独保留。
@@ -37,6 +48,8 @@ Kubernetes：共享 `pibot` Secret 只放开关；地址、AK/SK、environment �
 云端入队前去除认证信息、已知凭据及敏感字段，输入/输出分别最多 64 KiB，二进制占位。队列使用稳定 ID、多 Worker 租约和退避，24 小时过期清理并计数，退出最多等 10 秒；Langfuse 不可用不使业务失败。
 
 ## 验证
+
+记忆维护失败会向 Worker 标准错误输出单行 JSON，包含 job/bot/model、失败阶段（`model`、`validate`、`usage`、`persist`）、错误和阶段耗时，不记录对话正文或密钥。数据库错误仅保留错误类型和 SQLSTATE，JSON 解析错误不包含模型输出片段。Langfuse 的维护 span 同时记录错误、`failure_phase` 和 `phase_ms`；`LLM Call` 只使用模型请求阶段的起止时间及错误，后续校验或保存失败不会再把模型调用标红。
 
 测试使用专用数据库，会清空其 public schema：
 
