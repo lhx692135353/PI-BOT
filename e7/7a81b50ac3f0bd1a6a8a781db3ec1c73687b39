@@ -1,0 +1,46 @@
+server/tests/llm.test.ts
+  s_4114c4a0a3d0c7::t_63cd0c4151e823 114-116,122,155-158
+  s_4114c4a0a3d0c7::t_865dceb11fa4e1 117-121,123-142
+  s_4114c4a0a3d0c7::t_d469ef14497c96 103-104
+  s_4114c4a0a3d0c7::t_0979016803610b 143-150
+  s_4114c4a0a3d0c7::t_a329639ae067a8 151-154
+server/deploy/pibot.yaml
+  s_4114c4a0a3d0c7::t_3b4da510ae0efc 32-33,167-169,231-234
+  s_4114c4a0a3d0c7::t_9327603081c312 170,235
+server/src/observations.ts
+  s_4114c4a0a3d0c7::t_865dceb11fa4e1 395-400,427-431,435-458
+  s_4114c4a0a3d0c7::t_74c617128dc6e5 130,422-423
+  s_4114c4a0a3d0c7::t_1b6eadb8582eb8 310,326,361-367,381-382,393-394,421,424-426,432,459,462-463,466-467,472-473
+server/src/llm.ts
+  s_4114c4a0a3d0c7::t_a329639ae067a8 225-228,243-245
+  s_4114c4a0a3d0c7::t_2dd64c6677eb79 224,229-230,237,239-240
+  s_4114c4a0a3d0c7::t_865dceb11fa4e1 211-214,231-233,235-236,249-251
+  s_4114c4a0a3d0c7::t_d469ef14497c96 208,222,238,241-242,246
+server/MEMORY-OBSERVABILITY.md
+  s_4114c4a0a3d0c7::t_9327603081c312 40
+  s_4114c4a0a3d0c7::t_3b4da510ae0efc 31-39,41,52
+  s_4114c4a0a3d0c7::t_0d78953d1997ec 53
+server/tests/memory.test.ts
+  s_4114c4a0a3d0c7::t_865dceb11fa4e1 473-528,535-645
+  s_4114c4a0a3d0c7::t_380a53cdddb08c 472,529-534
+server/src/memory-maintenance.ts
+  s_4114c4a0a3d0c7::t_865dceb11fa4e1 66-67,129-137,144-149,162-164,168-175,180-187,198-202,206-210,212-242,246,248-257,273-290
+  s_4114c4a0a3d0c7::t_74c617128dc6e5 15,122-126,138-143,150-155,160-161,166-167,177-178,188-197,203-205,262,267-268,271-272,303-304,308-310
+  s_4114c4a0a3d0c7::t_e73ff535375f5b 179
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e77a81b50ac3f0bd1a6a8a781db3ec1c73687b39",
+  "prompts": {},
+  "sessions": {
+    "s_4114c4a0a3d0c7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a182a9-c2d9-7b32-95eb-5964920c4baf",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
