@@ -41,6 +41,19 @@ test("Qwen chat and report requests explicitly disable default thinking without 
       for (const [key, value] of Object.entries(override)) assert.deepEqual(requests.at(-1)[key], value);
       if (!("reasoning" in override)) assert.equal(requests.at(-1).reasoning, undefined);
     }
+    // This is the default persisted shape of models created before presets existed.
+    model.capabilities = { reasoning: "unknown" } as typeof model.capabilities;
+    model.provider_model = "qwen3.8-max";
+    await app.inject({ method: "POST", url: "/conversation", payload: input });
+    assert.deepEqual(requests.at(-1).reasoning, { effort: "none" });
+    assert.equal(requests.at(-1).max_output_tokens, 1000);
+    await app.inject({ method: "POST", url: "/task", payload: input });
+    assert.equal(requests.at(-1).reasoning, undefined);
+    for (const override of [{ reasoning_effort: "low" }, { thinking_budget: 1024 }]) {
+      await app.inject({ method: "POST", url: "/conversation", payload: { ...input, ...override } });
+      assert.equal(requests.at(-1).reasoning, undefined);
+      for (const [key, value] of Object.entries(override)) assert.deepEqual(requests.at(-1)[key], value);
+    }
     model.capabilities.reasoning = "required";
     model.provider_model = "qwen3.8-2.4t-a95b";
     await app.inject({ method: "POST", url: "/conversation", payload: input });

@@ -49,6 +49,18 @@ kubectl -n pibot rollout status deployment/pibot-worker
 
 ## 验证
 
+### 普通对话首句耗时
+
+百炼的 `qwen3.8-max`、`qwen3.8-flash` 在模型能力未填写或为 `unknown` 时使用服务端预设：普通对话请求发送 `reasoning: { effort: "none" }`。依据[阿里云 Responses API 参数说明](https://help.aliyun.com/en/model-studio/qwen-api-via-openai-responses)。旧记录无需迁移，模型列表和目录返回有效能力，管理界面选择模型时采用相同预设。
+
+管理员明确的 `none`、`required` 能力及 `reasoning_off` 参数保持优先；请求显式指定的思考参数也保持优先。预设只匹配百炼服务商及上述两个精确模型 ID，不作用于自定义服务商、未知模型或后台任务。任务上下文、调用轮次及输出上限不变。
+
+模型 trace 的 `modelParameters` 仅记录允许的思考控制值；Langfuse 接口要求标量值，因此嵌套参数用 `reasoning.effort` 表示，其他控制参数保留原字段名。metadata 中 `reasoning_source` 为 `provider_preset`（内置预设）、`model_config`（管理员配置）、`request`（请求指定）或 `provider_default`（未注入参数）。检查普通对话的参数是否为 `none`，并结合 `reasoning_tokens`、`first_reply_ms`、`reply_generation_ms` 和 `reply_delivery_overhead_ms` 对比实际耗时。参数模式与用量分别记录，若服务商仍返回思考用量，应继续核查其实际支持情况；不把“发出关闭参数”视为已消除思考耗时。
+
+需要执行工作的首轮先简短说明要核实什么，再安排任务，详细计划交给后台。沿用模型自然回复，不增加固定确认消息或强制额外模型回合。上线后用同模型的简单问答、任务创建、状态查询和任务回报检查首句是否更快、任务条件是否完整，以及有无重复回复；不承诺固定响应秒数。
+
+### 记忆维护诊断
+
 记忆维护失败会向 Worker 标准错误输出单行 JSON，包含 job/bot/model、失败阶段（`model`、`validate`、`usage`、`persist`）、错误和阶段耗时，不记录对话正文或密钥。数据库错误仅保留错误类型和 SQLSTATE，JSON 解析错误不包含模型输出片段。Langfuse 的维护 span 同时记录错误、`failure_phase` 和 `phase_ms`；`LLM Call` 只使用模型请求阶段的起止时间及错误，后续校验或保存失败不会再把模型调用标红。
 
 测试使用专用数据库，会清空其 public schema：

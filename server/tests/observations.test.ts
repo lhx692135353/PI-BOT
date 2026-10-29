@@ -483,3 +483,55 @@ test("desktop/shared agent sources and manifests contain no Langfuse exporter or
       /LANGFUSE_(?:BASE_URL|PUBLIC_KEY|SECRET_KEY)|from\s*['"]@langfuse/,
     );
 });
+
+test("old Qwen rows display effective capabilities and trace the actual reasoning controls and their source", { skip }, async () => {
+  const model = (await db.tx(tx => tx.one("SELECT * FROM models ORDER BY created_at LIMIT 1")))!;
+  const defaults = { chat: true, vision: true, voice: false, tools: true, reasoning: "unknown" };
+  try {
+    await db.tx(tx => tx.rows("UPDATE models SET provider='bailian',provider_model='qwen3.8-max',capabilities=$2 WHERE model_id=$1", [model.model_id, JSON.stringify(defaults)]));
+    const listed = await app.inject({ method: "GET", url: "/admin/api/models", headers: { authorization: `Bearer ${token}` } });
+    assert.equal(listed.statusCode, 200);
+    const shown = listed.json().find((m: any) => m.id === model.model_id);
+    assert.equal(shown.capabilities.reasoning, "configurable");
+    assert.deepEqual(shown.capabilities.reasoning_off, { reasoning: { effort: "none" } });
+    const stored = await db.tx(tx => tx.one("SELECT capabilities FROM models WHERE model_id=$1", [model.model_id]));
+    assert.deepEqual(stored!.capabilities, defaults, "displaying defaults does not migrate the stored row");
+    const id = (await api(`/bots/${bot}/messages`, { text: "首句延迟检查", request_id: randomUUID() })).data.run.id;
+    await db.tx(async tx => buildContext(tx, s, await tx.get("bot_runs", id)));
+    const bearer = await issueLlmToken({ sub: userId, src: "cloud", bot }, s);
+    const cases = [
+      { source: "provider_preset", controls: {}, expected: { "reasoning.effort": "none" } },
+      { source: "request", controls: { reasoning: { effort: "low", summary: "PRIVATE-REQUEST-PARAMETER" } }, expected: { "reasoning.effort": "low" } },
+      { source: "model_config", controls: {}, expected: { enable_thinking: false } },
+    ];
+    for (const scenario of cases) {
+      if (scenario.source === "model_config") await db.tx(tx => tx.rows("UPDATE models SET capabilities=$2 WHERE model_id=$1", [model.model_id, JSON.stringify({ ...defaults, reasoning: "configurable", reasoning_off: { enable_thinking: false } })]));
+      const generationId = randomUUID();
+      const response = await api("/llm/v1/responses", {
+        model: model.model_id, input: [{ role: "user", content: "PRIVATE-PROMPT" }], stream: false, ...scenario.controls,
+      }, bearer, { "x-pibot-run-id": id, "x-pibot-generation-id": generationId });
+      assert.equal(response.status, 200, JSON.stringify(response));
+      const observation = await eventually(async () => {
+        const row = await db.tx(tx => tx.one("SELECT payload FROM observation_outbox WHERE payload->'body'->>'id'=$1", [spanId(`${id}:generation:${generationId}`)]));
+        return row?.payload.body ?? false;
+      });
+      assert.equal(observation.metadata.reasoning_source, scenario.source);
+      assert.deepEqual(observation.modelParameters, scenario.expected);
+      assert.ok(Object.values(observation.modelParameters).every(value => ["string", "number", "boolean"].includes(typeof value)));
+      assert.doesNotMatch(JSON.stringify({ metadata: observation.metadata, parameters: observation.modelParameters }), /PRIVATE-PROMPT|PRIVATE-REQUEST-PARAMETER|sk-private-provider-value/);
+      if (scenario.source === "provider_preset") assert.deepEqual(provider.requests.at(-1)!.body.reasoning, { effort: "none" });
+      if (scenario.source === "request") assert.deepEqual(provider.requests.at(-1)!.body.reasoning, scenario.controls.reasoning);
+      if (scenario.source === "model_config") assert.equal(provider.requests.at(-1)!.body.enable_thinking, false);
+    }
+    const created = await api("/admin/api/models", {
+      name: "new fast chat", provider: "bailian", provider_model: "qwen3.8-flash", api_key: "sk-new-model-test", context_window: 32000, max_tokens: 2000,
+    });
+    assert.equal(created.status, 200, JSON.stringify(created));
+    assert.deepEqual(created.data.capabilities.reasoning_off, { reasoning: { effort: "none" } });
+    const patched = await app.inject({ method: "PATCH", url: `/admin/api/models/${created.data.id}`, headers: { authorization: `Bearer ${token}` }, payload: { capabilities: { ...defaults, reasoning: "required" } } });
+    assert.equal(patched.statusCode, 200);
+    assert.equal(patched.json().capabilities.reasoning, "required");
+  } finally {
+    await db.tx(tx => tx.rows("UPDATE models SET provider=$2,provider_model=$3,capabilities=$4 WHERE model_id=$1", [model.model_id, model.provider, model.provider_model, JSON.stringify(model.capabilities)]));
+  }
+});

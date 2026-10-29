@@ -1,5 +1,5 @@
 import tokenPlanCatalog from "./provider-catalogs/token-plan.json" with { type: "json" };
-import { type ModelCapabilities } from "@pi-bot/runtime-contracts";
+import { DEFAULT_MODEL_CAPABILITIES, type ModelCapabilities } from "@pi-bot/runtime-contracts";
 import { fail, HttpError } from "./db.js";
 
 export type Provider = "xai" | "bailian" | "custom";
@@ -32,16 +32,67 @@ export function applyProviderSearch(body: Record<string, unknown>, model: { prov
   return { ...body, tools };
 }
 
-/** Pi's non-reasoning model flag omits the parameter; Qwen then enables thinking by default. */
+type ReasoningModel = {
+  provider?: string | null;
+  provider_model?: string | null;
+  capabilities?: Partial<ModelCapabilities> | null;
+};
+
+const FAST_CHAT_MODELS = new Set(["qwen3.8-max", "qwen3.8-flash"]);
+
+/** Runtime defaults cover old rows without overwriting administrator settings. */
+export function effectiveModelCapabilities(model: ReasoningModel): ModelCapabilities {
+  const capabilities = { ...DEFAULT_MODEL_CAPABILITIES, ...model.capabilities };
+  if (model.provider === "bailian" && FAST_CHAT_MODELS.has(model.provider_model ?? "")
+    && (capabilities.reasoning === "unknown" || capabilities.reasoning === "configurable")) {
+    return {
+      ...capabilities,
+      reasoning: "configurable",
+      reasoning_off: capabilities.reasoning_off ?? { reasoning: { effort: "none" } },
+    };
+  }
+  return capabilities;
+}
+
+export type ReasoningSource = "request" | "model_config" | "provider_preset" | "provider_default";
+export interface ReasoningTelemetry {
+  source: ReasoningSource;
+  effort?: string;
+  flatEffort?: string;
+  enabled?: boolean;
+  budget?: number;
+}
+
+/** Only allowlisted scalar controls are recorded; never copy arbitrary provider parameters. */
+export function reasoningTelemetry(payload: Record<string, unknown>, source: ReasoningSource): ReasoningTelemetry {
+  const effort = (payload.reasoning as { effort?: unknown } | null)?.effort;
+  const flatEffort = payload.reasoning_effort;
+  const supported = (value: unknown): value is string => typeof value === "string" && ["none", "minimal", "low", "medium", "high", "xhigh", "max"].includes(value);
+  return {
+    source,
+    ...(supported(effort) ? { effort } : {}),
+    ...(supported(flatEffort) ? { flatEffort } : {}),
+    ...(typeof payload.enable_thinking === "boolean" ? { enabled: payload.enable_thinking } : {}),
+    ...(typeof payload.thinking_budget === "number" && Number.isSafeInteger(payload.thinking_budget) && payload.thinking_budget >= 0 ? { budget: payload.thinking_budget } : {}),
+  };
+}
+
+/** Pi omits the off parameter; known Qwen models otherwise default to thinking. */
 export function applyConversationReasoning(
   body: Record<string, unknown>,
-  model: { provider?: string | null; provider_model?: string | null; capabilities?: Partial<ModelCapabilities> },
+  model: ReasoningModel,
   lane?: string | null,
-) {
-  const capabilities = model.capabilities;
-  if (lane !== "conversation" || capabilities?.reasoning !== "configurable" || !capabilities.reasoning_off
-    || body.reasoning !== undefined || body.enable_thinking !== undefined) return body;
-  return { ...body, ...capabilities.reasoning_off };
+): { payload: Record<string, unknown>; source: ReasoningSource } {
+  if (["reasoning", "enable_thinking", "reasoning_effort", "thinking_budget"].some(key => body[key] !== undefined))
+    return { payload: body, source: "request" };
+  const capabilities = effectiveModelCapabilities(model);
+  if (lane !== "conversation" || capabilities.reasoning !== "configurable"
+    || !capabilities.reasoning_off || !Object.keys(capabilities.reasoning_off).length)
+    return { payload: body, source: "provider_default" };
+  return {
+    payload: { ...body, ...capabilities.reasoning_off },
+    source: model.capabilities?.reasoning_off !== undefined ? "model_config" : "provider_preset",
+  };
 }
 
 export const TOKEN_PLAN_BASE = "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1";
@@ -117,7 +168,10 @@ export async function listCatalog(provider: "xai" | "bailian", key: string) {
     const all = await readJson("https://api.x.ai/v1/models", key);
     return classifyModels([...parseCatalog(language), ...parseCatalog(all)]);
   }
-  return classifyModels(tokenPlanCatalog.models);
+  return classifyModels(tokenPlanCatalog.models.map(model => ({
+    ...model,
+    capabilities: effectiveModelCapabilities({ provider: "bailian", provider_model: model.id, capabilities: model.capabilities }),
+  })));
 }
 
 function text(value: unknown) {

@@ -39,7 +39,7 @@ import { cancelRun, decideApproval, dispatchDevice, failDeviceRuns } from "./run
 import { cancelTask, createTask, readTask, reportLater, TERMINAL, listTasks, messageTask, callerRun } from "./agents.js";
 import { deviceOut, deviceList, botConnection } from './devices.js';
 import { complete, findModel, proxyResponses, recordUsage } from "./llm.js";
-import { listCatalog, providerBase } from "./providers.js";
+import { effectiveModelCapabilities, listCatalog, providerBase } from "./providers.js";
 import type { WebSearch } from "./search.js";
 import { manageSkill, skillRequest } from "./skills.js";
 
@@ -129,7 +129,7 @@ const modelOut = (m: Row) => ({
   provider_model: m.provider_model,
   voice_model: m.voice_model ?? null,
   provider_search: m.provider_search === true,
-  capabilities: m.capabilities,
+  capabilities: effectiveModelCapabilities(m),
   context_window: m.context_window,
   max_tokens: m.max_tokens,
   enabled: m.enabled,

@@ -63,6 +63,7 @@ export interface CatalogModel {
   id: string;
   context_window: number | null;
   max_tokens: number | null;
+  capabilities?: Model["capabilities"];
 }
 export interface Model {
   capabilities?: {chat:boolean;vision:boolean;voice:boolean;tools:boolean;reasoning:"none"|"configurable"|"required"|"unknown";reasoning_off?:Record<string,unknown>};

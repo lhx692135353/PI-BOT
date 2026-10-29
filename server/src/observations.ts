@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import type { ReasoningTelemetry } from "./providers.js";
 import type { Database, Row, Tx } from "./db.js";
 import type { Settings } from "./config.js";
 
@@ -315,9 +316,17 @@ export async function recordGeneration(
     error?: string;
     model: Row;
     secrets?: string[];
+    reasoning?: ReasoningTelemetry;
   },
 ) {
   if (!s.tracingEnabled) return;
+  // Langfuse ingestion accepts scalar model parameter values, so nested API controls use dotted keys.
+  const modelParameters: Record<string, string | number | boolean> | undefined = data.reasoning ? {
+    ...(data.reasoning.effort !== undefined ? { "reasoning.effort": data.reasoning.effort } : {}),
+    ...(data.reasoning.flatEffort !== undefined ? { reasoning_effort: data.reasoning.flatEffort } : {}),
+    ...(data.reasoning.enabled !== undefined ? { enable_thinking: data.reasoning.enabled } : {}),
+    ...(data.reasoning.budget !== undefined ? { thinking_budget: data.reasoning.budget } : {}),
+  } : undefined;
   const body = observationBody(
     run,
     spanId(`${run.run_id}:generation:${data.id}`),
@@ -331,6 +340,7 @@ export async function recordGeneration(
         data.parentTool ? `${run.run_id}:${data.parentTool}` : run.run_id,
       ),
       model: data.model.provider_model,
+      modelParameters,
       completionStartTime: data.firstToken?.toISOString(),
       usage: data.usage
         ? { input: data.usage.input, output: data.usage.output }
@@ -346,6 +356,7 @@ export async function recordGeneration(
         price_status: "unknown",
         cache_read_tokens: data.usage?.cached ?? null,
         reasoning_tokens: data.usage?.reasoning ?? null,
+        reasoning_source: data.reasoning?.source ?? null,
       },
     },
   );

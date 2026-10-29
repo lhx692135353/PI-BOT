@@ -334,7 +334,7 @@ function ModelForm({ model, onClose, onSaved }: { model?: Model; onClose: () => 
         </label>
         <label>
           服务商
-          <select value={form.provider} onChange={(e) => { const provider = e.target.value as ProviderName; setCatalog(null); setManual(provider === "custom"); set({ provider, provider_model: "", voice_model: provider === "bailian" ? "qwen-audio-3.0-realtime-plus" : null, provider_search: false }); }}>
+          <select value={form.provider} onChange={(e) => { const provider = e.target.value as ProviderName; setCatalog(null); setManual(provider === "custom"); set({ provider, provider_model: "", capabilities: undefined, voice_model: provider === "bailian" ? "qwen-audio-3.0-realtime-plus" : null, provider_search: false }); }}>
             <option value="xai">xAI</option>
             <option value="bailian">百炼</option>
             <option value="custom">自定义</option>
@@ -364,6 +364,7 @@ function ModelForm({ model, onClose, onSaved }: { model?: Model; onClose: () => 
                 provider_model: e.target.value,
                 ...(item?.context_window ? { context_window: item.context_window } : {}),
                 ...(item?.max_tokens ? { max_tokens: item.max_tokens } : {}),
+                capabilities: item?.capabilities,
                 name: !form.name || form.name === form.provider_model ? e.target.value : form.name,
               });
             }}>
@@ -395,11 +396,11 @@ function ModelForm({ model, onClose, onSaved }: { model?: Model; onClose: () => 
         <label className="check"><input type="checkbox" checked={form.capabilities?.tools ?? true} onChange={e=>set({capabilities:{chat:true,vision:true,voice:false,reasoning:"unknown",...form.capabilities,tools:e.target.checked}})}/>支持原生工具调用</label>
         <label>推理模式
           <select value={form.capabilities?.reasoning ?? "unknown"} onChange={e => set({capabilities:{chat:true,vision:true,voice:false,tools:true,...form.capabilities,reasoning:e.target.value as "none"|"configurable"|"required"|"unknown"}})}>
-            <option value="unknown">未确认，遵循服务商默认</option><option value="none">无推理模式</option><option value="configurable">可配置</option><option value="required">必须开启</option>
+            <option value="unknown">自动识别，未知模型遵循服务商默认</option><option value="none">无推理模式</option><option value="configurable">可配置</option><option value="required">必须开启</option>
           </select>
         </label>
         {form.capabilities?.reasoning === "configurable" && <label>聊天关闭推理的参数（JSON，按服务商文档填写）
-          <input defaultValue={JSON.stringify(form.capabilities.reasoning_off ?? {})} onBlur={e=>{try{const value=JSON.parse(e.target.value);if(value && typeof value==="object"&&!Array.isArray(value))set({capabilities:{...form.capabilities!,reasoning_off:value}});}catch{e.target.setCustomValidity("请输入 JSON 对象");}}}/>
+          <input key={`${form.provider}:${form.provider_model}`} defaultValue={JSON.stringify(form.capabilities.reasoning_off ?? {})} onBlur={e=>{try{const value=JSON.parse(e.target.value);if(value && typeof value==="object"&&!Array.isArray(value))set({capabilities:{...form.capabilities!,reasoning_off:value}});}catch{e.target.setCustomValidity("请输入 JSON 对象");}}}/>
         </label>}
         {locked ? (
           <p className="muted small">上下文 {fmt(form.context_window)}，单次输出上限 {fmt(form.max_tokens)}。这两项来自所选模型。</p>

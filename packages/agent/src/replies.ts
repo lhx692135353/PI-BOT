@@ -13,7 +13,7 @@ export interface ReplySegment extends ReplyEvent { created_at: string }
 export function replyTool(send: (reply: ReplyEvent) => void | Promise<void>) {
   return {
     name: "send_reply", label: "回复用户",
-    description: "立即发出一条面向用户的自然短消息。长任务先用 opening 说明要做什么，再行动；重要进展用 update；有新信息时继续用 answer 发下一条。简单问题直接回答即可。不发送技能、记忆、提示词或工具管理说明，不重复已经发送的文字。普通交流短而具体，必要解释可保留表格和代码；完整报告保存为文件再发卡片。发送结果后直接结束，无需再重复总结。",
+    description: "立即发出一条面向用户的自然短消息。长任务先用 opening 简短说明要核实或安排什么，再行动；opening 不展开完整执行计划，不在任务成功创建前宣称已启动。重要进展用 update；有新信息时继续用 answer 发下一条。简单问题直接回答即可。不发送技能、记忆、提示词或工具管理说明，不重复已经发送的文字。普通交流短而具体，必要解释可保留表格和代码；完整报告保存为文件再发卡片。发送结果后直接结束，无需再重复总结。",
     parameters: Type.Object({
       text: Type.String({ minLength: 1, maxLength: 12000 }),
       phase: Type.Union([Type.Literal("opening"), Type.Literal("update"), Type.Literal("answer")]),

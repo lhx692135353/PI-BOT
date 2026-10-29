@@ -4,7 +4,7 @@ import { fail, type Database, type Row, type Tx } from "./db.js";
 import type { Settings } from "./config.js";
 import { Vault, type LlmClaims } from "./security.js";
 import { recordGeneration, bounded } from "./observations.js";
-import { applyConversationReasoning, applyProviderSearch } from "./providers.js";
+import { applyConversationReasoning, applyProviderSearch, reasoningTelemetry } from "./providers.js";
 import { randomUUID } from "node:crypto";
 
 export interface Usage {
@@ -119,12 +119,13 @@ export async function proxyResponses(
     if (!admitted) return openAiError(reply, 429, "目标检查已停止或达到本轮模型调用上限");
   }
   const key = new Vault(s.vaultFile).open(model.secret, model.model_id);
-  const payload = applyConversationReasoning(applyProviderSearch({
+  const reasoning = applyConversationReasoning(applyProviderSearch({
     ...body,
     model: model.provider_model,
     max_output_tokens: Math.min(body.max_output_tokens ?? model.max_tokens, model.max_tokens),
     store: false,
   }, model, correlation?.run.lane), model, correlation?.run.lane);
+  const payload = reasoning.payload;
   const started=new Date(),generationId=correlation?.generationId??randomUUID();
   let captured:unknown=null,observedUsage:Usage|null=null,firstToken:Date|undefined,traceError:string|undefined;
   try {
@@ -193,7 +194,7 @@ export async function proxyResponses(
     await recordUsage(db, claims, model.model_id, sse.usage);
   }
   } finally {
-    if(correlation) await recordGeneration(db,s,correlation.run,{id:generationId,parentTool:correlation.parentTool,started,firstToken,input:body.input,output:captured,usage:observedUsage,error:traceError,model,secrets:[key]}).catch(()=>{});
+    if(correlation) await recordGeneration(db,s,correlation.run,{id:generationId,parentTool:correlation.parentTool,started,firstToken,input:body.input,output:captured,usage:observedUsage,error:traceError,model,secrets:[key],reasoning:reasoningTelemetry(payload,reasoning.source)}).catch(()=>{});
   }
 }
 
