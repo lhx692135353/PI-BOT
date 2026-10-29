@@ -1,0 +1,132 @@
+desktop/tests/harness-e2e.test.ts
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 1-2,31-35,106,122-124,128,136,139-142,162,252,359
+server/src/routes.ts
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 1,41,115,173-180,182-198,204,249,410,452,472,476,502
+android/app/src/main/java/dev/pibot/android/ui/SettingsScreen.kt
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 99,115
+server/tests/remote.test.ts
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 31,384,405-409,455,458,601,654-655
+android/app/src/test/java/dev/pibot/android/PhoneControlFlowTest.kt
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 99,101-102
+android/app/src/main/java/dev/pibot/android/ui/BotEditorScreen.kt
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 86,88,94
+server/tests/async-tasks.test.ts
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 256-257,259-264,282,303
+desktop/apps/desktop/ui/main.tsx
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 98,124,133-143,154,157,159-160,180,187-190,197,205,353,366,397-398
+desktop/REQUIREMENTS.md
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 11,19,35,43
+packages/agent/src/tasks.ts
+  s_4114c4a0a3d0c7::t_9128beb9ea5ddc 23
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 1,24
+server/tests/ui.test.ts
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 1-3,246-257,259-271
+android/app/src/main/java/dev/pibot/android/ui/TaskConversationDialog.kt
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 75
+server/src/hub.ts
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 31-32
+server/tests/automations.test.ts
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 44,53,56,136,154,158,160,182,190-191,282,284-285,287-288,329
+server/src/scheduling.ts
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 1-3,10,33-46
+  s_4114c4a0a3d0c7::t_833958bf2e91f4 47
+android/app/src/main/java/dev/pibot/android/ui/TimelineScreen.kt
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 180
+server/src/sockets.ts
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 1,118-119
+android/app/src/main/java/dev/pibot/android/ui/PhoneControlScreen.kt
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 101
+packages/agent/src/automations.ts
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 1,20,22-23
+android/app/src/main/java/dev/pibot/android/data/PiBotApi.kt
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 172,186-192,309-312,314-315
+desktop/packages/service/src/application.ts
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 12,83,135,223-225
+desktop/tests/phone-panel.harness.tsx
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 83,206
+desktop/packages/service/src/library.ts
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 266-279
+desktop/tests/library.test.ts
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 7,141-158
+  s_4114c4a0a3d0c7::t_2c81f02d262cc8 159
+server/ARCHITECTURE.md
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 30,214,217,222,225,230,234,236,250-260
+server/src/app.ts
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 1-5,137-145,172-173,178-186,195-219
+  s_4114c4a0a3d0c7::t_c962bbaff0b2a3 220
+server/src/automations.ts
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 1,36-37,42,45,59,87,97,108-114,116,118,141,155-160,162,202-203,269,272,291-298,306,308-323,336-345,348,363,368,394,409
+desktop/packages/protocol/src/index.ts
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 39-41,71
+android/app/src/main/java/dev/pibot/android/data/PiBotRepository.kt
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 321,323-325
+server/src/bots.ts
+  s_4114c4a0a3d0c7::t_9128beb9ea5ddc 508
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 202,250,268,321,326,353,362-363,367,501-502,578-579
+server/src/targets.ts
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 1-3,6-41,43-103,105-107
+server/src/worker.ts
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 21,45,55,69-81
+server/openapi.json
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 214-248,1339,1350-1387,2417,2922-2930,2976-2984
+desktop/packages/service/src/cloud.ts
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 91
+server/src/task-conversation.ts
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 22-24
+desktop/apps/desktop/ui/timeline.tsx
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 81
+packages/agent/src/ask-agent.ts
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 1,55,61,65
+desktop/tests/multi-device.test.ts
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 21,81,86-88,90,94,101,121-131,134-136
+android/app/src/main/java/dev/pibot/android/ui/FilesScreen.kt
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 59,65-67,75-82,85-86,88,91,109,117-125,135,153
+server/remote-guest/runtime.mjs
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 46,51-62
+desktop/apps/desktop/ui/editor.tsx
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 4,7,18,63
+server/src/memory.ts
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 313-317
+server/src/voice.ts
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 178-179
+server/src/agents.ts
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 4,25,28,110,133-139,142,159,174,189-199,408,411-427,470,516-525
+server/REQUIREMENTS.md
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 16,19,24,63
+README.md
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 11,13,26,29,44,96,137
+desktop/tests/phone-entry-driver.js
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 18-23,25
+desktop/README.md
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 12,54,58,107
+server/src/migrate.ts
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 4
+server/src/runs.ts
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 28,35,39-40,52,55,207,224
+server/tests/integration.test.ts
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 243-255,257-274,294,405-406,408,515-517,519-527
+android/app/src/test/java/dev/pibot/android/PhoneAssociationTest.kt
+  s_4114c4a0a3d0c7::t_83c4f91ef80610 30
+packages/agent/src/routing.ts
+  s_4114c4a0a3d0c7::t_4ff98f989ca10f 1-8
+server/migrations/0019-task-routing.sql
+  s_4114c4a0a3d0c7::t_185b8f6751238c 1-23
+server/tests/task-routing.test.ts
+  s_4114c4a0a3d0c7::t_20f878a1a5e179 1-192
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ab0d1830d2cd8fa1c42d9a66a2cf3bebce8098f1",
+  "prompts": {},
+  "sessions": {
+    "s_4114c4a0a3d0c7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a182a9-c2d9-7b32-95eb-5964920c4baf",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
