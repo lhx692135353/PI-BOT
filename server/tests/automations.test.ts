@@ -41,7 +41,7 @@ beforeEach(async () => {
     await finishRun(tx, dialog.run_id, "completed", null, "已建立");
     review = (await tx.one("SELECT automation_id FROM bot_automations WHERE bot_id=$1", [bot]))!.automation_id;
   });
-  conn = { deviceId: device, userId: user, capabilities: ["always-on-v1"], send: m => sent.push(m), close() {} };
+  conn = { deviceId: device, userId: user, capabilities: ["always-on-v1","files","shell"], send: m => sent.push(m), close() {} };
   hub.attach(conn);
 });
 after(async () => { await db?.close(); });
@@ -50,10 +50,10 @@ async function current(id = review) { return db.tx(tx => tx.get("bot_automations
 async function goal(id = goalId) { return db.tx(tx => tx.get("bot_goals", id)); }
 async function active(id = review) { return db.tx(tx => tx.one("SELECT r.* FROM bot_runs r JOIN automation_rounds ar ON ar.run_id=r.run_id WHERE ar.automation_id=$1 AND ar.status='active'", [id])); }
 async function dialogue() {
-  return db.tx(tx => insertRun(tx, { userId: user, botId: bot, requestId: randomUUID(), text: "管理目标", computer: { deviceId: device } }));
+  return db.tx(tx => insertRun(tx, { userId: user, botId: bot, requestId: randomUUID(), text: "管理目标", computer: { deviceId: device },sourceClient:"desktop",sourceDeviceId:device }));
 }
 async function control(run: Row, body: object) {
-  return db.tx(tx => manageGoals(tx, user, claims(), goalRequest.parse({ run_id: run.run_id, request_id: randomUUID(), ...body }), now));
+  return db.tx(tx => manageGoals(tx, user, {...claims(),src:run.executor,did:run.device_id??undefined}, goalRequest.parse({ run_id: run.run_id, request_id: randomUUID(), ...body }), now,config(),hub));
 }
 function asDecision(extra: Record<string, any> = {}) {
   const state = extra.state === "complete" || extra.state === "done" ? "done" : extra.state === "waiting_user" ? "waiting_user" : "continue";
@@ -133,7 +133,7 @@ test("a goal review waits offline and for a compatible computer, and never becom
   hub.detach(conn); await due(); await scheduler().once();
   assert.equal((await current()).status, "waiting_device"); assert.equal(await active(), undefined);
   conn.capabilities = []; hub.attach(conn); await scheduler().once(); assert.equal(await active(), undefined);
-  conn.capabilities = ["always-on-v1"]; await scheduler().once();
+  conn.capabilities = ["always-on-v1","files","shell"]; await due(); await scheduler().once();
   const run = (await active())!;
   assert.equal(run.executor, "device"); assert.equal(run.execution_policy, "device_only");
   assert.equal(sent.filter(m => m.type === "run").length, 1);
@@ -151,13 +151,13 @@ test("one computer's offline backlog cannot starve another computer's due work o
       const created = await createBot(tx, user, { name: `offline-${i}`, persona: "", execution_device_id: offlineDevice });
       await tx.insert("bot_automations", { automation_id: randomUUID(), bot_id: created.bot_id, user_id: user, operation_target:"device:"+offlineDevice, kind: "review", title: "目标检查", goal: "检查目标", next_wake_at: new Date(now.getTime() - 86400000) });
     }
-    const offline = await tx.rows("SELECT a.automation_id FROM bot_automations a JOIN bots b USING(bot_id) WHERE b.execution_device_id=$1 LIMIT 51", [offlineDevice]);
+    const offline = await tx.rows("SELECT a.automation_id FROM bot_automations a JOIN bots b USING(bot_id) WHERE a.operation_target='device:'||$1::text LIMIT 51", [offlineDevice]);
     for (const a of offline) await tx.insert("automation_reports", { report_id: randomUUID(), automation_id: a.automation_id,
       version: 1, event_key: "offline-pending", category: "progress", content: "离线待回报", available_at: new Date(now.getTime() - 86400000) });
   });
-  await due(); await scheduler().once();
+  await due(); for(let i=0;i<3;i++) await scheduler().once();
   assert.ok(await active());
-  const count = await db.tx(tx => tx.one("SELECT count(*) AS n FROM bot_automations a JOIN bots b USING(bot_id) WHERE b.execution_device_id=$1 AND a.status='waiting_device'", [offlineDevice]));
+  const count = await db.tx(tx => tx.one("SELECT count(*) AS n FROM bot_automations a JOIN bots b USING(bot_id) WHERE a.operation_target='device:'||$1::text AND a.status='paused'", [offlineDevice]));
   assert.equal(count!.n, 101);
   await done((await active())!, { notify: true, summary: "在线用户的重要结果", notification_key: "online-result" });
   await scheduler().once();
@@ -179,7 +179,7 @@ test("concurrent scans coalesce wakes and quiet rounds change neither timeline n
   await scheduler().once(); assert.equal(await active(), undefined);
 });
 
-test("important output is persisted, remains pending offline, and is published exactly once", { skip }, async () => {
+test("important output is persisted and published exactly once even when computers are offline", { skip }, async () => {
   db.pushEnabled = true;
   await db.tx(tx => tx.rows(`INSERT INTO push_installations(installation_id,user_id,fcm_token,binding_id,session_expires_at,session_issued_at)
     VALUES($1,$2,'goal-test-token',$3,now()+interval '1 day',0)`, [randomUUID(),user,randomUUID()]));
@@ -187,8 +187,8 @@ test("important output is persisted, remains pending offline, and is published e
   const run = (await active())!;
   await done(run, { notify: true, summary: "发现一个需要确认的新问题", notification_key: "issue:42:needs-decision" });
   hub.detach(conn); await scheduler().once();
-  assert.equal((await db.tx(tx => tx.one("SELECT count(*) AS n FROM push_deliveries")))!.n, 0, "private review output is not a push event");
-  assert.equal((await db.tx(tx => messagesPage(tx, bot, undefined, 50))).messages.at(-1)!.content, "已建立");
+  assert.equal((await db.tx(tx => tx.one("SELECT count(*) AS n FROM push_deliveries")))!.n, 1, "cloud publishes the completed report without waiting for a computer");
+  assert.equal((await db.tx(tx => messagesPage(tx, bot, undefined, 50))).messages.at(-1)!.content, "发现一个需要确认的新问题");
   hub.attach(conn); await Promise.all([scheduler().once(), scheduler().once()]);
   const page = await db.tx(tx => messagesPage(tx, bot, undefined, 50));
   assert.equal(page.messages.at(-1)!.content, "发现一个需要确认的新问题");
@@ -279,13 +279,13 @@ test("the daily review cap defers to the next local day without sending a budget
 
 test("a review can record one new goal but cannot change existing ones", { skip }, async () => {
   await due(); await scheduler().once(); const run = (await active())!;
-  const listed = await db.tx(tx => manageGoals(tx, user, claims(), goalRequest.parse({ action: "list", run_id: run.run_id, request_id: "x" }))) as { goals: Row[] };
+  const listed = await db.tx(tx => manageGoals(tx, user, {...claims(),src:run.executor,did:run.device_id??undefined}, goalRequest.parse({ action: "list", run_id: run.run_id, request_id: "x" }))) as { goals: Row[] };
   assert.equal(listed.goals.length, 1);
-  await assert.rejects(db.tx(tx => manageGoals(tx, user, claims(), goalRequest.parse({ action: "pause", run_id: run.run_id, request_id: "pause", goal_id: goalId }))), /查看或新建/);
-  const created = await db.tx(tx => manageGoals(tx, user, claims(), goalRequest.parse({ action: "create", run_id: run.run_id, request_id: "review-goal", title: "补上遗漏", goal: "把资料里没做完的整理完", authorization: "在自己的资料库内推进" }))) as Row;
+  await assert.rejects(db.tx(tx => manageGoals(tx, user, {...claims(),src:run.executor,did:run.device_id??undefined}, goalRequest.parse({ action: "pause", run_id: run.run_id, request_id: "pause", goal_id: goalId }))), /查看或新建/);
+  const created = await db.tx(tx => manageGoals(tx, user, {...claims(),src:run.executor,did:run.device_id??undefined}, goalRequest.parse({ action: "create", run_id: run.run_id, request_id: "review-goal", title: "补上遗漏", goal: "把资料里没做完的整理完", authorization: "在自己的资料库内推进" }))) as Row;
   assert.equal(created.goal, "把资料里没做完的整理完");
-  assert.equal((await db.tx(tx => manageGoals(tx, user, claims(), goalRequest.parse({ action: "create", run_id: run.run_id, request_id: "review-goal", goal: "把资料里没做完的整理完", authorization: "在自己的资料库内推进" }))) as Row).id, created.id);
-  await assert.rejects(db.tx(tx => manageGoals(tx, user, claims(), goalRequest.parse({ action: "create", run_id: run.run_id, request_id: "another", goal: "再加一个", authorization: "在自己的资料库内推进" }))), /只能新建一个/);
+  assert.equal((await db.tx(tx => manageGoals(tx, user, {...claims(),src:run.executor,did:run.device_id??undefined}, goalRequest.parse({ action: "create", run_id: run.run_id, request_id: "review-goal", goal: "把资料里没做完的整理完", authorization: "在自己的资料库内推进" }))) as Row).id, created.id);
+  await assert.rejects(db.tx(tx => manageGoals(tx, user, {...claims(),src:run.executor,did:run.device_id??undefined}, goalRequest.parse({ action: "create", run_id: run.run_id, request_id: "another", goal: "再加一个", authorization: "在自己的资料库内推进" }))), /只能新建一个/);
   assert.equal((await db.tx(tx => tx.get("bot_runs", run.run_id))).cancel_requested, false);
   assert.equal((await current()).version, 1);
   const visible = await db.tx(tx => listGoals(tx, user, bot));
@@ -326,7 +326,7 @@ test("a goal review cannot hand work to another bot", { skip }, async () => {
 
 test("a running user task keeps the review waiting, then the review starts when that task ends", { skip }, async () => {
   const dialog = await dialogue();
-  const job = await db.tx(tx => createTask(tx, hub, user, claims(), { run_id: dialog.run_id, task: "一次性核查", kind: "background", wait: false }));
+  const job = await db.tx(tx => createTask(tx, hub, user, {...claims(),src:"cloud",did:undefined}, { run_id: dialog.run_id, task: "一次性核查", kind: "background", wait: false,execution:"device",device_id:device },config()));
   await db.tx(tx => finishRun(tx, dialog.run_id, "completed", null, "已安排"));
   await due(); await scheduler().once(); assert.equal(await active(), undefined, "user work keeps the review waiting");
   await db.tx(tx => finishRun(tx, job.run!.run_id, "completed", null, "核查完成"));

@@ -39,7 +39,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -76,9 +75,6 @@ fun BotEditorScreen(repository: PiBotRepository, botId: String?, onDone: (String
     val existing = remember(botId) { botId?.let { id -> repository.bots.value?.firstOrNull { it.id == id } } }
     var name by remember { mutableStateOf(existing?.name ?: "") }
     var persona by remember { mutableStateOf(existing?.persona ?: "") }
-    val devices by repository.devices.collectAsStateWithLifecycle()
-    var executionDeviceId by remember { mutableStateOf(existing?.executionDeviceId ?: if (botId == null) repository.devices.value.firstOrNull { it.revokedAt == null }?.id else null) }
-    var confirmDeviceChange by remember { mutableStateOf(false) }
     var modelId by remember { mutableStateOf(existing?.modelId) }
     var avatar by remember { mutableStateOf(existing?.avatar?.normalized() ?: avatarFor(UUID.randomUUID().toString())) }
     var models by remember { mutableStateOf<List<Model>>(emptyList()) }
@@ -87,16 +83,15 @@ fun BotEditorScreen(repository: PiBotRepository, botId: String?, onDone: (String
     var confirmArchive by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(Unit) { runCatching { repository.refreshMe(); models = repository.models(); if (botId == null && executionDeviceId == null) executionDeviceId = repository.devices.value.firstOrNull { it.revokedAt == null }?.id }.onFailure { error = errorText(it) } }
+    LaunchedEffect(Unit) { runCatching { repository.refreshMe(); models = repository.models() }.onFailure { error = errorText(it) } }
 
-    fun save(confirmed: Boolean = false) {
-        if (botId != null && executionDeviceId != existing?.executionDeviceId && !confirmed) { confirmDeviceChange = true; return }
+    fun save() {
         if (saving || name.isBlank()) return
         saving = true
         error = null
         scope.launch {
             try {
-                val input = BotInput(name.trim(), persona.trim(), modelId, avatar, executionDeviceId)
+                val input = BotInput(name.trim(), persona.trim(), modelId, avatar)
                 val bot = if (botId == null) repository.createBot(input) else repository.updateBot(botId, input)
                 onDone(bot.id)
             } catch (e: Exception) {
@@ -143,15 +138,6 @@ fun BotEditorScreen(repository: PiBotRepository, botId: String?, onDone: (String
             )
             Spacer(Modifier.height(12.dp))
             ModelPicker(models, modelId) { modelId = it }
-
-            Section("执行电脑")
-            for (d in devices.filter { it.revokedAt == null || it.id == executionDeviceId }) {
-                TextButton(onClick = { executionDeviceId = d.id }, enabled = d.revokedAt == null) {
-                    Text("${if (d.id == executionDeviceId) "✓ " else ""}${d.label} · ${when (d.platform) { "linux" -> "Linux"; "darwin" -> "macOS"; "win32" -> "Windows"; else -> "未知平台" }} · ${if (d.revokedAt != null) "已解绑" else if (d.online) "在线" else "离线"}")
-                }
-            }
-            TextButton(onClick = { executionDeviceId = null }) { Text(if (executionDeviceId == null) "✓ 未绑定 · 仅云端聊天" else "未绑定 · 仅云端聊天") }
-            Text("文件保存在所选电脑。离线时本地任务等待，云端仍可聊天和搜索。", color = Muted, fontSize = 12.sp)
 
             Section("造型")
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -204,13 +190,6 @@ fun BotEditorScreen(repository: PiBotRepository, botId: String?, onDone: (String
         }
     }
 
-    if (confirmDeviceChange) AlertDialog(
-        onDismissRequest = { confirmDeviceChange = false },
-        title = { Text("更换执行电脑？") },
-        text = { Text("使用目标电脑自己的资料库，不会复制原有文件。目标检查将暂停，需要重新确认后恢复。") },
-        confirmButton = { TextButton(onClick = { confirmDeviceChange = false; save(true) }) { Text("更换并保存") } },
-        dismissButton = { TextButton(onClick = { confirmDeviceChange = false }) { Text("取消") } },
-    )
     if (confirmArchive && botId != null) {
         AlertDialog(
             onDismissRequest = { confirmArchive = false },

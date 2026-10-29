@@ -9,7 +9,7 @@ import type { AccountState, AppEvent, Bot, Connection, LocalActivity, Method, Me
 import { checkServerUrl, cloudFetch, CloudHttpError, CloudSocket, newIdentity, identityFromPrivateKey, signer, type Signer } from './cloud.js';
 import type { Credentials } from './keychain.js';
 import { Executor, agentDirFor, type RunContext } from './executor.js';
-import { previewList, previewRead } from './library.js';
+import { previewList, previewRead, preflightLibrary } from './library.js';
 import type { LogEvent } from './log.js';
 
 interface Account {
@@ -80,7 +80,7 @@ export class Application {
       phoneConfigPath: join(this.o.dataDir, 'phone.json'),
     });
     this.socket = new CloudSocket(account.serverUrl, this.sign, {
-      open: () => { if (generation !== this.connectionGeneration) return; this.o.log?.('cloud.online'); this.setConnection('online'); this.o.emit({ type: 'bots' }); },
+      open: () => { if (generation !== this.connectionGeneration) return; void this.phone.call('phone.status',{}).then((status:any) => {if (generation === this.connectionGeneration && status.available) this.socket?.send({type:'capabilities',features:['always-on-v1','files','shell','preflight-v1','phone']});}).catch(()=>{}); this.o.log?.('cloud.online'); this.setConnection('online'); this.o.emit({ type: 'bots' }); },
       close: authFailed => {
         if (generation !== this.connectionGeneration) return;
         this.o.log?.(authFailed ? 'cloud.revoked' : 'cloud.offline');
@@ -132,6 +132,7 @@ export class Application {
         try {
           const p = m.params ?? {};
           const result = typeof m.method === 'string' && m.method.startsWith('phone.') ? await this.phone.call(m.method, p)
+            : m.method === 'tasks.preflight' ? await preflightLibrary(this.o.libraryRoot, String(p.slug), Array.isArray(p.paths) && p.paths.every((x: unknown) => typeof x === 'string') ? p.paths : ['../invalid'])
             : m.method === 'files.list' ? await previewList(this.o.libraryRoot, String(p.slug), String(p.path ?? ''))
             : m.method === 'files.read' ? await previewRead(this.o.libraryRoot, String(p.slug), String(p.path ?? ''))
             : (() => { throw new RuntimeError(httpErrorInfo(501,'不支持的请求','device')); })();
@@ -216,12 +217,12 @@ export class Application {
       case 'deviceRevoke': return this.cloud('POST', `/devices/${input.id}/revoke`);
       case 'openLibrary': {
         const bot = await this.cloud<Bot>('GET', `/bots/${input.id}`);
-        if (!this.account || bot.execution_device_id !== this.account.deviceId) throw new Error('资料库位于另一台执行电脑，请在那台电脑上打开或使用手机浏览');
         return { slug: bot.slug };
       }
       case 'goals': return this.cloud('GET', `/bots/${input.id}/goals`);
-      case 'library': return this.cloud('GET', `/bots/${input.id}/files?path=${encodeURIComponent(input.path ?? '')}`);
-      case 'libraryRead': return this.cloud('GET', `/bots/${input.id}/files/content?path=${encodeURIComponent(input.path)}`);
+      case 'librarySources': return this.cloud('GET', `/bots/${input.id}/files/sources`);
+      case 'library': return this.cloud('GET', `/bots/${input.id}/files?path=${encodeURIComponent(input.path ?? '')}${input.target ? '&target='+encodeURIComponent(input.target) : ''}`);
+      case 'libraryRead': return this.cloud('GET', `/bots/${input.id}/files/content?path=${encodeURIComponent(input.path)}${input.target ? '&target='+encodeURIComponent(input.target) : ''}`);
       case 'bots': return this.cloud<{ bots: Bot[] }>('GET', '/bots');
       case 'botCreate': return this.cloud<Bot>('POST', '/bots', input);
       case 'botUpdate': { const { id, ...patch } = input; return this.cloud<Bot>('PATCH', `/bots/${id}`, patch); }

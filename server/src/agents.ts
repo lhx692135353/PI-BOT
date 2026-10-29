@@ -1,14 +1,13 @@
 import { artifactOut } from "./reports.js";
 import { internalTool, TERMINAL_RUN_STATES } from "@pi-bot/runtime-contracts";
 import { taskMessage } from "./task-conversation.js";
-import {taskTarget} from "./targets.js";
+import {taskRouting,resolveTaskTarget,RemotePreparationRequired,type Routing} from "./targets.js";
 import { randomUUID } from "node:crypto";
 import { fail, type Database, type Row, type Tx } from "./db.js";
 import type { Settings } from "./config.js";
 import type { Hub } from "./hub.js";
 import type { LlmClaims } from "./security.js";
 import { ACTIVE, MAX_DELEGATION_DEPTH, delegationChain, insertRun, resolveModel, finishRun } from "./bots.js";
-import { botConnection, checkDevice } from './devices.js';
 import { cancelRun, dispatchDevice } from "./runs.js";
 import { AutomationScheduler } from "./automations.js";
 import { TASK_CONCURRENCY, resumeExecution } from "./scheduling.js";
@@ -23,9 +22,10 @@ export interface VoiceAnnouncer {
 export const agentTaskOut = (t: Row) => ({
   id: t.task_id,
   status: t.run_status ?? t.status,
-  execution: t.execution,
+  execution: t.operation_target === "pending" ? "auto" : t.execution,
   device_id: t.device_id,
   operation_target:t.operation_target,
+  routing:t.routing,
   mode: t.mode,
   kind: t.kind,
   title: t.title,
@@ -107,7 +107,7 @@ export async function createTask(
   hub: Hub,
   userId: string,
   claims: LlmClaims,
-  body: { run_id: string; agent?: string; task: string; wait: boolean; kind?: "background" | "delegation"; title?: string; request_id?: string;resumed_from?:string; execution?: "device" | "cloud" | "remote"; device_id?:string; operation_target?:string },
+  body: { run_id: string; agent?: string; task: string; wait: boolean; kind?: "background" | "delegation"; title?: string; request_id?: string;resumed_from?:string; execution?: "auto" | "device" | "cloud" | "remote"; device_id?:string; operation_target?:string; requirements?:string[]; resources?:Routing["resources"] },
   settings?:Settings,
 ) {
   const parent = await callerRun(tx, userId, claims, body.run_id);
@@ -130,10 +130,16 @@ export async function createTask(
     fail(409, `「${target.name}」正在等你完成另一项任务，同步等待会互相卡住${depth === 0 ? "；可以改用 wait=false" : "，请自己完成"}`);
   const { n } = (await tx.one("SELECT count(*) AS n FROM agent_tasks WHERE parent_run_id=$1", [parent.run_id]))!;
   if (n >= MAX_TASKS_PER_RUN) fail(422, `本次任务已委托 ${MAX_TASKS_PER_RUN} 次，达到上限，请自己完成剩余部分`);
-  const location=await taskTarget(tx,settings,hub,userId,parent,target,body.execution,body.device_id);
-  if(body.operation_target&&body.operation_target!==location.operation_target) fail(409,"原任务的执行环境已变化，不能自动迁移");
+  const routing = await taskRouting(tx,userId,parent,body);
+  // Explicit destinations fail immediately when unavailable. Automatic work is resolved at dispatch.
+  let location = {execution:"cloud",device_id:null as string | null,operation_target:"pending"};
+  if (routing.execution !== "auto" || body.operation_target) {
+    location = await resolveTaskTarget(tx,settings,hub,userId,target.slug,routing);
+    if(body.operation_target && body.operation_target !== location.operation_target) fail(409,"原任务的资源所在环境已变化");
+  }
   const task = await tx.insert("agent_tasks", {
     ...location,
+    routing,
     task_id: randomUUID(),
     user_id: userId,
     parent_run_id: parent.run_id,
@@ -150,7 +156,7 @@ export async function createTask(
   });
   await taskMessage(tx, task, "request", "request", task.task, true);
   if (body.wait) await tx.rows("UPDATE bot_runs SET waiting_on_task_id=$2 WHERE run_id=$1", [parent.run_id, task.task_id]);
-  const run = await startTask(tx, hub, task);
+  const run = routing.execution === "auto" ? null : await startTask(tx, hub, task,settings);
   const saved = await tx.get("agent_tasks", task.task_id);
   return { task: agentTaskOut({ ...saved, bot_name: target.name }), run };
 }
@@ -165,7 +171,7 @@ async function failQueued(tx: Tx, task: Row, error: string) {
   await tx.notify({ user_id: task.user_id, bot_id: task.target_bot_id });
 }
 /** Starts a queued task on its target if the target is idle; otherwise it stays queued. */
-export async function startTask(tx: Tx, hub: Hub, task: Row) {
+export async function startTask(tx: Tx, hub: Hub, task: Row, settings?:Settings) {
   if (task.child_run_id) return null;
   const target = await tx.one("SELECT * FROM bots WHERE bot_id=$1 FOR NO KEY UPDATE", [task.target_bot_id]);
   if (!target || target.archived_at) {
@@ -179,6 +185,17 @@ export async function startTask(tx: Tx, hub: Hub, task: Row) {
   if (!(await resolveModel(tx, target))) {
     await failQueued(tx, task, "管理员尚未配置可用模型");
     return null;
+  }
+  if (task.routing) {
+    try {
+      const location = await resolveTaskTarget(tx,settings,hub,task.user_id,target.slug,task.routing);
+      await tx.update("agent_tasks",task.task_id,location);
+      Object.assign(task,location);
+    } catch (error) {
+      if (error instanceof RemotePreparationRequired) throw error;
+      await failQueued(tx,task,error instanceof Error ? error.message : "没有可用执行资源");
+      return null;
+    }
   }
   const conn = hub.device(task.user_id,task.device_id);
   if(task.execution==="device"&&task.operation_target!=="legacy"&&!conn){await failQueued(tx,task,"指定电脑已离线，本次操作未执行");return null;}
@@ -388,11 +405,26 @@ export class AgentDispatcher {
       try {
         const run = await this.db.tx(async (tx) => {
           const t = await tx.one("SELECT * FROM agent_tasks WHERE task_id=$1 AND status='queued' FOR NO KEY UPDATE SKIP LOCKED", [task_id]);
-          return t ? startTask(tx, this.hub, t) : null;
+          return t ? startTask(tx, this.hub, t,this.s) : null;
         });
         if (run?.executor === "device") await dispatchDevice(this.db, this.s, this.hub, run.run_id);
-      } catch {
-        console.error("agent task start failed");
+      } catch (error) {
+        if (error instanceof RemotePreparationRequired && this.hub.prepareRemote) {
+          try {
+            const task = await this.db.tx(tx => tx.get("agent_tasks",task_id));
+            await this.hub.prepareRemote(task.user_id);
+            const run = await this.db.tx(async tx => {
+              const current = await tx.one("SELECT * FROM agent_tasks WHERE task_id=$1 AND status='queued' AND child_run_id IS NULL FOR NO KEY UPDATE SKIP LOCKED",[task_id]);
+              return current ? startTask(tx,this.hub,current,this.s) : null;
+            });
+            if (run?.executor === "device") await dispatchDevice(this.db,this.s,this.hub,run.run_id);
+          } catch (preparationError) {
+            await this.db.tx(async tx => {
+              const current = await tx.one("SELECT * FROM agent_tasks WHERE task_id=$1 AND status='queued' AND child_run_id IS NULL FOR NO KEY UPDATE SKIP LOCKED",[task_id]);
+              if (current) await failQueued(tx,current,preparationError instanceof Error ? preparationError.message : "云端执行环境不可用");
+            });
+          }
+        } else console.error("agent task start failed");
       }
     }
   }
@@ -430,13 +462,12 @@ export class AgentDispatcher {
           if (activeConversation) return null;
           if (!(await resolveModel(tx, bot))) return null;
           await tx.rows("UPDATE agent_tasks SET delivered_at=now() WHERE task_id=$1", [task_id]);
-          const conn = await botConnection(tx,this.hub,t.user_id,bot.bot_id);
           const report = await insertRun(tx, {
             userId: t.user_id,
             botId: bot.bot_id,
             requestId: `report:${t.task_id}`,
             text: reportText(t),
-            computer: conn ? { deviceId: conn.deviceId } : null,
+            computer: null,
             origin: "report",
             taskId: t.task_id,
             fromBotId: t.kind === "background" ? undefined : t.target_bot_id,
@@ -482,7 +513,16 @@ export class AgentDispatcher {
 
   private async dispatchConversations() {
     const runs = await this.db.tx(tx => tx.rows("SELECT run_id FROM bot_runs WHERE executor='device' AND status='queued' ORDER BY (execution_policy='device_only'), (origin='report'), created_at LIMIT 100"));
-    for (const r of runs) await dispatchDevice(this.db, this.s, this.hub, r.run_id).catch(() => {});
+    for (const r of runs) {
+      try { await dispatchDevice(this.db,this.s,this.hub,r.run_id); }
+      catch (error) {
+        if (error instanceof RemotePreparationRequired && this.hub.prepareRemote) {
+          const run = await this.db.tx(tx => tx.get("bot_runs",r.run_id));
+          try { await this.hub.prepareRemote(run.user_id); await dispatchDevice(this.db,this.s,this.hub,r.run_id); }
+          catch (e) { await this.db.tx(tx => finishRun(tx,r.run_id,"failed",e instanceof Error ? e.message : "云端执行环境不可用")); }
+        }
+      }
+    }
   }
   private async forwardInstructions() {
     const pending = await this.db.tx(tx => tx.rows(`SELECT i.*, r.run_id, r.executor, r.device_id, r.user_id

@@ -98,7 +98,7 @@ fun PhoneControlScreen(repository: PiBotRepository, botId: String?, fixedDeviceI
     val accountKey = remember(sessionState?.user?.id, sessionState?.serverUrl) { phoneAssociationKey(sessionState?.user?.id, sessionState?.serverUrl) }
     val devices by repository.devices.collectAsStateWithLifecycle()
     val bots by repository.bots.collectAsStateWithLifecycle()
-    val executionId = bots?.firstOrNull { it.id == botId }?.executionDeviceId
+    val executionId: String? = null
     val lease = remember { PhoneLease() }
     var foreground by remember { mutableStateOf(owner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) }
     var deviceId by remember { mutableStateOf(fixedDeviceId) }

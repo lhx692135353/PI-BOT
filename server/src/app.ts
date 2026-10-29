@@ -1,3 +1,8 @@
+import { timingSafeEqual } from "node:crypto";
+import { RemotePreparationRequired } from "./targets.js";
+import { claimExecution } from "./scheduling.js";
+import { buildContext } from "./bots.js";
+import { ensureEnvironment } from "./remote/environments.js";
 import { reportViewer } from "./reports.js";
 import {RemoteService} from "./remote/service.js";
 import { firebaseTransport, loadAndroidPushConfig, PushDispatcher } from "./push.js";
@@ -129,6 +134,15 @@ export async function createApp(
   });
 
   const remote = remoteFactory(db,s);
+  hub.prepareRemote = async userId => {
+    const env = await db.tx(tx => ensureEnvironment(tx,s,userId));
+    await remote.connect(env);
+  };
+  hub.remotePreflight = async (env,slug,paths) => {
+    const connection = await remote.connect(env);
+    const result = await connection.call({action:"preflight",slug,args:{paths},operation_id:randomUUID()});
+    return result.available === true;
+  };
   app.addHook("onClose",async()=>remote.close());
   for (const route of routes)
     app.route({
@@ -155,12 +169,21 @@ export async function createApp(
           const who = await db.tx((tx) => authenticate(tx, route, req, raw, s));
           const body = parse(route.body, json, "body") ?? json;
           result = await route.handler({ ...base, ...who, body, tx: undefined as never });
-        } else
-          result = await db.tx(async (tx) => {
+        } else {
+          const execute = () => db.tx(async (tx) => {
             const who = await authenticate(tx, route, req, raw, s);
             const body = parse(route.body, json, "body") ?? json;
             return route.handler({ ...base, ...who, body, tx });
           });
+          try { result = await execute(); }
+          catch (error) {
+            if (!(error instanceof RemotePreparationRequired) || !hub.prepareRemote) throw error;
+            after.length=0;
+            const who = await db.tx(tx => authenticate(tx,route,req,raw,s));
+            await hub.prepareRemote(who.user.user_id);
+            result = await execute();
+          }
+        }
         for (const fn of after)
           await Promise.resolve()
             .then(fn)
@@ -168,6 +191,32 @@ export async function createApp(
         return result;
       },
     });
+
+  app.post("/internal/runs/:id/claim",async (req,reply) => {
+    const actual = Buffer.from(String(req.headers.authorization ?? "")), expected = Buffer.from(`Bearer ${s.runnerToken ?? ""}`);
+    if (!s.runnerToken || actual.length !== expected.length || !timingSafeEqual(actual,expected)) fail(401,"无效的 Worker 令牌");
+    const {id} = req.params as {id:string};
+    let raw:unknown;
+    try { raw = Buffer.isBuffer(req.body) ? JSON.parse(req.body.toString("utf8")) : req.body; }
+    catch { fail(422,"无效的任务领取请求"); }
+    const parsed = z.object({worker_id:z.string().uuid()}).safeParse(raw);
+    if (!parsed.success) fail(422,"无效的 Worker ID");
+    const body = parsed.data!;
+    if (!z.string().uuid().safeParse(id).success) fail(422,"无效任务 ID");
+    const execute = () => db.tx(async tx => {
+      const run = await claimExecution(tx,id,s,body.worker_id,hub);
+      if (!run) return {run:null};
+      await tx.notify({user_id:run.user_id,bot_id:run.bot_id});
+      return {run:await buildContext(tx,s,run)};
+    });
+    try { return await execute(); }
+    catch (error) {
+      if (!(error instanceof RemotePreparationRequired) || !hub.prepareRemote) throw error;
+      const run = await db.tx(tx => tx.get("bot_runs",id));
+      await hub.prepareRemote(run.user_id);
+      return execute();
+    }
+  });
 
   app.get("/reports/view/:id", async (_req, reply) => reply.header("cache-control","no-store").header("content-security-policy", "default-src 'self'; style-src 'unsafe-inline'; script-src 'self'; frame-ancestors 'none'; base-uri 'none'").type("text/html").send(reportViewer));
   app.get("/reports/view/viewer.js", async (_req, reply) => reply.type("text/javascript").send(await readFile(new URL("../dist/report-viewer.js",import.meta.url))));

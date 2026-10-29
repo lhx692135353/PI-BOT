@@ -175,8 +175,8 @@ export class VoiceHub implements VoiceAnnouncer {
       const memory = await tx.get("bot_memories", bot.bot_id);
       const forgotten = await forgottenContext(tx, bot.bot_id);
       const agents = await collaborators(tx, bot);
-      const location=deviceId?"device:"+deviceId:client==="android"?"remote":"legacy";
-      const instructions = `${systemPrompt(bot, maskForgotten(memory?.summary ?? "", forgotten), "cloud", { lane: "conversation", agents })}\n${client!=="legacy"?await targetPrompt(tx,this.s,this.hub,userId,location,client):""}
+      const location="cloud";
+      const instructions = `${systemPrompt(bot, maskForgotten(memory?.summary ?? "", forgotten), "cloud", { lane: "conversation", agents })}\n${await targetPrompt(tx,this.s,this.hub,userId,location,client)}
 
 你正在和用户打电话。用口语短句，不要 Markdown、列表、链接堆砌、任务编号和工具日志。闲聊和已有依据的简单问题直接回答。需要搜索、读写文件、执行命令或较长推理时立刻 start_task，用一句话说明正在做什么，然后停下，不要等待做完。用户一打断就停止当前这句。后台任务结束后，系统会把结果发给你，你再用一两句话告诉用户。其他智能体只用 ask_agent，不要等待。`;
       const runId = randomUUID();

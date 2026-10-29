@@ -43,11 +43,23 @@ async function action(q, signal) {
       version: 1,
       platform: "linux",
       root: base,
-      capabilities: ["shell", "files", "browser", "desktop", "vnc"],
+      capabilities: ["shell", "files", "browser", "desktop", "vnc", "preflight-v1"],
     };
   }
   if (!/^[a-z0-9][a-z0-9-]{0,62}$/.test(q.slug || ""))
     throw new Error("无效资料库");
+  if (q.action === "preflight") {
+    try {
+      const baseReal = await fs.realpath(base), folder = path.join(baseReal,q.slug);
+      if ((await fs.lstat(folder)).isSymbolicLink()) return {available:false};
+      const root = await fs.realpath(folder);
+      if (!inside(baseReal,root)) return {available:false};
+      const paths = q.args?.paths;
+      if (!Array.isArray(paths) || paths.length > 20) return {available:false};
+      for (const p of paths) await fs.stat(await resolvePath(root,p,[]));
+      return {available:true};
+    } catch { return {available:false}; }
+  }
   await fs.mkdir(base, { recursive: true });
   const root = await realPath(path.join(base, q.slug));
   if (!inside(await fs.realpath(base), root)) throw new Error("无效资料库");

@@ -106,8 +106,6 @@ fun TimelineScreen(
     val bot by remember(repository, botId) { repository.bot(botId) }.collectAsStateWithLifecycle(null)
     val timeline by remember(repository, botId) { repository.timeline(botId) }.collectAsStateWithLifecycle(Timeline())
     val devices by repository.devices.collectAsStateWithLifecycle()
-    val target = devices.firstOrNull { it.id == bot?.executionDeviceId }
-    val targetOnline = target?.online == true
     val scope = rememberCoroutineScope()
     var error by remember(botId) { mutableStateOf<String?>(null) }
     var loadingMore by remember(botId) { mutableStateOf(false) }
@@ -173,14 +171,13 @@ fun TimelineScreen(
                     Spacer(Modifier.size(6.dp))
                     Column(Modifier.weight(1f)) {
                         Text(current.name, fontSize = 16.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text("${target?.label ?: "未绑定电脑"} · ${if (targetOnline) "在线" else "云端聊天 · 本地任务等待"}", fontSize = 11.sp, lineHeight = 14.sp, color = Muted)
                     }
                 }
                 Box {
                     CircleAction("更多选项", { menuOpen = true }) { Icon(Icons.Filled.MoreVert, null) }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                         DropdownMenuItem(text = { Text("云端桌面与文件") }, onClick = { menuOpen = false; scope.launch { runCatching { val url = repository.remoteDesktop(botId); context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) }.onFailure { error = errorText(it) } } })
-                        DropdownMenuItem(text = { Text("资料库") }, enabled = targetOnline, onClick = { menuOpen = false; onFiles() })
+                        DropdownMenuItem(text = { Text("资料库") }, onClick = { menuOpen = false; onFiles() })
                         DropdownMenuItem(text = { Text("虚拟手机") }, onClick = { menuOpen = false; onPhone() })
                         DropdownMenuItem(text = { Text("编辑 Bot") }, onClick = { menuOpen = false; onEdit() }, leadingIcon = { Icon(Icons.Filled.Edit, null) })
                     }

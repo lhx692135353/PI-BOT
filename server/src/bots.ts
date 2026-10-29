@@ -18,7 +18,6 @@ import { directory, privateMemoryContext, forgottenContext, maskForgotten } from
 import { estimateTokens } from "@earendil-works/pi-coding-agent";
 import { wakeGoals, automationForRun, settleAutomation } from "./automations.js";
 import { recordRun } from "./observations.js";
-import { checkDevice } from './devices.js';
 
 export const ACTIVE: readonly string[] = ACTIVE_RUN_STATES;
 export const avatarSchema = z.object({
@@ -200,7 +199,7 @@ export async function botOut(tx: Tx, b: Row) {
     slug: b.slug,
     persona: b.persona,
     model_id: b.model_id,
-    execution_device_id: b.execution_device_id,
+    execution_device_id: null,
     avatar: b.avatar,
     is_main: b.is_main ?? false,
     created_at: b.created_at,
@@ -239,10 +238,6 @@ export async function createBot(
   input: z.infer<typeof botInput>,
 ) {
   await checkModel(tx, input.model_id);
-  const target = input.execution_device_id === undefined
-    ? (await tx.one('SELECT device_id FROM devices WHERE user_id=$1 AND revoked_at IS NULL ORDER BY created_at,device_id LIMIT 1', [userId]))?.device_id ?? null
-    : input.execution_device_id;
-  await checkDevice(tx, userId, target);
   const id = randomUUID();
   const slug = await uniqueSlug(tx, userId, input.slug ?? slugBase(input.name));
   const bot = await tx.insert("bots", {
@@ -252,7 +247,7 @@ export async function createBot(
     slug,
     persona: input.persona,
     model_id: input.model_id ?? null,
-    execution_device_id: target,
+    execution_device_id: null,
     avatar: input.avatar ?? avatarFor(id),
   });
   return bot;
@@ -265,20 +260,12 @@ export async function updateBot(
 ) {
   const bot = await ownBot(tx, userId, botId, true);
   if (patch.model_id !== undefined) await checkModel(tx, patch.model_id);
-  if (patch.execution_device_id !== undefined && patch.execution_device_id !== bot.execution_device_id) {
-    await checkDevice(tx, userId, patch.execution_device_id);
-    if (await tx.one("SELECT 1 FROM bot_runs WHERE bot_id=$1 AND status=ANY($2)", [botId,ACTIVE]) ||
-        await tx.one("SELECT 1 FROM agent_tasks WHERE (parent_bot_id=$1 OR target_bot_id=$1) AND status IN ('queued','running','waiting_approval')", [botId]))
-      fail(409, '请先结束或取消未完成的任务，再更换执行电脑');
-    await tx.rows("UPDATE bot_automations SET status='paused',version=version+1,next_wake_at=NULL WHERE bot_id=$1 AND status NOT IN ('completed','stopped')", [botId]);
-    await tx.rows("UPDATE automation_reports p SET discarded_at=now() FROM bot_automations a WHERE p.automation_id=a.automation_id AND a.bot_id=$1 AND p.delivered_at IS NULL", [botId]);
-  }
   // The library directory keeps its slug when a bot is renamed.
   return tx.update("bots", botId, {
     name: patch.name,
     persona: patch.persona,
     model_id: patch.model_id,
-    execution_device_id: patch.execution_device_id,
+    execution_device_id: undefined,
     avatar: patch.avatar,
     updated_at: new Date(),
   });
@@ -331,11 +318,12 @@ export async function postMessage(
   if (await tx.one("SELECT 1 FROM bot_runs WHERE bot_id=$1 AND origin='voice' AND status = ANY($2)", [botId, ACTIVE]))
     fail(409, "正在语音通话，请直接说或挂断后再发文字");
   if (!(await resolveModel(tx, bot))) fail(503, "管理员尚未配置可用模型");
-  const run = await insertRun(tx, { userId, botId, requestId, text, computer, images, sourceClient:source.client, sourceDeviceId:source.deviceId, operationTarget:source.client ? (source.deviceId ? "device:"+source.deviceId : "remote") : undefined });
+  const run = await insertRun(tx, { userId, botId, requestId, text, computer, images, sourceClient:source.client, sourceDeviceId:source.deviceId, operationTarget:"cloud" });
   return { run, bot, created: true };
 }
 
 export interface NewRun {
+  routing?:import("./targets.js").Routing;
   operationTarget?:string;
   sourceClient?:string;
   sourceDeviceId?:string;
@@ -362,7 +350,7 @@ export async function insertRun(tx: Tx, o: NewRun) {
   const runId = randomUUID(),
     userMessageId = randomUUID(),
     assistantMessageId = randomUUID();
-  const executor = o.computer || o.targetDeviceId ? "device" : "cloud";
+  const executor = (o.lane ?? "conversation") === "conversation" ? "cloud" : o.computer || o.targetDeviceId ? "device" : "cloud";
   const task=o.taskId?await tx.get("agent_tasks",o.taskId):null;
   const parent=task?await tx.get("bot_runs",task.parent_run_id):null;
   const seq = await nextSeq(tx, o.botId, 2, (o.executionPolicy ?? parent?.execution_policy) !== "device_only" || o.origin === "report");
@@ -371,11 +359,12 @@ export async function insertRun(tx: Tx, o: NewRun) {
     bot_id: o.botId,
     user_id: o.userId,
     request_id: o.requestId,
-    operation_target:o.operationTarget??parent?.operation_target??"legacy",
+    routing:o.routing ?? (o.lane === "task" ? task?.routing : null),
+    operation_target:o.operationTarget??((o.lane ?? "conversation") === "conversation" ? "cloud" : parent?.operation_target??"legacy"),
     source_client:o.sourceClient??parent?.source_client??"legacy",
     source_device_id:o.sourceDeviceId??parent?.source_device_id??null,
     executor,
-    device_id: o.targetDeviceId ?? o.computer?.deviceId ?? null,
+    device_id: executor === "device" ? o.targetDeviceId ?? o.computer?.deviceId ?? null : null,
     status: "queued",
     user_message_id: userMessageId,
     assistant_message_id: assistantMessageId,
@@ -509,14 +498,14 @@ export function systemPrompt(
           "不要执行破坏性或不可逆的系统操作；需要密码或交互登录时请让用户自行处理。",
         ].join("\n")
       : [
-          "执行环境：当前运行在云端，绑定电脑的资料库文件和终端在本次运行中不可用。",
-          `你只能对话${options.search ? "和联网搜索" : ""}。需要本机文件或命令的工作用 start_task(execution=device) 排队，等待绑定电脑上线；纯联网搜索用 execution=cloud，不要假装已经完成本地工作。`,
+          "对话由云端统一处理，智能体没有绑定的电脑。",
+          `你只能对话${options.search ? "和联网搜索" : ""}。需要文件或命令的工作用 start_task(execution=auto) 安排，服务端选择可用机器；纯联网搜索用 execution=cloud，不要假装已经完成本地工作。`,
         ].join("\n"),
   );
   if (options.lane === "conversation") parts.push([
     "你现在处于对话调度通道：持续接话、理解意图、安排工作、查询任务和整理回报。所有执行工作交后台，聊天保持可用。",
     "闲聊和已有依据的简单问题直接回答。凡需要搜索、读写文件、执行命令或较长推理的工作，先用 send_reply(phase=opening) 发一句简短、具体的回应，说明要核实什么，再立即用 start_task 创建后台任务。首轮不推演完整方案，也不展开执行计划；详细分析交给后台。只有创建成功后才能确认已安排，然后结束当前回合；创建失败则说明失败，不宣称已启动。你自己不能执行这些工作，也不要等待后台完成。",
-    "start_task 默认在绑定电脑执行；纯联网搜索或不依赖本地文件的云端处理可指定 execution=cloud。start_task 的 task 必须自包含但精简：保留用户目标、必要上下文、已有条件、文件位置、约束和期望输出。用文件引用代替复制历史全文，不附详细执行计划或重复首句；不要为精简而省略关键条件。避免重复创建已有任务。",
+    "start_task 默认 execution=auto，每个新任务独立按来源电脑、其他电脑、云端选择；纯联网搜索或不依赖本地文件的云端处理可指定 execution=cloud。start_task 的 task 必须自包含但精简：保留用户目标、必要上下文、已有条件、文件位置、约束和期望输出。用文件引用代替复制历史全文，不附详细执行计划或重复首句；不要为精简而省略关键条件。避免重复创建已有任务。",
     "查询任务用 task_status，结果仅代表记录的活动和更新时间；查询外部训练、部署的最新状态时，另建一个简短的核查任务，不要把缓存当作刚查到的外部进度。",
     "用户补充或改变已有任务要求时，用 task_message 发给准确的任务。工具会说明是已传达、排队或已结束；已结束则结合原结果用 start_task 创建后续任务。",
     "用户要求询问、转告其他智能体时必须实际调用 ask_agent；若是已有活动委托的追问，可用 task_message 发送。对方已结束的任务不能继续收信，应通过 ask_agent 发起新的询问。只有成功回执才能说已发送或问过；queued/pending 表示已保存待送达，不能说对方已经收到或答复。传话记录保存在本次委托详情中，不等于给对方主聊天新增用户消息。",
@@ -586,8 +575,8 @@ export async function buildContext(
   const memoryContext=privateContext+(stateContext?"\n当前任务状态："+stateContext+(checkpointText.length>stateContext.length?"\n[检查点已截断，需要时用 task_status 读取完整版本]":""):"");
   const automation = await automationForRun(tx, run);
   let system=systemPrompt(bot,summary,run.executor,{search,providerSearch,agents,depth,lane:run.lane,remote:run.lane === "task" && run.operation_target?.startsWith("remote:"),quiet:run.origin === "automation"});
-  if(run.operation_target!=="legacy") system += "\n"+await targetPrompt(tx,s,undefined,run.user_id,run.operation_target,run.source_client);
-  if (run.lane === "conversation") system += "\n目标：用户在追求一件会持续一段时间的事时，你自己用 goal_manage 记下，不要等用户说「建立目标」。记录目标说明和已经允许做的范围。不要用一次性 start_task 代替。查询、修改、暂停、恢复、完成和停止也使用该工具。全部操作仅在用户明确要求全部时使用 all=true。建立前先查询，避免重复。目标检查在每个目标保存的执行环境进行，不能自动迁移。";
+  system += "\n"+await targetPrompt(tx,s,undefined,run.user_id,run.operation_target,run.source_client);
+  if (run.lane === "conversation") system += "\n目标：用户在追求一件会持续一段时间的事时，你自己用 goal_manage 记下，不要等用户说「建立目标」。记录目标说明和已经允许做的范围。不要用一次性 start_task 代替。查询、修改、暂停、恢复、完成和停止也使用该工具。全部操作仅在用户明确要求全部时使用 all=true。建立前先查询，避免重复。目标检查沿用保存的调度策略，每轮开始前独立选择机器；已有文件和检查点必须保留真实来源，不自动重放未知操作。";
   if (automation) system += `\n你正在检查自己的目标，当前时间 ${new Date().toISOString()}。发现资料、记忆或未完成工作里有明确且尚未完成的事时，可以用 goal_manage 新建一个目标，本轮最多一个；没有新的授权时 authorization 写「在自己的资料库内推进」。先查询，避免重复。不要修改、暂停或停止已有目标。结束前必须调用 goal_finish，为当时每一个进行中目标提交状态，包括本轮新建的，然后结束。不要只用普通文字结束。没有新进展时 notify=false。只有可交付成果、重要变化或需要用户决定才 notify=true，并提供稳定的 notification_key；同一目标同一状态不得换 key。需要用户决定时 state=waiting_user。不要把工作交给其他智能体。只推进该目标授权范围内、且有明确下一步的事项。先核实检查点和操作结果，未知副作用不可重放。检查点版本：${automation.checkpoint_version}`;
 
   if (run.automation_readonly) system += "\n本轮 memory_manage 仅允许 list/search，skill_manage 不可用。";

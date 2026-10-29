@@ -18,7 +18,7 @@ import {recordUi} from "./ui.js";
 const RUN_LIMIT_MS = 30 * 60 * 1000;
 
 /**
- * Executes cloud runs (computer offline) through the Runner and keeps each bot's
+ * Executes cloud conversations and tasks through the Runner and keeps each bot's
  * rolling memory summary up to date.
  */
 export class Worker {
@@ -42,7 +42,7 @@ export class Worker {
     for (const c of this.controllers) c.abort();
   }
   async claim(): Promise<RunContext | undefined> {
-    return this.db.tx(async (tx) => {
+    const direct = await this.db.tx(async (tx) => {
       const stale = await tx.rows(
         "SELECT run_id, origin, assistant_message_id FROM bot_runs WHERE executor='cloud' AND status IN ('running','waiting_approval') AND lease_until < now() FOR UPDATE SKIP LOCKED",
       );
@@ -52,7 +52,7 @@ export class Worker {
           await tx.rows("UPDATE bot_messages SET visibility='public' WHERE message_id=$1", [r.assistant_message_id]);
         } else await finishRun(tx, r.run_id, "failed", "云端执行中断，请重新发送");
       }
-      const candidates = await tx.rows("SELECT run_id FROM bot_runs WHERE executor='cloud' AND (execution_policy='any' OR operation_target LIKE 'remote:%') AND status='queued' AND NOT cancel_requested ORDER BY (lane='task'), (origin='report'), created_at LIMIT 100");
+      const candidates = await tx.rows("SELECT run_id FROM bot_runs WHERE executor='cloud' AND (routing IS NULL OR lane='conversation') AND (execution_policy='any' OR operation_target LIKE 'remote:%') AND status='queued' AND NOT cancel_requested ORDER BY (lane='task'), (origin='report'), created_at LIMIT 100");
       let run: Row | null = null;
       for (const candidate of candidates) {
         run = await claimExecution(tx, candidate.run_id, this.s, this.id);
@@ -66,6 +66,19 @@ export class Worker {
         await finishRun(tx, run.run_id, "failed", "管理员尚未配置可用模型");
       }
     });
+    if (direct) return direct;
+    const routed = await this.db.tx(tx => tx.rows("SELECT run_id FROM bot_runs WHERE executor='cloud' AND lane='task' AND routing IS NOT NULL AND status='queued' AND NOT cancel_requested ORDER BY created_at LIMIT 100"));
+    for (const candidate of routed) {
+      let response:Response;
+      try { response = await fetch(`${this.s.internalUrl}/internal/runs/${candidate.run_id}/claim`,{
+        method:"POST",headers:{Authorization:`Bearer ${this.s.runnerToken}`,"Content-Type":"application/json"},
+        body:JSON.stringify({worker_id:this.id}),signal:AbortSignal.timeout(120000),
+      }); } catch { break; }
+      if (!response.ok) continue;
+      const result = await response.json() as {run?:RunContext};
+      if (result.run) return result.run;
+    }
+    return undefined;
   }
   async runOnce() {
     const job = await this.claim();

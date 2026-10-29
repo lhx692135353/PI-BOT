@@ -25,19 +25,19 @@ import { PROGRESS_CHARS, PROGRESS_SEGMENTS } from "@pi-bot/agent";
 
 export const DEVICE_OFFLINE = "执行电脑已离线，本次运行已中断；请核实结果后重新安排任务";
 
-/** Dispatches to the recorded device; only conversation turns can fall back to the cloud. */
+/** Recheck queued strategies before claiming; running and legacy task destinations stay fixed. */
 export async function dispatchDevice(db: Database, s: Settings, hub: Hub, runId: string) {
   const job = await db.tx(async (tx) => {
     const run = await tx.one("SELECT * FROM bot_runs WHERE run_id=$1 FOR NO KEY UPDATE SKIP LOCKED", [runId]);
     if (!run || run.status !== "queued" || run.executor !== "device") return null;
     const conn = hub.device(run.user_id,run.device_id);
     if (run.execution_policy === "device_only") {
-      if (!conn?.capabilities?.includes("always-on-v1")) return null;
+      if (!run.routing && !conn?.capabilities?.includes("always-on-v1")) return null;
       await tx.rows("UPDATE bot_automations SET status='enabled' WHERE automation_id=$1 AND status='waiting_device'", [run.automation_id]);
       await tx.rows("UPDATE bot_runs SET deadline_at=$2 WHERE run_id=$1", [runId, new Date(Date.now() + s.automationRoundSeconds * 1000)]);
     }
-    if (!conn && run.lane === "task") return null;
-    if (run.execution_policy !== "device_only" && !conn) {
+    if (!conn && run.lane === "task" && !run.routing) return null;
+    if (run.execution_policy !== "device_only" && !conn && run.lane !== "task") {
       await tx.rows(
         "UPDATE bot_runs SET executor='cloud', device_id=NULL WHERE run_id=$1",
         [runId],
@@ -49,10 +49,10 @@ export async function dispatchDevice(db: Database, s: Settings, hub: Hub, runId:
       await tx.notify({ user_id: run.user_id, bot_id: run.bot_id });
       return null;
     }
-    const claimed = await claimExecution(tx, runId, s);
+    const claimed = await claimExecution(tx, runId, s,undefined,hub);
     if (!claimed) return null;
     await tx.notify({ user_id: run.user_id, bot_id: run.bot_id });
-    return { conn, context: await buildContext(tx, s, claimed) };
+    return { conn:hub.device(claimed.user_id,claimed.device_id), context: await buildContext(tx, s, claimed) };
   });
   job?.conn?.send({ type: "run", run: job.context });
 }
@@ -204,7 +204,7 @@ export async function failDeviceRuns(db: Database, deviceId: string, reason = DE
   await db.tx(async (tx) => {
     if (!keepQueued) {
       const tasks = await tx.rows(`UPDATE agent_tasks SET status='failed',error=$2,finished_at=now(),updated_at=now()
-        WHERE device_id=$1 AND status='queued' AND child_run_id IS NULL RETURNING *`, [deviceId, reason]);
+        WHERE device_id=$1 AND status='queued' AND child_run_id IS NULL AND routing IS NULL RETURNING *`, [deviceId, reason]);
       for (const t of tasks) {
         await taskMessage(tx, t, "terminal", "error", reason);
         await tx.notify({user_id:t.user_id,bot_id:t.parent_bot_id});
@@ -221,6 +221,7 @@ export async function failDeviceRuns(db: Database, deviceId: string, reason = DE
       const current = await tx.get("bot_runs", r.run_id);
       if (current?.executor !== "device") continue;
       live.delete(r.run_id);
+      if (current.routing && current.status === "queued") continue;
       if (keepQueued && current.status === "queued" && (current.lane === "task" || current.execution_policy === "device_only")) {
         await tx.rows("UPDATE bot_automations SET status='waiting_device' WHERE automation_id=$1 AND status='enabled'", [current.automation_id]);
         continue;

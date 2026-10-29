@@ -1,3 +1,4 @@
+import { CAPABILITIES } from "./targets.js";
 import type { FastifyInstance } from "fastify";
 import type { WebSocket } from "ws";
 import { CHANNEL, type Database, type Row } from "./db.js";
@@ -114,7 +115,8 @@ export async function sockets(
           }
           lastMessageAt = Date.now();
           if (m.type === "capabilities") {
-            conn.capabilities = Array.isArray(m.features) ? m.features.filter((x: unknown) => x === "always-on-v1") : [];
+            conn.capabilities = Array.isArray(m.features) ? m.features.filter((x: unknown) => typeof x === "string" && CAPABILITIES.includes(x as typeof CAPABILITIES[number])) : [];
+            await db.tx(tx => tx.rows("UPDATE bot_automations SET next_wake_at=now() WHERE user_id=$1 AND status='waiting_device'",[conn!.userId]));
             dispatcher?.kick();
           } else if (m.type === "ping") {
             send(ws, { type: "pong" });

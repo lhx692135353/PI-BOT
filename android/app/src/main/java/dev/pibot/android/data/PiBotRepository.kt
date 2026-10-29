@@ -318,9 +318,11 @@ class PiBotRepository(
         refreshBot(approval.botId)
     }
 
-    suspend fun files(botId: String, path: String): FileList = authed { u, t -> api.files(u, t, botId, path) }
+    suspend fun fileSources(botId: String): FileSources = authed { u, t -> api.fileSources(u,t,botId) }
 
-    suspend fun file(botId: String, path: String): FileContent = authed { u, t -> api.file(u, t, botId, path) }
+    suspend fun files(botId: String, path: String, target: String? = null): FileList = authed { u, t -> api.files(u, t, botId, path, target) }
+
+    suspend fun file(botId: String, path: String, target: String? = null): FileContent = authed { u, t -> api.file(u, t, botId, path, target) }
 
     suspend fun changePassword(old: String, new: String) {
         authed { u, t -> api.changePassword(u, t, old, new) }

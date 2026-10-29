@@ -28,6 +28,8 @@ type Pending = {
  * The API runs as a single replica because device sockets terminate here.
  */
 export class Hub {
+  prepareRemote?: (userId: string) => Promise<void>;
+  remotePreflight?: (env: Row, slug: string, paths: string[]) => Promise<boolean>;
   private devices = new Map<string, DeviceConnection>();
   private listeners = new Map<string, Set<(event: UserEvent) => void>>();
   private pending = new Map<string, Pending>();

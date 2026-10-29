@@ -36,8 +36,9 @@ export const schemas = {
   deviceRevoke: z.object({ id }),
   openLibrary: z.object({ id }),
   goals: z.object({ id }),
-  library: z.object({ id, path: z.string().max(2000).default('') }),
-  libraryRead: z.object({ id, path: z.string().min(1).max(2000) }),
+  librarySources: z.object({ id }),
+  library: z.object({ id, target:z.string().optional(), path: z.string().max(2000).default('') }),
+  libraryRead: z.object({ id, target:z.string().optional(), path: z.string().min(1).max(2000) }),
   bots: z.object({}),
   botCreate: z.object({ name: z.string().trim().min(1).max(40), persona: z.string().max(8000).default(''), model_id: id.nullable().optional(), execution_device_id: id.nullable().optional(), avatar: avatarSchema }),
   botUpdate: z.object({ id, name: z.string().trim().min(1).max(40).optional(), persona: z.string().max(8000).optional(), model_id: id.nullable().optional(), execution_device_id: id.nullable().optional(), avatar: avatarSchema.optional() }),
@@ -67,7 +68,7 @@ export interface ToolEntry { id: string; name: string; state: 'running' | 'compl
 /** Another bot that wrote a `user` message: a delegated task, or the report of one this bot handed off. */
 export interface FromBot { id: string; name: string; avatar: Avatar | null; kind: 'task' | 'report' }
 export interface ReplySegment { id: string; text: string; phase: 'opening' | 'update' | 'answer'; created_at: string; generated_at: string }
-export interface TaskConversation { task_id: string; status: RunStatus; bots: { id: string; name: string; avatar: Avatar }[]; messages: { id: string; seq: number; from_bot_id: string; to_bot_id: string; kind: string; content: string; created_at: string | null }[]; total: number; has_more: boolean; next_after: number }
+export interface TaskConversation { execution_label?:string; operation_target?:string; task_id: string; status: RunStatus; bots: { id: string; name: string; avatar: Avatar }[]; messages: { id: string; seq: number; from_bot_id: string; to_bot_id: string; kind: string; content: string; created_at: string | null }[]; total: number; has_more: boolean; next_after: number }
 export interface AgentTaskRef { message_count?: number; operation_target?:string; id: string; bot_id: string; bot_name: string; status: 'queued' | 'running' | 'waiting_approval' | 'completed' | 'failed' | 'cancelled'; mode: 'wait' | 'report'; kind?: 'background' | 'delegation'; title?: string; updated_at?: string; activity?: string | null }
 export interface Message { attachments?: ArtifactRef[]; reply_segments?: ReplySegment[]; task_id?: string | null; id: string; bot_id: string; run_id: string | null; seq: number; role: 'user' | 'assistant'; content: string; images?: MessageImage[]; status: 'completed' | 'running' | 'failed' | 'cancelled'; executor: 'device' | 'cloud' | null; tools: ToolEntry[]; progress?: string[]; ui?: UiDocument | null; from_bot?: FromBot | null; agent_tasks?: AgentTaskRef[]; created_at: string; updated_at: string }
 export interface Approval { id: string; run_id: string; bot_id: string; kind: 'outside_access'; path: string; reason: string; status: string; expires_at: string }

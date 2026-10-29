@@ -80,6 +80,7 @@ function reset() {
   calls.length = 0;
   visibility = 'visible';
   localStorage.clear();
+  localStorage.setItem(PHONE_ASSOC_KEY,JSON.stringify({[BOT]:A}));
   respond = () => ({});
   root?.unmount();
   root = null;
@@ -202,6 +203,7 @@ async function lateAcquireReleases() {
 
   calls.length = 0;
   localStorage.clear();
+  localStorage.setItem(PHONE_ASSOC_KEY,JSON.stringify({[BOT]:A}));
   acquire = deferred();
   root?.unmount();
   root = null;

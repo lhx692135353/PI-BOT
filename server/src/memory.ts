@@ -310,9 +310,11 @@ export async function resumeTask(
     title: `续接：${old!.title}`.slice(0, 80),
     request_id: body.request_id,
     resumed_from: old!.task_id,
-    execution: old!.execution,
-    device_id:old!.device_id,
-    operation_target:old!.operation_target,
+    execution: old!.operation_target === "pending" ? "auto" : old!.execution,
+    device_id:old!.device_id ?? undefined,
+    operation_target:old!.operation_target === "pending" ? undefined : old!.operation_target,
+    requirements:old!.routing?.requirements,
+    resources:old!.routing?.resources,
   },settings);
   if(resumed.run && old!.child_run_id)await tx.rows(`INSERT INTO message_artifacts(message_id,artifact_id) SELECT $1,artifact_id FROM report_artifacts WHERE run_id=$2 ON CONFLICT DO NOTHING`,[resumed.run.assistant_message_id,old!.child_run_id]);
   return resumed;

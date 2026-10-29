@@ -253,11 +253,15 @@ test("Mac task events remain private, queued dialogue survives disconnect, and i
   await computer.next(m => m.type === "hello");
   const events = socket(base.replace("http", "ws") + "/ws/events", { authorization: `Bearer ${token}` });
   await events.next(m => m.type === "hello");
-  const posted = await send("manual control");
-  const control = (await computer.next(m => m.type === "run" && m.run.run_id === posted.run.id)).run;
+  computer.send({type:"capabilities",features:["files","shell","always-on-v1"]});
+  await eventually(()=>hub.device(registration.data.device.user_id,registration.data.device.id)?.capabilities?.includes("shell"));
   const user = (await api("/me")).data.user;
-  const llm = await issueLlmToken({ sub: user.id, src: "device", bot, did: registration.data.device.id }, s);
-  const t = await api("/agent/tasks", { run_id: control.run_id, kind: "background", execution: "device", title: "Mac work", task: "Mac files", wait: false }, llm);
+  const control = await db.tx(async tx => {
+    const run=await insertRun(tx,{userId:user.id,botId:bot,requestId:randomUUID(),text:"manual control",computer:null,sourceClient:"desktop",sourceDeviceId:registration.data.device.id});
+    return tx.update("bot_runs",run.run_id,{status:"running"});
+  });
+  const llm = await issueLlmToken({ sub: user.id, src: "cloud", bot }, s);
+  const t = await api("/agent/tasks", { run_id: control.run_id, kind: "background", execution: "device",device_id:registration.data.device.id, title: "Mac work", task: "Mac files", wait: false }, llm);
   assert.equal(t.status, 200, JSON.stringify(t.data));
   const task = (await computer.next(m => m.type === "run" && m.run.lane === "task")).run;
   computer.send({ type: "run_event", run_id: task.run_id, event: { kind: "text", text: "PRIVATE Mac output" } });
@@ -275,6 +279,7 @@ test("Mac task events remain private, queued dialogue survives disconnect, and i
   assert.doesNotMatch(JSON.stringify(events.frames), /PRIVATE Mac/);
   computer.close();
   await computer.closed;
+  await db.tx(tx=>finishRun(tx,control.run_id,"completed",null,"control finished"));
   await settled(queued.run.id);
   await eventually(async () => (await db.tx(tx => tx.get("agent_tasks", t.data.id))).status === "failed");
   const saved = await db.tx(tx => tx.get("agent_tasks", t.data.id));
@@ -295,7 +300,7 @@ test("waiting delegation releases its slot and resumes only when capacity is ava
   await db.tx(async tx => {
     const parent = await insertRun(tx, { userId: user.id, botId: bot, requestId: randomUUID(), text: "parent", computer: null, lane: "task" });
     assert.ok(await claimExecution(tx, parent.run_id, s, capacityWorker));
-    const task = await createTask(tx, hub, user.id, { sub: user.id, src: "cloud", bot } as any, { run_id: parent.run_id, agent: "specialist", task: "child", wait: true });
+    const task = await createTask(tx, hub, user.id, { sub: user.id, src: "cloud", bot } as any, { run_id: parent.run_id, agent: "specialist", task: "child", wait: true,execution:"cloud" });
     assert.equal((await tx.get("bot_runs", parent.run_id)).waiting_on_task_id, task.task.id);
     const a = await insertRun(tx, { userId: user.id, botId: bot, requestId: randomUUID(), text: "a", computer: null, lane: "task" });
     const b = await insertRun(tx, { userId: user.id, botId: bot, requestId: randomUUID(), text: "b", computer: null, lane: "task" });

@@ -47,8 +47,6 @@ export function resolvePhoneDevice(input: {
   const has = (id?: string | null) => !!id && live.some(device => device.id === id);
   if (input.savedDeviceId) return has(input.savedDeviceId)
     ? { deviceId: input.savedDeviceId, source: 'saved' } : { deviceId: null, source: 'missing' };
-  if (input.executionDeviceId) return has(input.executionDeviceId)
-    ? { deviceId: input.executionDeviceId, source: 'execution' } : { deviceId: null, source: 'missing' };
   return { deviceId: null, source: 'none' };
 }
 

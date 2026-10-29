@@ -96,7 +96,7 @@ fun SettingsScreen(repository: PiBotRepository, onBack: () -> Unit, onPhone: (St
                     TextButton(onClick = { onPhone(d.id) }) { Text("手机画面与控制") }
                     TextButton(onClick = { removing = d }) { Text("解绑", color = Danger) }
                 }
-                Text("每个 Bot 可选择一台执行电脑；文件各自保存，离线时本地任务等待。", color = Muted, fontSize = 12.sp)
+                Text("任务默认优先本机，再使用其他可用电脑，最后使用云端。文件保存在实际使用的机器上。", color = Muted, fontSize = 12.sp)
                 error?.let { Text(it, color = Danger) }
             }
             Spacer(Modifier.height(20.dp))
@@ -112,7 +112,7 @@ fun SettingsScreen(repository: PiBotRepository, onBack: () -> Unit, onPhone: (St
     }
     removing?.let { d -> AlertDialog(
         onDismissRequest = { removing = null }, title = { Text("解绑「${d.label}」？") },
-        text = { Text("文件会保留，绑定它的 Bot 需要重新选择执行电脑。") },
+        text = { Text("文件会保留；新任务会选择其他可用机器。依赖该电脑文件的任务将暂时无法执行。") },
         confirmButton = { TextButton(onClick = { removing = null; scope.launch { runCatching { repository.revokeDevice(d.id) }.onFailure { error = errorText(it) } } }) { Text("解绑", color = Danger) } },
         dismissButton = { TextButton(onClick = { removing = null }) { Text("取消") } },
     ) }

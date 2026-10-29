@@ -240,100 +240,38 @@ test("the model proxy injects the provider key, rewrites the model and records u
   assert.ok(usage.by_model.length);
 });
 
-test("Mac online: runs execute on the Mac with tools, approvals and file RPC", { skip }, async () => {
-  const computer = socket(base.replace("http", "ws") + "/ws/device", state.keys.headers("GET", "/ws/device"));
-  await computer.next((m) => m.type === "hello");
-  const events = socket(base.replace("http", "ws") + "/ws/events", { authorization: `Bearer ${state.alice}` });
-  await events.next((m) => m.type === "hello" && m.device_online === true);
-  assert.equal((await api("GET", "/me", { token: state.alice })).json.computer.online, true);
-
-  const requestId = randomUUID();
-  const posted = await api("POST", `/bots/${state.bot}/messages`, { token: state.alice, body: { text: "整理一下桌面", request_id: requestId } });
-  assert.equal(posted.status, 200, JSON.stringify(posted.json));
-  assert.equal(posted.json.run.executor, "device");
-  assert.deepEqual(posted.json.messages.at(-1).progress, [], "queued replies wait for model text instead of inserting a canned acknowledgement");
-  const again = await api("POST", `/bots/${state.bot}/messages`, { token: state.alice, body: { text: "整理一下桌面", request_id: requestId } });
-  assert.equal(again.json.run.id, posted.json.run.id, "request_id is idempotent");
-  const busy = await api("POST", `/bots/${state.bot}/messages`, { token: state.alice, body: { text: "另一件事", request_id: randomUUID() } });
-  assert.equal(busy.status, 200, "a second conversation is accepted and queued");
-  await api("POST", `/runs/${busy.json.run.id}/cancel`, { token: state.alice });
-
-  const { run } = await computer.next((m) => m.type === "run");
-  assert.equal(run.bot.slug, "research-bot");
-  assert.match(run.system, /~\/pi-bot\/research-bot/);
-  assert.match(run.system, /帮我整理资料/);
-  assert.doesNotMatch(run.system, /user_message/);
-  assert.doesNotMatch(run.system, /最多三句/);
-  assert.equal(run.text, "整理一下桌面");
-  const runId = run.run_id;
-  computer.send({ type: "run_event", run_id: runId, event: { kind: "started" } });
-  computer.send({ type: "run_event", run_id: runId, event: { kind: "tool", id: "t1", name: "list_files", state: "running", summary: "." } });
-  computer.send({ type: "run_event", run_id: runId, event: { kind: "text", text: "正在查看" } });
-  const delta = await events.next((m) => m.event?.type === "delta");
-  assert.equal(delta.event.content, "正在查看");
-  computer.send({ type: "run_event", run_id: runId, event: { kind: "progress", lines: ["我先看看桌面上的文件。"] } });
-  const progressPage = await eventually(async () => {
-    const p = await api("GET", `/bots/${state.bot}/messages`, { token: state.alice });
-    const m = p.json.messages.find((m: any) => m.run_id === runId && m.role === "assistant");
-    return m.progress?.[0] === "我先看看桌面上的文件。" && m;
+test("online computers receive tasks while cloud owns dialogue, approvals and file provenance", { skip }, async () => {
+  const computer=socket(base.replace("http","ws")+"/ws/device",state.keys.headers("GET","/ws/device"));
+  await computer.next(m=>m.type==='hello');
+  const events=socket(base.replace("http","ws")+"/ws/events",{authorization:`Bearer ${state.alice}`});await events.next(m=>m.type==='hello');
+  const requestId=randomUUID();
+  const posted=await api("POST",`/bots/${state.bot}/messages`,{token:state.alice,body:{text:"hello online",request_id:requestId}});
+  assert.equal(posted.json.run.executor,"cloud");
+  const again=await api("POST",`/bots/${state.bot}/messages`,{token:state.alice,body:{text:"hello online",request_id:requestId}});assert.equal(again.json.run.id,posted.json.run.id);
+  await worker.runOnce();
+  assert.ok(!computer.frames.some(m=>m.type==='run' && m.run.run_id===posted.json.run.id));
+  const local=await workerDb.tx(async tx=>{
+    const b=await tx.get("bots",state.bot);
+    return insertRun(tx,{userId:b.user_id,botId:b.bot_id,text:"inspect files",requestId:randomUUID(),computer:null,lane:"task"});
   });
-  assert.deepEqual(progressPage.progress, ["我先看看桌面上的文件。"]);
-  assert.equal(progressPage.content, "", "remarks move above the answer instead of remaining in its body");
-  computer.send({ type: "run_event", run_id: runId, event: { kind: "approval", request_id: "q1", path: "/Users/alice/Desktop", reason: "需要整理桌面" } });
-  const created = await computer.next((m) => m.type === "approval_created");
-  const detail = await eventually(async () => {
-    const b = await api("GET", `/bots/${state.bot}`, { token: state.alice });
-    return b.json.pending_approvals?.length && b.json;
-  });
-  assert.equal(detail.latest_run.status, "waiting_approval");
-  assert.equal(detail.pending_approvals[0].path, "/Users/alice/Desktop");
-  const decided = await api("POST", `/approvals/${created.approval_id}`, { token: state.alice, body: { decision: "approve" } });
-  assert.equal(decided.json.status, "approved");
-  const decision = await computer.next((m) => m.type === "approval");
-  assert.equal(decision.decision, "approve");
-  assert.equal((await api("POST", `/approvals/${created.approval_id}`, { token: state.alice, body: { decision: "reject" } })).status, 409);
-
-  const listing = api("GET", `/bots/${state.bot}/files?path=notes`, { token: state.alice });
-  const rpc = await computer.next((m) => m.type === "rpc");
-  assert.equal(rpc.method, "files.list");
-  assert.deepEqual(rpc.params, { slug: "research-bot", path: "notes" });
-  computer.send({ type: "rpc_result", id: rpc.id, ok: true, result: { entries: [{ name: "a.md", type: "file", size: 3 }] } });
-  assert.deepEqual((await listing).json.entries[0].name, "a.md");
-  const slow = await api("GET", `/bots/${state.bot}/files/content?path=a.md`, { token: state.alice });
-  assert.equal(slow.status, 504);
-
-  computer.send({ type: "run_event", run_id: runId, event: { kind: "tool", id: "t1", name: "list_files", state: "completed" } });
-  computer.send({ type: "run_event", run_id: runId, event: { kind: "done", state: "completed", text: "桌面已整理好。" } });
-  const page = await eventually(async () => {
-    const p = await api("GET", `/bots/${state.bot}/messages`, { token: state.alice });
-    return p.json.messages.find((m: any) => m.run_id === runId && m.role === "assistant")?.status === "completed" && p.json;
-  });
-  const reply = page.messages.find((m: any) => m.run_id === runId && m.role === "assistant");
-  assert.equal(reply.content, "桌面已整理好。");
-  assert.equal(reply.executor, "device");
-  assert.deepEqual(reply.progress, ["我先看看桌面上的文件。"], "progress survives the final answer and reloading history");
-  assert.deepEqual(reply.tools.map((t: any) => [t.name, t.state]), [["list_files", "completed"]]);
-
-  await api("POST", `/bots/${state.bot}/messages`, { token: state.alice, body: { text: "再做一件事", request_id: randomUUID() } });
-  const second = await computer.next((m) => m.type === "run");
-  assert.deepEqual(second.run.history.filter((m: any) => m.role === "assistant").map((m: any) => m.content), ["我先看看桌面上的文件。", "桌面已整理好。"]);
-  assert.ok(second.run.history.some((m: any) => m.role === "user" && m.content === "整理一下桌面"));
-  assert.equal(JSON.stringify(second.run.history).includes("list_files"), false, "tool execution stays out of later context");
-  computer.send({ type: "run_event", run_id: second.run.run_id, event: { kind: "started" } });
-  const cancelled = await api("POST", `/runs/${second.run.run_id}/cancel`, { token: state.alice });
-  assert.equal(cancelled.status, 200);
-  await computer.next((m) => m.type === "cancel" && m.run_id === second.run.run_id);
-
-  computer.close();
-  await events.next((m) => m.event?.type === "presence" && m.event.online === false);
-  const failed = await eventually(async () => {
-    const b = await api("GET", `/bots/${state.bot}`, { token: state.alice });
-    return b.json.latest_run.status !== "running" && b.json.latest_run;
-  });
-  assert.equal(failed.status, "cancelled", "cancel requested before the Mac dropped");
-  const offline = await api("GET", `/bots/${state.bot}/files`, { token: state.alice });
-  assert.equal(offline.status, 503);
-  events.close();
+  // deviceKeys intentionally exposes its identity through the registered account.
+  const deviceId=(await api("GET","/devices",{token:state.alice})).json.find((d:any)=>!d.revoked_at).id;
+  await workerDb.tx(tx=>tx.update("bot_runs",local.run_id,{device_id:deviceId,executor:"device"}));
+  await dispatchDevice(workerDb,s,(app as any).hub,local.run_id);
+  const {run}=await computer.next(m=>m.type==='run' && m.run.run_id===local.run_id);
+  assert.match(run.system,/~\/pi-bot\/research-bot/);
+  computer.send({type:"run_event",run_id:run.run_id,event:{kind:"approval",request_id:"q1",path:"/Users/alice/Desktop",reason:"需要查看桌面"}});
+  const approval=await computer.next(m=>m.type==='approval_created');
+  assert.equal((await api("POST",`/approvals/${approval.approval_id}`,{token:state.alice,body:{decision:"approve"}})).json.status,"approved");
+  await computer.next(m=>m.type==='approval');
+  const listing=api("GET",`/bots/${state.bot}/files?path=notes&target=device:${deviceId}`,{token:state.alice});
+  const rpc=await computer.next(m=>m.type==='rpc');assert.equal(rpc.method,'files.list');
+  computer.send({type:'rpc_result',id:rpc.id,ok:true,result:{entries:[{name:'a.md',type:'file',size:3}]}});
+  assert.equal((await listing).json.target,'device:'+deviceId);
+  computer.send({type:'run_event',run_id:run.run_id,event:{kind:'done',state:'completed',text:'inspected'}});
+  await eventually(async()=> (await workerDb.tx(tx=>tx.get('bot_runs',run.run_id))).status==='completed');
+  computer.close();await events.next(m=>m.event?.type==='presence' && !m.event.online);
+  assert.equal((await api('GET',`/bots/${state.bot}/files?target=device:${deviceId}`,{token:state.alice})).status,409);events.close();
 });
 
 test("Mac offline: runs fall back to the cloud runner through the proxy, with memory", { skip }, async () => {
@@ -353,7 +291,7 @@ test("Mac offline: runs fall back to the cloud runner through the proxy, with me
   assert.equal(first.content, "好的，我记住了蓝鲸。");
   const forwarded = provider.requests.findLast(r => r.body.stream && latestUserText(r.body.input).includes("记住蓝鲸"))!.body;
   assert.equal(forwarded.model, "upstream-model");
-  assert.match(forwarded.input[0].content, /当前运行在云端，绑定电脑的资料库文件和终端在本次运行中不可用/);
+  assert.match(forwarded.input[0].content, /对话由云端统一处理，智能体没有绑定的电脑/);
   assert.deepEqual(forwarded.tools.map((t: any) => t.name), ["start_task", "task_status", "task_message", "cancel_task", "goal_manage", "ask_agent", "report_read", "get_ui_catalog", "show_ui", "send_reply", "skill_manage", "skill_load", "memory_manage", "history_search", "agent_directory", "resume_task"], "cloud conversation runs get memory and collaboration, never file or shell tools");
   const second = await send("之前说了什么？");
   assert.equal(second.content, "你之前说的是蓝鲸。");
@@ -464,8 +402,10 @@ test("delegation rules: other users, cycles, depth, mutual waits, quotas and cas
     const body = { bot_id: botId };
     return (await api("POST", "/device/llm-token", { body, headers: state.keys.headers("POST", "/device/llm-token", JSON.stringify(body)) })).json.token as string;
   };
+  computer.send({type:"capabilities",features:["files","shell"]});
+  const deviceId=(await api("GET","/devices",{token:state.alice})).json.find((d:any)=>!d.revoked_at).id;
   const delegate = (token: string, runId: string, agent: string, wait = true) =>
-    api("POST", "/agent/tasks", { token, body: { run_id: runId, agent, task: `请${agent}帮忙`, wait } });
+    api("POST", "/agent/tasks", { token, body: { run_id: runId, agent, task: `请${agent}帮忙`, wait,execution:"device",device_id:deviceId } });
   const start = async (botId: string, text: string) => {
     const run = await workerDb.tx(async tx => {
       const b = await tx.get("bots", botId);
@@ -572,21 +512,19 @@ test("users only see their own bots and Mac; a Mac dropping mid-run fails the ru
   const posted = await api("POST", `/bots/${state.bot}/messages`, { token: bob, body: { text: "hi", request_id: randomUUID() } });
   assert.equal(posted.status, 404);
 
-  const mine = await api("POST", `/bots/${state.bot}/messages`, { token: state.alice, body: { text: "长任务", request_id: randomUUID() } });
-  assert.equal(mine.json.run.executor, "device");
-  assert.equal((await api("POST", `/runs/${mine.json.run.id}/cancel`, { token: bob })).status, 404);
-  const { run } = await computer.next((m) => m.type === "run");
-  computer.send({ type: "run_event", run_id: run.run_id, event: { kind: "started" } });
-  computer.send({ type: "run_event", run_id: run.run_id, event: { kind: "text", text: "做到一半" } });
-  await eventually(async () => (await api("GET", `/bots/${state.bot}`, { token: state.alice })).json.latest_run.status === "running");
-  computer.close();
-  const failed = await eventually(async () => {
-    const b = await api("GET", `/bots/${state.bot}`, { token: state.alice });
-    return b.json.latest_run.status === "failed" && b.json.latest_run;
+  const mine = await workerDb.tx(async tx=>{
+    const b=await tx.get("bots",state.bot), device=await tx.one("SELECT device_id FROM devices WHERE user_id=$1 AND revoked_at IS NULL",[b.user_id]);
+    return insertRun(tx,{userId:b.user_id,botId:b.bot_id,text:"long task",requestId:randomUUID(),computer:{deviceId:device!.device_id},lane:"task"});
   });
-  assert.equal(failed.error, "执行电脑已离线，本次运行已中断；请核实结果后重新安排任务");
-  const page = await api("GET", `/bots/${state.bot}/messages`, { token: state.alice });
-  assert.equal(page.json.messages.at(-1).content, "做到一半", "partial text is kept");
+  assert.equal((await api("POST",`/runs/${mine.run_id}/cancel`,{token:bob})).status,404);
+  await dispatchDevice(workerDb,s,(app as any).hub,mine.run_id);
+  const {run}=await computer.next(m=>m.type==='run' && m.run.run_id===mine.run_id);
+  computer.send({type:'run_event',run_id:run.run_id,event:{kind:'text',text:'做到一半'}});
+  await eventually(async()=> (await workerDb.tx(tx=>tx.get('bot_messages',mine.assistant_message_id))).content==='做到一半');
+  computer.close();
+  const failed=await eventually(async()=>{const r=await workerDb.tx(tx=>tx.get('bot_runs',mine.run_id));return r.status==='failed' && r;});
+  assert.match(failed.error,/执行电脑已离线/);
+  assert.equal((await workerDb.tx(tx=>tx.get('bot_messages',mine.assistant_message_id))).content,'做到一半');
   bobEvents.close();
 });
 

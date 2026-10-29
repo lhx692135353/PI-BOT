@@ -16,7 +16,6 @@ fun resolvePhoneDevice(savedDeviceId: String?, executionDeviceId: String?, devic
     fun has(id: String?) = id != null && live.any { it.id == id }
     // A stale explicit binding is not permission to silently select another computer.
     if (!savedDeviceId.isNullOrBlank()) return if (has(savedDeviceId)) PhoneChoice(savedDeviceId, "saved") else PhoneChoice(null, "missing")
-    if (!executionDeviceId.isNullOrBlank()) return if (has(executionDeviceId)) PhoneChoice(executionDeviceId, "execution") else PhoneChoice(null, "missing")
     return PhoneChoice(null, "none")
 }
 

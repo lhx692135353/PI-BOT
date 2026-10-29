@@ -263,3 +263,17 @@ export function libraryTools(sandbox: Sandbox, hooks: ToolHooks): ToolDefinition
     execute: (id, args, signal, update, ctx) => withLibraryMutation(sandbox.root, signal, () => tool.execute(id, args, signal, update, ctx)),
   } : tool);
 }
+
+/** Probe existing resources without mkdir, shell execution or outside-library access. */
+export async function preflightLibrary(root: string, slug: string, paths: string[]) {
+  if (!SLUG.test(slug) || paths.length > 20) return {available:false};
+  try {
+    const base = await realpath(root), folder = join(base,libraryFolder(slug));
+    if ((await lstat(folder)).isSymbolicLink()) return {available:false};
+    const library = await realpath(folder);
+    if (!inside(base,library)) return {available:false};
+    const sandbox = new Sandbox(library);
+    for (const path of paths) await sandbox.resolve(path,{mustExist:true});
+    return {available:true};
+  } catch { return {available:false}; }
+}

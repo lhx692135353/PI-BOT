@@ -96,10 +96,10 @@ class PhoneControlFlowTest {
             Device(id = devA, label = "办公台式机", online = true),
             Device(id = devB, label = "居家笔记本", online = false)
         )
-        // 绑定了电脑的 Bot 直接解析出 executionDeviceId
+        // 旧 Bot 配置不再隐式选择电脑
         val choice1 = resolvePhoneDevice(savedDeviceId = null, executionDeviceId = devA, devices = devices)
-        assertEquals(devA, choice1.deviceId)
-        assertEquals("execution", choice1.source)
+        assertNull(choice1.deviceId)
+        assertEquals("none", choice1.source)
 
         // 未绑定的 Bot 且多台电脑时不随意猜测，安全返回 none
         val choice2 = resolvePhoneDevice(savedDeviceId = null, executionDeviceId = null, devices = devices)

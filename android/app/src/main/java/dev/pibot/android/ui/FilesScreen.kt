@@ -56,14 +56,15 @@ import dev.pibot.android.data.PiBotRepository
 import dev.pibot.android.face.PiBotFace
 import dev.pibot.android.face.seedOf
 
-/** Read-only browser for a bot's library on the bound computer(`~/pi-bot/<slug>`). */
+/** Read-only browser for a bot's library on the selected source(`~/pi-bot/<slug>`). */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FilesScreen(repository: PiBotRepository, botId: String, onBack: () -> Unit) {
     val bot by repository.bot(botId).collectAsStateWithLifecycle(null)
     val devices by repository.devices.collectAsStateWithLifecycle()
-    val target = devices.firstOrNull { it.id == bot?.executionDeviceId }
-    val targetOnline = target?.online == true
+    var sources by remember(botId) { mutableStateOf<List<dev.pibot.android.data.FileSource>>(emptyList()) }
+    var source by remember(botId) { mutableStateOf<String?>(null) }
+    val targetOnline = sources.firstOrNull { it.target == source }?.online == true
     var path by remember { mutableStateOf("") }
     var opened by remember { mutableStateOf<String?>(null) }
     var list by remember { mutableStateOf<FileList?>(null) }
@@ -71,15 +72,23 @@ fun FilesScreen(repository: PiBotRepository, botId: String, onBack: () -> Unit) 
     var error by remember { mutableStateOf<String?>(null) }
     var reload by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(path, reload, targetOnline, bot?.executionDeviceId) {
+    LaunchedEffect(botId, devices) {
+        runCatching { repository.fileSources(botId).sources }.onSuccess {
+            sources = it
+            if (source == null) source = it.firstOrNull { s -> s.online }?.target ?: it.firstOrNull()?.target
+        }.onFailure { error = errorText(it) }
+    }
+
+    LaunchedEffect(path, reload, targetOnline, source) {
         list = null
         error = null
-        runCatching { repository.files(botId, path) }.onSuccess { list = it }.onFailure { error = errorText(it) }
+        if (source == null) return@LaunchedEffect
+        runCatching { repository.files(botId, path, source) }.onSuccess { list = it }.onFailure { error = errorText(it) }
     }
-    LaunchedEffect(opened, bot?.executionDeviceId, targetOnline, reload) {
+    LaunchedEffect(opened, source, targetOnline, reload) {
         file = null
         val target = opened ?: return@LaunchedEffect
-        runCatching { repository.file(botId, target) }.onSuccess { file = it }.onFailure { error = errorText(it); opened = null }
+        runCatching { repository.file(botId, target, source) }.onSuccess { file = it }.onFailure { error = errorText(it); opened = null }
     }
     fun up() {
         when {
@@ -97,7 +106,7 @@ fun FilesScreen(repository: PiBotRepository, botId: String, onBack: () -> Unit) 
                 title = {
                     Column {
                         Text(opened?.substringAfterLast('/') ?: "资料库", maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text("~/pi-bot/${bot?.slug ?: ""}/" + (opened ?: path), fontSize = 12.sp, color = Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text((sources.firstOrNull { it.target == source }?.label ?: "文件来源") + " / " + (opened ?: path), fontSize = 12.sp, color = Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Paper),
@@ -105,7 +114,15 @@ fun FilesScreen(repository: PiBotRepository, botId: String, onBack: () -> Unit) 
         },
         containerColor = Paper,
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
+        Column(Modifier.fillMaxSize().padding(padding)) {
+          androidx.compose.foundation.lazy.LazyRow {
+            items(sources, key = {it.target}) { item ->
+              androidx.compose.material3.TextButton(onClick = {source=item.target;path="";opened=null;list=null;file=null}) {
+                Text("${if(item.target == source) "✓ " else ""}${item.label} · ${if(item.online) "在线" else "离线"}")
+              }
+            }
+          }
+          Box(Modifier.fillMaxSize()) {
             val b = bot
             val entries = list?.entries
             val failure = error
@@ -115,6 +132,7 @@ fun FilesScreen(repository: PiBotRepository, botId: String, onBack: () -> Unit) 
                     b?.avatar ?: ORANGE, if (targetOnline) "error" else "sleeping",
                     if (targetOnline) "打不开" else "电脑离线", failure,
                 ) { Button(onClick = { reload++ }) { Text("重试") } }
+                source == null -> EmptyState(b?.avatar ?: ORANGE, "idle", "暂无文件来源", "添加电脑或启用云端环境后，可在这里选择文件来源。")
                 entries == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 entries.isEmpty() -> EmptyState(b?.avatar ?: ORANGE, "idle", "这里还是空的", "让 ${b?.name ?: "Bot"} 写点东西进来吧。")
                 else -> LazyColumn(Modifier.fillMaxSize()) {
@@ -132,6 +150,7 @@ fun FilesScreen(repository: PiBotRepository, botId: String, onBack: () -> Unit) 
             }
         }
     }
+  }
 }
 
 @Composable

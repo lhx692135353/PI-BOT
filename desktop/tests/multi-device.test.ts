@@ -18,7 +18,7 @@ import { insertRun } from '../../server/src/bots.js';
 import { signer } from '../packages/service/src/cloud.js';
 import WebSocket from 'ws';
 
-test('independent computers route files, delegation, approvals and offline queues to the bound device', {skip:!TEST_DB,timeout:60000}, async t => {
+test('one Agent independently selects source computers, preserves resource provenance and falls back when a computer is offline', {skip:!TEST_DB,timeout:60000}, async t => {
   await resetDatabase(TEST_DB!);
   const dir=tempDir(), hub=new Hub(), executions:string[]=[], events:Record<string,string[]>={'linux-a':[],'linux-b':[]};
   const factory=(label:string):AgentFactory=>async o=>({
@@ -78,27 +78,27 @@ test('independent computers route files, delegation, approvals and offline queue
   const botB=(await api('POST','/bots',{name:'Bot B',execution_device_id:bid})).data;
   const send=async(id:string,text:string)=>{const r=await api('POST',`/bots/${id}/messages`,{text,request_id:randomUUID()});assert.equal(r.status,200,JSON.stringify(r.data));return r.data.run;};
   const fileA=join(dir.path,'linux-a/files',botA.slug,'a.txt'), fileB=join(dir.path,'linux-b/files',botB.slug,'b.txt');
-  await Promise.all([send(botA.id,'write:a.txt'),send(botB.id,'write:b.txt')]);
+  await Promise.all([a.call('send',{botId:botA.id,text:'write:a.txt'}),b.call('send',{botId:botB.id,text:'write:b.txt'})]);
   await eventually(()=>existsSync(fileA)&&existsSync(fileB));
   assert.equal(readFileSync(fileA,'utf8'),'linux-a'); assert.equal(readFileSync(fileB,'utf8'),'linux-b');
   assert.equal(existsSync(join(dir.path,'linux-b/files',botA.slug,'a.txt')),false);
   const files=await api('GET',`/bots/${botA.id}/files/content?path=a.txt`); assert.equal(files.data.content,'linux-a');
-  await assert.rejects(b.call('openLibrary',{id:botA.id}),/另一台/);
-  await send(botA.id,`delegate:${botB.id}`);
-  await eventually(()=>existsSync(join(dir.path,'linux-b/files',botB.slug,'delegated.txt')));
+  assert.equal((await b.call('openLibrary',{id:botA.id}) as any).slug,botA.slug);
+  await a.call('send',{botId:botA.id,text:`delegate:${botB.id}`});
+  await eventually(()=>existsSync(join(dir.path,'linux-a/files',botB.slug,'delegated.txt')));
   const outside=join(dir.path,'outside');mkdirSync(outside);
-  await send(botB.id,`outside:${outside}`);
+  await b.call('send',{botId:botB.id,text:`outside:${outside}`});
   const approval=await eventually(async()=>{const r=await api('GET',`/bots/${botB.id}`);return r.data.pending_approvals[0];});
   const approvalRun=await db.tx(tx=>tx.get('bot_runs',approval.run_id));
   await assert.rejects(db.tx(tx=>callerRun(tx,approvalRun.user_id,{sub:approvalRun.user_id,src:'device',bot:botB.id,did:aid},approvalRun.run_id)));
-  assert.equal((await api('PATCH',`/bots/${botB.id}`,{execution_device_id:aid})).status,409);
+  assert.equal((await api('PATCH',`/bots/${botB.id}`,{execution_device_id:aid})).status,200);
   assert.equal((await api('POST',`/approvals/${approval.id}`,{decision:'approve'})).status,200);
   await eventually(async()=> (await db.tx(tx=>tx.get('bot_runs',approval.run_id))).status==='completed');
   // Simulate a replacement connection while the original has an interrupted
   // operation. The old run must finish before the replacement can accept work.
   await eventually(async () => !(await db.tx(tx => tx.one("SELECT 1 FROM bot_runs WHERE bot_id=$1 AND lane='conversation' AND status IN ('running','waiting_approval')", [botA.id]))));
   const interrupted = await db.tx(async tx => {
-    const r = await insertRun(tx,{userId:a.state().user!.id,botId:botA.id,requestId:randomUUID(),text:'interrupted',computer:{deviceId:aid}});
+    const r = await insertRun(tx,{userId:a.state().user!.id,botId:botA.id,requestId:randomUUID(),text:'interrupted',computer:{deviceId:aid},lane:'task'});
     await tx.rows("UPDATE bot_runs SET status='running' WHERE run_id=$1",[r.run_id]);
     return r;
   });
@@ -118,27 +118,21 @@ test('independent computers route files, delegation, approvals and offline queue
   await a.shutdown(); await eventually(()=>!hub.device(a.state().user!.id,aid));
   await eventually(()=>events['linux-b'].filter(e=>e==='bots').length>changesBeforeDisconnect);
   assert.equal(hub.online(b.state().user!.id),true);
-  const offline=await send(botA.id,'write:offline.txt'); assert.equal(offline.executor,'cloud');
-  const queued=await eventually(async()=>db.tx(tx=>tx.one("SELECT * FROM agent_tasks WHERE target_bot_id=$1 AND task='write:offline.txt'",[botA.id])));
-  assert.equal(queued.device_id,aid); assert.equal(queued.status,'queued');
-  assert.equal((await api('GET',`/bots/${botA.id}/files`)).status,503);
-  assert.equal(existsSync(join(dir.path,'linux-b/files',botA.slug,'offline.txt')),false);
-  await a.start(); await eventually(()=>existsSync(join(dir.path,'linux-a/files',botA.slug,'offline.txt')));
-  await eventually(async()=> (await db.tx(tx=>tx.get('agent_tasks',queued.task_id))).status==='completed');
-  assert.equal(executions.filter(x=>x==='linux-a').length,2);
-  await a.shutdown(); await eventually(()=>!hub.device(a.state().user!.id,aid));
-  for (const n of [1,2,3]) await send(botA.id,`write:revoked-${n}.txt`);
-  await eventually(async()=> (await db.tx(tx=>tx.rows("SELECT * FROM agent_tasks WHERE target_bot_id=$1 AND task LIKE 'write:revoked-%'",[botA.id]))).length===3);
-  const backlog=await db.tx(tx=>tx.rows("SELECT * FROM agent_tasks WHERE target_bot_id=$1 AND task LIKE 'write:revoked-%'",[botA.id]));
-  assert.ok(backlog.some(t=>!t.child_run_id),'capacity-limited tasks have no child run yet');
-  await send(botA.id,'cloud:search');
-  await eventually(async()=>db.tx(tx=>tx.one("SELECT 1 FROM agent_tasks WHERE target_bot_id=$1 AND task='cloud:search' AND execution='cloud' AND status='completed'",[botA.id])));
-  assert.equal((await db.tx(tx=>tx.rows("SELECT * FROM agent_tasks WHERE target_bot_id=$1 AND task LIKE 'write:revoked-%' AND status='queued'",[botA.id]))).length,3,'offline file tasks do not block cloud work or leave their device');
+  const offline=await a.call('send',{botId:botA.id,text:'write:offline.txt'}) as any;
+  assert.equal(offline.run.executor,'cloud');
+  await eventually(()=>existsSync(join(dir.path,'linux-b/files',botA.slug,'offline.txt')));
+  const migrated=await db.tx(tx=>tx.one("SELECT * FROM agent_tasks WHERE target_bot_id=$1 AND task='write:offline.txt'",[botA.id]));
+  assert.equal(migrated!.device_id,bid);assert.equal(migrated!.routing.preferred_device_id,aid);
+  const original=await api('GET',`/bots/${botA.id}/files?target=device:${aid}`);assert.equal(original.status,409);
+  const current=await api('GET',`/bots/${botA.id}/files/content?path=offline.txt&target=device:${bid}`);assert.equal(current.data.content,'linux-b');
+  await a.start();await eventually(()=>a.state().connection==='online');
+  await a.call('send',{botId:botA.id,text:'write:back-home.txt'});
+  await eventually(()=>existsSync(join(dir.path,'linux-a/files',botA.slug,'back-home.txt')));
+  assert.equal((await api('GET',`/bots/${botA.id}`)).data.execution_device_id,null);
   assert.equal((await api('POST',`/devices/${aid}/revoke`,{})).status,200);
-  await eventually(async()=> (await db.tx(tx=>tx.rows("SELECT * FROM agent_tasks WHERE target_bot_id=$1 AND task LIKE 'write:revoked-%'",[botA.id]))).every(t=>t.status==='failed'));
-  await a.start();
   await eventually(()=>a.state().connection==='revoked');
-  await a.logout(); assert.equal(a.state().connection,'signed_out','a revoked device can clear its local login');
-  assert.equal(b.state().connection,'online');
+  await a.logout();assert.equal(a.state().connection,'signed_out');assert.equal(b.state().connection,'online');
+  await b.call('send',{botId:botA.id,text:'write:after-revoke.txt'});
+  await eventually(()=>existsSync(join(dir.path,'linux-b/files',botA.slug,'after-revoke.txt')));
   const list=(await api('GET','/devices')).data;assert.equal(list.length,2);assert.ok(list.find((d:any)=>d.id===aid).revoked_at);
 });

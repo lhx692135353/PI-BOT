@@ -1,3 +1,5 @@
+import { createRunner } from '../../server/src/runner.js';
+import { Worker } from '../../server/src/worker.js';
 import { isRealToolResult, latestUserText, realToolOutputs, ResponseStream } from "../../packages/agent/tests/responses.js";
 import test, { after, before } from 'node:test';
 import assert from 'node:assert/strict';
@@ -26,6 +28,11 @@ async function scriptedProvider(outside: string) {
     let raw = ''; for await (const chunk of req) raw += chunk;
     const json = JSON.parse(raw);
     requests.push(json);
+    if (!json.stream) {
+      res.writeHead(200,{'content-type':'application/json'});
+      res.end(JSON.stringify({id:'maintenance',object:'response',status:'completed',output:[{type:'message',role:'assistant',content:[{type:'output_text',text:JSON.stringify({memories:[],topics:[]})}]}],usage:{input_tokens:1,output_tokens:1}}));
+      return;
+    }
     const messages: any[] = json.input;
     const user = latestUserText(messages);
     const toolDone = isRealToolResult(messages);
@@ -96,6 +103,7 @@ let dir: string, api: Awaited<ReturnType<typeof createApp>>, base: string, provi
 const events: AppEvent[] = [];
 let adminToken = '';
 let serverDb: Database;
+let runner: Awaited<ReturnType<typeof createRunner>>, worker: Worker, workerDb: Database, workerLoop: Promise<void>;
 let search: Awaited<ReturnType<typeof mockSearch>>;
 async function http(method: string, path: string, body?: unknown, token = adminToken) {
   const r = await fetch(base + path, { method, headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -111,10 +119,13 @@ before(async () => {
   provider = await scriptedProvider(join(dir, 'Desktop'));
   search = await mockSearch();
   serverDb = new Database(TEST_DB!);
-  const config = settings({ PI_BOT_DATABASE_URL: TEST_DB, PI_BOT_ADMIN_PASSWORD: 'admin-password', PI_BOT_JWT_SECRET: 'j'.repeat(40), PI_BOT_VAULT_FILE: vaultFile(dir), PI_BOT_TAVILY_API_KEY: 'tvly-test-key' });
+  runner=await createRunner({token:'r'.repeat(40),dir:join(dir,'runner')});
+  await runner.listen({host:'127.0.0.1',port:0});
+  const config = settings({PI_BOT_RUNNER_TOKEN:'r'.repeat(40),PI_BOT_RUNNER_URL:`http://127.0.0.1:${(runner.server.address() as any).port}`,PI_BOT_WORKER_POLL_SECONDS:'0.02', PI_BOT_DATABASE_URL: TEST_DB, PI_BOT_ADMIN_PASSWORD: 'admin-password', PI_BOT_JWT_SECRET: 'j'.repeat(40), PI_BOT_VAULT_FILE: vaultFile(dir), PI_BOT_TAVILY_API_KEY: 'tvly-test-key' });
   api = await createApp(config, serverDb, new Hub(), new WebSearch(config, search.fetch));
   await api.listen({ port: 0, host: '127.0.0.1' });
   base = `http://127.0.0.1:${(api.server.address() as any).port}`;
+  workerDb=new Database(TEST_DB!);worker=new Worker(workerDb,{...config,internalUrl:base});workerLoop=worker.runForever();
   adminToken = (await http('POST', '/auth/login', { username: 'admin', password: 'admin-password' }, '')).json.access_token;
   await http('POST', '/admin/api/users', { username: 'bob', password: 'bob-password' });
   await http('POST', '/admin/api/models', { name: 'Scripted', base_url: provider.url, provider_model: 'scripted', api_key: 'sk-scripted', context_window: 32000, max_tokens: 1000 });
@@ -122,9 +133,13 @@ before(async () => {
 });
 after(async () => {
   if (skip) return;
+  worker?.stop();
   await app?.shutdown();
-  await api?.close();
   await provider?.close();
+  await workerLoop;
+  await workerDb?.close();
+  await runner?.close();
+  await api?.close();
   await search?.close();
   rmSync(dir, { recursive: true, force: true });
 });
@@ -144,7 +159,7 @@ test('the Mac harness logs in, binds itself and runs bots against its library', 
     return !!last.task_id && last.status !== 'running' && last;
   }, 20000);
   assert.equal(reply.status, 'completed', JSON.stringify(reply));
-  assert.equal(reply.executor, 'device');
+  assert.equal(reply.executor, 'cloud');
   assert.match(reply.content, /完成：已写入 notes\/hello.md/);
   assert.deepEqual(reply.tools, [], 'worker tools stay off the public result');
   const workerTools = await serverDb.tx(tx => tx.one("SELECT m.tools FROM agent_tasks t JOIN bot_runs r ON r.run_id=t.child_run_id JOIN bot_messages m ON m.message_id=r.assistant_message_id WHERE t.task_id=$1", [reply.task_id]));
@@ -234,7 +249,7 @@ test('outside access waits for the user and continues after approval', { skip },
 test('the Mac conversation steers a real running Pi task without cancelling its command', { skip }, async () => {
   const bot = ((await app.call('bots', {})) as { bots: Bot[] }).bots.find(b => b.name === 'Writer')!;
   const sent = await app.call('send', { botId: bot.id, text: '长任务' }) as any;
-  const task = await eventually(async () => await serverDb.tx(tx => tx.one("SELECT * FROM agent_tasks WHERE parent_run_id=$1", [sent.run.id])));
+  const task = await eventually(async () => await serverDb.tx(tx => tx.one("SELECT * FROM agent_tasks WHERE parent_run_id=$1 AND child_run_id IS NOT NULL", [sent.run.id])));
   await eventually(() => events.some(e => e.type === 'activity' && e.activity?.runId === task.child_run_id && e.activity?.tool === 'run_command'));
   const followup = await app.call('send', { botId: bot.id, text: `补充任务:${task.task_id}` }) as any;
   const ack = await eventually(async () => {
@@ -341,7 +356,7 @@ test('the real Mac harness calls the native delegation tool once, and exposes th
     const page = await app.call('messages', { botId: sender.id }) as MessagePage;
     return page.messages.find(m => m.run_id === sent.run.id && m.role === 'assistant' && m.status === 'completed');
   });
-  assert.equal(reply.executor, 'device');
+  assert.equal(reply.executor, 'cloud');
   assert.equal(reply.content, '询问已提交，等对方回报。');
   assert.equal(reply.agent_tasks?.length, 1);
   const taskId = reply.agent_tasks![0].id;

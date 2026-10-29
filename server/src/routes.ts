@@ -1,3 +1,4 @@
+import { routingFields } from "./targets.js";
 import { reportRoutes } from "./reports.js";
 import { conversation } from "./task-conversation.js";
 import { remoteRoutes } from './remote/routes.js';
@@ -37,7 +38,7 @@ import {
 } from "./bots.js";
 import { cancelRun, decideApproval, dispatchDevice, failDeviceRuns } from "./runs.js";
 import { cancelTask, createTask, readTask, reportLater, TERMINAL, listTasks, messageTask, callerRun } from "./agents.js";
-import { deviceOut, deviceList, botConnection } from './devices.js';
+import { deviceOut, deviceList } from './devices.js';
 import { complete, findModel, proxyResponses, recordUsage } from "./llm.js";
 import { effectiveModelCapabilities, listCatalog, providerBase } from "./providers.js";
 import type { WebSearch } from "./search.js";
@@ -111,7 +112,7 @@ const modelFields = z.object({
   enabled: z.boolean().default(true),
   is_default: z.boolean().default(false),
 });
-const libraryPath = z.object({ path: z.string().max(2000).default("") });
+const libraryPath = z.object({ path: z.string().max(2000).default(""), target:z.string().regex(/^(device|remote):[0-9a-f-]{36}$/).optional() });
 
 export const userOut = (u: Row) => ({
   id: u.user_id,
@@ -169,20 +170,38 @@ async function ensureDefault(tx: Tx) {
   const first = await tx.one("SELECT model_id FROM models WHERE enabled ORDER BY created_at LIMIT 1");
   if (first) await setDefault(tx, first.model_id);
 }
+async function fileSources(ctx: Context) {
+  await ctx.db.tx(tx => ownBot(tx,ctx.user.user_id,ctx.params.id));
+  const devices = await ctx.db.tx(tx => deviceList(tx,ctx.hub,ctx.user.user_id));
+  const env = await ctx.db.tx(tx => tx.one("SELECT * FROM remote_environments WHERE user_id=$1 AND status<>'retired'",[ctx.user.user_id]));
+  const sources = devices.filter(d => !d.revoked_at).map(d => ({target:"device:"+d.id,label:d.label,online:d.online}));
+  if (env && env.backend === ctx.s.remoteBackend) sources.push({target:"remote:"+env.environment_id,label:"云端",online:env.status === "ready"});
+  return {sources};
+}
 async function deviceFiles(ctx: Context, method: "list" | "read") {
-  const bot = await ctx.db.tx((tx) => ownBot(tx, ctx.user.user_id, ctx.params.id));
-  return ctx.hub.rpc(
-    ctx.user.user_id,
-    `files.${method}`,
-    { slug: bot.slug, path: ctx.query.path },
-    ctx.s.rpcTimeoutMs,
-    bot.execution_device_id,
-  );
+  const bot = await ctx.db.tx(tx => ownBot(tx,ctx.user.user_id,ctx.params.id));
+  const {sources} = await fileSources(ctx);
+  const recent = await ctx.db.tx(tx => tx.one("SELECT operation_target FROM bot_runs WHERE user_id=$1 AND bot_id=$2 AND lane='task' AND operation_target ~ '^(device|remote):' ORDER BY created_at DESC LIMIT 1",[ctx.user.user_id,bot.bot_id]));
+  const requested = ctx.query.target ?? (ctx.device ? "device:"+ctx.device.device_id : recent?.operation_target);
+  const source = requested ? sources.find(x => x.target === requested) : sources.find(x => x.online) ?? sources[0];
+  if (!source) fail(404,"请选择有效的文件来源；当前没有可浏览的机器");
+  if (!source!.online) fail(409,"文件所在机器离线或尚未就绪，文件暂时无法读取");
+  let result: Row;
+  if (source!.target.startsWith("device:")) {
+    result = await ctx.hub.rpc(ctx.user.user_id,`files.${method}`,{slug:bot.slug,path:ctx.query.path},ctx.s.rpcTimeoutMs,source!.target.slice(7)) as Row;
+  } else {
+    const env = await ctx.db.tx(tx => tx.get("remote_environments",source!.target.slice(7)));
+    const connection = await ctx.remote.connect(env);
+    result = await connection.call({action:method === "list" ? "list_files" : "read_file",slug:bot.slug,args:{path:ctx.query.path || "."},operation_id:randomUUID()});
+    if (method === "read") result = {kind:"text",path:ctx.query.path,name:ctx.query.path.split("/").pop(),...result};
+  }
+  return {...result,target:source!.target,source_label:source!.label};
 }
 
 export const routes: Route[] = [
   ...pushRoutes,
   ...reportRoutes,
+  {method:"GET",path:"/bots/:id/files/sources",auth:"actor",tag:"files",summary:"资料库的可选文件来源",tx:false,handler:fileSources},
   ...phoneRoutes,
   ...remoteRoutes,
   {method:"POST",path:"/agent/automations/effect",auth:"llm",tag:"agents",summary:"目标检查操作日志",internal:true,
@@ -227,8 +246,7 @@ export const routes: Route[] = [
     method: "POST", path: "/agent/tasks", auth: "llm", tag: "agents", summary: "智能体把任务委托给同一用户的另一个 Bot（短期智能体令牌）",
     body: z.object({
       run_id: uuid,
-      execution: z.enum(["device","cloud","remote"]).optional(),
-      device_id:uuid.optional(),
+      ...routingFields,
       agent: z.string().trim().min(1).max(100).optional(),
       kind: z.enum(["background", "delegation"]).default("delegation"),
       title: z.string().trim().min(1).max(80).optional(),
@@ -341,9 +359,7 @@ export const routes: Route[] = [
       }
       await tx.one("SELECT user_id FROM users WHERE user_id=$1 FOR UPDATE", [user.user_id]);
       const prior = await tx.one("SELECT * FROM devices WHERE user_id=$1 AND public_key=$2 AND revoked_at IS NULL", [user.user_id,body.public_key]);
-      const first = !await tx.one("SELECT 1 FROM devices WHERE user_id=$1", [user.user_id]);
       const d = prior ? await tx.update("devices",prior.device_id,{label:body.label,platform:body.platform}) : await tx.insert("devices", { device_id: randomUUID(), user_id: user.user_id, public_key: body.public_key, label: body.label, platform: body.platform });
-      if (first) await tx.rows("UPDATE bots SET execution_device_id=$2 WHERE user_id=$1 AND execution_device_id IS NULL", [user.user_id,d.device_id]);
       after(() => hub.publish(user.user_id, {type:'bots'}));
       return { device: deviceOut(d, false), user: userOut(user) };
     },
@@ -391,7 +407,7 @@ export const routes: Route[] = [
   {
     method: "POST", path: "/bots", auth: "actor", tag: "bots", summary: "新建 Bot", body: botInput,
     handler: async ({ tx, user, device, body }) => {
-      const b = await createBot(tx, user.user_id, { ...body, execution_device_id: body.execution_device_id === undefined ? device?.device_id : body.execution_device_id });
+      const b = await createBot(tx, user.user_id, body);
       await tx.notify({ user_id: user.user_id, bot_id: b.bot_id });
       return botOut(tx, b);
     },
@@ -433,7 +449,7 @@ export const routes: Route[] = [
     body:z.object({client:z.enum(["desktop","android"]).optional()}),
     handler: async ({ tx, s, user, device, params, body }) => {
       const bot = await ownBot(tx, user.user_id, params.id);
-      return { ticket: await issueVoiceTicket(user.user_id, bot.bot_id, s,body.client?{client:device?"desktop":"android",deviceId:device?.device_id}:undefined), expires_in: 60 };
+      return { ticket: await issueVoiceTicket(user.user_id, bot.bot_id, s,{client:device?"desktop":body.client??"legacy",deviceId:device?.device_id}), expires_in: 60 };
     },
   },
   {
@@ -453,12 +469,11 @@ export const routes: Route[] = [
     },
   },
   {
-    method: "POST", path: "/bots/:id/messages", auth: "actor", tag: "bots", summary: "给 Bot 发消息；电脑在线时在电脑上运行，否则在云端运行",
+    method: "POST", path: "/bots/:id/messages", auth: "actor", tag: "bots", summary: "给 Bot 发消息；由云端统一处理对话与任务调度",
     body: z.object({ text: z.string().trim().max(100000).default(''), images: imagesSchema.default([]), request_id: z.string().min(8).max(80), client:z.enum(['android','desktop']).optional() }).refine(body => body.text.length > 0 || body.images.length > 0, '请填写消息或选择图片'),
     handler: async ({ db, tx, s, hub, user, device, params, body, after }) => {
       await ownBot(tx,user.user_id,params.id,true);
-      const conn = body.client ? (device ? hub.device(user.user_id,device.device_id) : undefined) : await botConnection(tx,hub,user.user_id,params.id);
-      const { run, created } = await postMessage(tx, user.user_id, params.id, body.text, body.request_id, conn ? { deviceId: conn.deviceId } : null, body.images, body.client ? {client:device?"desktop":"android",deviceId:device?.device_id} : {});
+      const { run, created } = await postMessage(tx, user.user_id, params.id, body.text, body.request_id, null, body.images, {client:device?"desktop":body.client??"legacy",deviceId:device?.device_id});
       if (created && run.executor === "device") after(() => dispatchDevice(db, s, hub, run.run_id));
       const messages = await tx.rows("SELECT * FROM bot_messages WHERE message_id = ANY($1) ORDER BY seq", [[run.user_message_id, run.assistant_message_id]]);
       return { run: runOut(run), messages: messages.map((m) => messageOut(m)) };
@@ -484,8 +499,7 @@ export const routes: Route[] = [
     body:z.object({client:z.enum(["desktop","android"]).optional(),revision:z.number().int().positive(),request_id:z.string().uuid(),states:z.array(z.object({surfaceId:z.string().min(1).max(80),data:z.record(z.string(),z.unknown())})).max(4),action:z.object({name:z.string().min(1).max(80),surfaceId:z.string().min(1).max(80),sourceComponentId:z.string().min(1).max(80),context:z.record(z.string(),z.unknown())})}),
     handler:async({db,tx,s,hub,user,device,params,body,after})=>{
       await ownBot(tx,user.user_id,params.id,true);
-      const conn=body.client ? (device?hub.device(user.user_id,device.device_id):undefined) : await botConnection(tx,hub,user.user_id,params.id);
-      const {run,created}=await submitUiAction(tx,user.user_id,params.id,params.messageId,body,conn?{deviceId:conn.deviceId}:null,body.client?{client:device?"desktop":"android",deviceId:device?.device_id}:{});
+      const {run,created}=await submitUiAction(tx,user.user_id,params.id,params.messageId,body,null,{client:device?"desktop":body.client??"legacy",deviceId:device?.device_id});
       if(created&&run.executor==='device')after(()=>dispatchDevice(db,s,hub,run.run_id));
       const messages=await tx.rows("SELECT * FROM bot_messages WHERE message_id=ANY($1) ORDER BY seq",[[run.user_message_id,run.assistant_message_id]]);
       return {run:runOut(run),messages:messages.map(m=>messageOut(m))};

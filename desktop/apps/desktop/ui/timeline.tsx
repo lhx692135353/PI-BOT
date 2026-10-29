@@ -78,7 +78,7 @@ function ConversationDialog({ bot, task, onClose, onOpenBot }: { bot: Bot; task:
   return <dialog className="conversation-dialog" ref={dialog} onCancel={e => { e.preventDefault(); onClose(); }} onClick={e => { if (e.target === dialog.current) onClose(); }} aria-labelledby="conversation-title">
     <div className="conversation-panel">
       <header><div id="conversation-title" className="conversation-participants">{participants.map((b, i) => <span key={b.id}>{i > 0 && <span className="muted">↔ </span>}{b.avatar && <PiBot avatar={b.avatar} mood="happy" size={26} />}{b.name}</span>)}</div><button className="ghost" onClick={onClose} aria-label="关闭传话详情">×</button></header>
-      <div className="conversation-meta">{data?.total ?? task.message_count ?? 0} 条消息往来 · {TASK_STATE[data?.status ?? task.status]}</div>
+      <div className="conversation-meta">{data?.total ?? task.message_count ?? 0} 条消息往来 · {TASK_STATE[data?.status ?? task.status]}{data?.execution_label ? ` · 本次使用：${data.execution_label}` : ""}</div>
       <div className="conversation-messages" aria-live="polite">
         {!data && busy && <p className="muted">正在加载传话…</p>}
         {data && !data.messages.length && <p className="muted">还没有传话记录</p>}

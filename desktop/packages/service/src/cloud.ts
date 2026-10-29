@@ -88,7 +88,7 @@ export class CloudSocket {
     socket.on('message', raw => {
       let message: any; try { message = JSON.parse(raw.toString()); } catch { return; }
       if (message?.type === 'pong') this.lastPong = Date.now();
-      else if (message?.type === 'hello') { this.connected = true; this.send({ type: 'capabilities', features: ['always-on-v1'] }); this.handlers.open(); }
+      else if (message?.type === 'hello') { this.connected = true; this.send({ type: 'capabilities', features: ['always-on-v1', 'files', 'shell', 'preflight-v1'] }); this.handlers.open(); }
       else this.handlers.message(message);
     });
     socket.on('unexpected-response', (_request, response) => { authFailed = response.statusCode === 401 || response.statusCode === 403; socket.terminate(); });

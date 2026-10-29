@@ -15,8 +15,14 @@ async function runEntry() {
   const before = window.__calls.length;
   header.click();
   await waitFor(() => document.querySelector('aside[aria-label="手机预览"]'), '右上角打开的面板');
+  await delay(150);
+  if (calls('phonePreview').length) throw new Error('Agent 不应隐式绑定手机所在电脑');
+  const picker = document.querySelector('select[aria-label="选择已授权的执行电脑"]');
+  if (!picker) throw new Error('未提供明确选择电脑的入口');
+  const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
+  setter.call(picker,A); picker.dispatchEvent(new Event('change',{bubbles:true}));
   const preview = await waitFor(() => calls('phonePreview')[0], '右上角入口的预览');
-  if (preview.input?.deviceId !== A) throw new Error('右上角面板没有预览 Bot 绑定的执行电脑');
+  if (preview.input?.deviceId !== A) throw new Error('右上角面板没有预览明确选择的电脑');
   if (calls('phoneAcquire').length !== 0) throw new Error('右上角打开面板时调用了接管');
   if (!document.body.innerText.includes('默认只读预览')) throw new Error('右上角面板没有默认只读说明');
   await waitFor(() => document.querySelector('.phone-screen img'), '右上角预览画面');

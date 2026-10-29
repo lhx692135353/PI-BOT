@@ -169,7 +169,7 @@ data class ConversationMessage(val id: String, val seq: Long, @SerialName("from_
     @SerialName("to_bot_id") val toBotId: String, val kind: String, val content: String, @SerialName("created_at") val createdAt: String? = null)
 
 @Serializable
-data class TaskConversation(@SerialName("task_id") val taskId: String, val status: String,
+data class TaskConversation(@SerialName("execution_label") val executionLabel: String? = null, @SerialName("task_id") val taskId: String, val status: String,
     val bots: List<ConversationBot>, val messages: List<ConversationMessage>, val total: Int,
     @SerialName("has_more") val hasMore: Boolean, @SerialName("next_after") val nextAfter: Long)
 
@@ -183,7 +183,13 @@ data class SendResult(val run: Run, val messages: List<Message>)
 data class FileEntry(val name: String, val type: String, val size: Long = 0, val modified: String? = null)
 
 @Serializable
-data class FileList(val path: String = "", val entries: List<FileEntry> = emptyList())
+data class FileSource(val target: String, val label: String, val online: Boolean = false)
+
+@Serializable
+data class FileSources(val sources: List<FileSource> = emptyList())
+
+@Serializable
+data class FileList(val target: String? = null, val path: String = "", val entries: List<FileEntry> = emptyList())
 
 @Serializable
 data class FileContent(
@@ -300,11 +306,13 @@ class PiBotApi(private val http: OkHttpClient, private val json: Json = API_JSON
     fun decide(url: ServerUrl, token: String, approvalId: String, approve: Boolean): Approval =
         call(url, "POST", "/approvals/$approvalId", token, DecisionBody(if (approve) "approve" else "reject"))
 
-    fun files(url: ServerUrl, token: String, botId: String, path: String): FileList =
-        call(url, "GET", "/bots/$botId/files", token, query = listOf("path" to path))
+    fun fileSources(url: ServerUrl, token: String, botId: String): FileSources = call(url,"GET","/bots/$botId/files/sources",token)
 
-    fun file(url: ServerUrl, token: String, botId: String, path: String): FileContent =
-        call(url, "GET", "/bots/$botId/files/content", token, query = listOf("path" to path))
+    fun files(url: ServerUrl, token: String, botId: String, path: String, target: String? = null): FileList =
+        call(url, "GET", "/bots/$botId/files", token, query = listOf("path" to path) + if (target == null) emptyList() else listOf("target" to target))
+
+    fun file(url: ServerUrl, token: String, botId: String, path: String, target: String? = null): FileContent =
+        call(url, "GET", "/bots/$botId/files/content", token, query = listOf("path" to path) + if (target == null) emptyList() else listOf("target" to target))
 
     private inline fun <reified T> call(url: ServerUrl, method: String, path: String, token: String?, query: List<Pair<String, String>> = emptyList()): T =
         execute(request(url, method, path, token, query, null))

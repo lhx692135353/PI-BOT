@@ -19,5 +19,7 @@ export async function conversation(tx: Tx, userId: string, botId: string, taskId
   const rows = await tx.rows("SELECT * FROM agent_task_messages WHERE task_id=$1 AND seq>$2 ORDER BY seq LIMIT $3", [taskId, after, limit + 1]);
   const entries = rows.slice(0, limit).map(r => ({ id: String(r.seq), seq: r.seq, from_bot_id: r.from_bot_id, to_bot_id: r.to_bot_id, kind: r.kind, content: r.content, created_at: r.created_at }));
   const count = await tx.one("SELECT count(*) AS n FROM agent_task_messages WHERE task_id=$1", [taskId]);
-  return { task_id: taskId, status: task!.status, bots, messages: entries, total: count!.n, has_more: rows.length > limit, next_after: entries.at(-1)?.seq ?? after };
+  const device = task!.device_id ? await tx.get("devices",task!.device_id) : null;
+  const executionLabel = device?.label ?? (task!.operation_target?.startsWith("remote:") ? "云端机器" : task!.operation_target === "pending" ? "等待调度" : "云端处理");
+  return { task_id: taskId, execution_label:executionLabel, operation_target:task!.operation_target, status: task!.status, bots, messages: entries, total: count!.n, has_more: rows.length > limit, next_after: entries.at(-1)?.seq ?? after };
 }

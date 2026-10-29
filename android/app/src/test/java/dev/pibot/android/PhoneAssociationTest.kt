@@ -27,7 +27,7 @@ class PhoneAssociationTest {
         val both = listOf(first, second)
         assertEquals(second.id, resolvePhoneDevice(second.id, first.id, both).deviceId)
         assertNull(resolvePhoneDevice("missing", first.id, both).deviceId)
-        assertEquals("execution", resolvePhoneDevice(null, first.id, both).source)
+        assertEquals("none", resolvePhoneDevice(null, first.id, both).source)
         assertNull(resolvePhoneDevice(first.id, null, listOf(first.copy(revokedAt = "2026-10-23T00:00:00Z"), second)).deviceId)
         assertNull(resolvePhoneDevice(null, "missing", listOf(first)).deviceId)
         assertEquals("none", resolvePhoneDevice(null, null, both).source)

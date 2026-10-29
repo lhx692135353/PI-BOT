@@ -72,6 +72,7 @@ internal fun TaskConversationDialog(botId: String, task: AgentTaskRef, repositor
                     }
                 }
                 Text("${page?.total ?: task.messageCount} 条消息往来 · ${taskState(page?.status ?: task.status)}", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(vertical = 10.dp))
+                page?.executionLabel?.let { Text("本次使用：$it", color = Muted, fontSize = 12.sp) }
                 LazyColumn(Modifier.weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     if (page == null && busy) item { Text("正在加载传话…", color = Muted) }
                     if (page?.messages?.isEmpty() == true) item { Text("还没有传话记录", color = Muted) }

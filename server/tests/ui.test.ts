@@ -1,3 +1,6 @@
+import { insertRun, finishRun } from "../src/bots.js";
+import { createTask, AgentDispatcher } from "../src/agents.js";
+import { dispatchDevice } from "../src/runs.js";
 import test, { before, after } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -240,81 +243,29 @@ test(
     );
   },
 );
-test(
-  "Mac run events persist A2UI before done; actions wait until the source reply finishes",
-  { skip },
-  async () => {
-    const keys = deviceKeys();
-    const reg = await api("POST", "/devices/register", {
-      public_key: keys.publicKey,
-      label: "UI test Mac",
+test("device task A2UI stays private until the cloud publishes the completed report",{skip},async()=>{
+  const keys=deviceKeys(),reg=await api("POST","/devices/register",{public_key:keys.publicKey,label:"UI test computer"});keys.setId(reg.json.device.id);
+  const computer=socket(base.replace("http","ws")+"/ws/device",keys.headers("GET","/ws/device"));await computer.next(m=>m.type==='hello');
+  computer.send({type:'capabilities',features:['files','shell']});
+  const user=(await api('GET','/me')).json.user;
+  await eventually(()=>(app as any).hub.device(user.id,reg.json.device.id)?.capabilities?.includes('shell'));
+  try {
+    const task=await db.tx(async tx=>{
+      const parent=await insertRun(tx,{userId:user.id,botId,requestId:randomUUID(),text:'show UI',computer:null});
+      await tx.update('bot_runs',parent.run_id,{status:'running'});
+      const task=await createTask(tx,(app as any).hub,user.id,{sub:user.id,src:'cloud',bot:botId},{run_id:parent.run_id,kind:'background',task:'show UI',execution:'device',device_id:reg.json.device.id,wait:false},settings({PI_BOT_DATABASE_URL:TEST_DB,PI_BOT_JWT_SECRET:"j".repeat(40)}));
+      await finishRun(tx,parent.run_id,'completed',null,'已安排');return task;
     });
-    keys.setId(reg.json.device.id);
-    const computer = socket(
-      base.replace("http", "ws") + "/ws/device",
-      keys.headers("GET", "/ws/device"),
-    );
-    await computer.next((m) => m.type === "hello");
-    try {
-      const sent = await api("POST", `/bots/${botId}/messages`, {
-        text: "Mac UI",
-        request_id: randomUUID(),
-      });
-      assert.equal(sent.json.run.executor, "device");
-      const job = (await computer.next((m) => m.type === "run")).run;
-      computer.send({
-        type: "run_event",
-        run_id: job.run_id,
-        event: { kind: "started" },
-      });
-      computer.send({
-        type: "run_event",
-        run_id: job.run_id,
-        event: { kind: "ui", messages: EXAMPLE },
-      });
-      const reply = await eventually(async () => {
-        const rows = (await api("GET", `/bots/${botId}/messages`)).json
-          .messages;
-        return rows.find(
-          (m: any) => m.run_id === job.run_id && m.role === "assistant" && m.ui,
-        );
-      });
-      assert.equal(reply.ui.revision, 1);
-      const action = {
-        revision: 1,
-        states: [],
-        action: {
-          name: "submit",
-          surfaceId: "calculator",
-          sourceComponentId: "submit",
-          context: {},
-        },
-        request_id: randomUUID(),
-      };
-      assert.equal(
-        (
-          await api(
-            "POST",
-            `/bots/${botId}/messages/${reply.id}/ui-actions`,
-            action,
-          )
-        ).status,
-        409,
-      );
-      computer.send({
-        type: "run_event",
-        run_id: job.run_id,
-        event: { kind: "done", state: "completed", text: "已展示" },
-      });
-      await eventually(async () => {
-        const rows = (await api("GET", `/bots/${botId}/messages`)).json
-          .messages;
-        return rows.some(
-          (m: any) => m.id === reply.id && m.status === "completed" && m.ui,
-        );
-      });
-    } finally {
-      computer.close();
-    }
-  },
-);
+    const config=settings({PI_BOT_DATABASE_URL:TEST_DB,PI_BOT_JWT_SECRET:'j'.repeat(40)});
+    await dispatchDevice(db,config,(app as any).hub,task.run!.run_id);
+    const job=(await computer.next(m=>m.type==='run' && m.run.run_id===task.run!.run_id)).run;
+    computer.send({type:'run_event',run_id:job.run_id,event:{kind:'ui',messages:EXAMPLE}});
+    await eventually(async()=> (await db.tx(tx=>tx.get('bot_messages',task.run!.assistant_message_id))).ui?.revision===1);
+    assert.ok(!(await api('GET',`/bots/${botId}/messages`)).json.messages.some((m:any)=>m.run_id===job.run_id));
+    computer.send({type:'run_event',run_id:job.run_id,event:{kind:'done',state:'completed',text:'已展示'}});
+    await eventually(async()=> (await db.tx(tx=>tx.get('bot_runs',job.run_id))).status==='completed');
+    await new AgentDispatcher(db,config,(app as any).hub).once();await worker.runOnce();
+    const reply=await eventually(async()=> (await api('GET',`/bots/${botId}/messages`)).json.messages.find((m:any)=>m.task_id===task.task.id && m.ui));
+    assert.equal(reply.ui.revision,1);assert.equal(reply.executor,'cloud');assert.equal(reply.status,'completed');
+  } finally {computer.close();}
+});

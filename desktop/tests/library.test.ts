@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, symlinkSync, writeFileSync, mkdirSync, existsSync, readFileSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, parse } from 'node:path';
-import { libraryDir, libraryTools, OutsideError, previewList, previewRead, Sandbox } from '../packages/service/src/library.js';
+import { preflightLibrary, libraryDir, libraryTools, OutsideError, previewList, previewRead, Sandbox } from '../packages/service/src/library.js';
 
 function temp() {
   const path = realpathSync.native(mkdtempSync(join(tmpdir(), 'pi-bot-lib-')));
@@ -137,4 +137,23 @@ test('library mutations serialize across runs, abort queued waiters and release 
   assert.deepEqual(order, ['first', 'first done', 'last']);
   await assert.rejects(withLibraryMutation('shared-test-library', undefined, async () => { throw new Error('failed write'); }), /failed write/);
   assert.equal(await withLibraryMutation('shared-test-library', undefined, async () => 'still works'), 'still works');
+});
+
+
+test('task preflight only checks existing resources and never creates a library or traverses outside it',async()=>{
+  const dir=temp();
+  try {
+    const root=join(dir.path,'libraries');
+    assert.deepEqual(await preflightLibrary(root,'missing',['data.csv']),{available:false});
+    assert.equal(existsSync(root),false);
+    const library=await libraryDir(root,'bot');
+    writeFileSync(join(library,'data.csv'),'real source');
+    assert.deepEqual(await preflightLibrary(root,'bot',['data.csv']),{available:true});
+    assert.deepEqual(await preflightLibrary(root,'bot',['missing.csv']),{available:false});
+    assert.deepEqual(await preflightLibrary(root,'bot',['../outside.csv']),{available:false});
+    const outside=join(dir.path,'outside');mkdirSync(outside);writeFileSync(join(outside,'secret'),'secret');
+    symlinkSync(outside,join(library,'escape'),process.platform==='win32'?'junction':'dir');
+    assert.deepEqual(await preflightLibrary(root,'bot',['escape/secret']),{available:false});
+    assert.equal(readFileSync(join(library,'data.csv'),'utf8'),'real source');
+  } finally {dir.cleanup();}
 });

@@ -95,7 +95,7 @@ function Settings({ state, onClose, onOpenPhone }: { state: AccountState; onClos
             <dt>服务器</dt><dd className="mono">{state.serverUrl}</dd>
             <dt>资料库</dt><dd className="mono">{state.libraryRoot}</dd>
           </dl>
-          <p className="muted small">Bot 在各自绑定的电脑上读写资料库、执行命令，访问资料库以外的文件前会先征得你同意。绑定电脑离线时，Bot 在云端聊天和搜索，本地任务等待原电脑上线。</p>
+          <p className="muted small">对话由云端统一处理；每个任务优先本机，再选择其他可用电脑，最后使用云端。文件保存在实际使用的机器上，访问资料库以外的路径仍需授权。</p>
           <h3>执行电脑</h3>
           {devices.filter(d=>!d.revoked_at).map(d=>(
             <div key={d.id} className="device-row">
@@ -121,7 +121,7 @@ interface GoalItem { operation_target?:string; id: string; title: string; goal: 
 interface LibraryEntry { name: string; type: 'dir' | 'file'; size: number }
 interface LibraryFile { kind: 'text' | 'binary' | 'image'; name: string; content?: string; truncated?: boolean }
 
-function Inspector({ bot, local, onClose, onOpenLibrary }: { bot: Bot; local: boolean; onClose(): void; onOpenLibrary(): void }) {
+function Inspector({ bot, currentDeviceId, onClose, onOpenLibrary }: { bot: Bot; currentDeviceId: string | null; onClose(): void; onOpenLibrary(): void }) {
   const [tab, setTab] = useState<'goals' | 'library'>('goals');
   const [goals, setGoals] = useState<GoalItem[] | null>(null);
   const [goalError, setGoalError] = useState('');
@@ -130,6 +130,17 @@ function Inspector({ bot, local, onClose, onOpenLibrary }: { bot: Bot; local: bo
   const [libraryError, setLibraryError] = useState('');
   const [file, setFile] = useState<LibraryFile | null>(null);
   const libraryTicket = useRef(0);
+  const [sources,setSources] = useState<{target:string;label:string;online:boolean}[]>([]);
+  const [source,setSource] = useState("");
+  useEffect(() => {
+    let live = true;
+    void call<{sources:typeof sources}>("librarySources",{id:bot.id}).then(result => {
+      if (!live) return;
+      setSources(result.sources);
+      setSource(result.sources.find(x => x.target === "device:"+currentDeviceId)?.target ?? result.sources.find(x => x.online)?.target ?? result.sources[0]?.target ?? "");
+    }).catch(e => {if (live) setLibraryError(errorText(e));});
+    return () => {live=false; ++libraryTicket.current;};
+  },[bot.id,currentDeviceId]);
   useEffect(() => {
     let live = true;
     const load = () => {
@@ -140,12 +151,13 @@ function Inspector({ bot, local, onClose, onOpenLibrary }: { bot: Bot; local: bo
     return () => { live = false; unsubscribe(); };
   }, [bot.id]);
   const loadLibrary = useCallback((next: string) => {
+    if (!source) return;
     const ticket = ++libraryTicket.current;
     setPath(next); setFile(null); setEntries(null); setLibraryError('');
-    void call<{ path: string; entries: LibraryEntry[] }>('library', { id: bot.id, path: next })
+    void call<{ path: string; entries: LibraryEntry[] }>('library', { id: bot.id, path: next, target:source })
       .then(r => { if (ticket !== libraryTicket.current) return; setPath(r.path || ''); setEntries(r.entries); })
-      .catch(e => { if (ticket === libraryTicket.current) setLibraryError(/离线/.test(errorText(e)) ? '绑定电脑离线，资料库暂时看不了' : errorText(e)); });
-  }, [bot.id]);
+      .catch(e => { if (ticket === libraryTicket.current) setLibraryError(/离线/.test(errorText(e)) ? '文件所在机器离线，资料库暂时无法读取' : errorText(e)); });
+  }, [bot.id,source]);
   useEffect(() => { if (tab === 'library') loadLibrary(''); }, [tab, loadLibrary]);
   const parent = path.split('/').slice(0, -1).join('/');
   return (
@@ -165,20 +177,24 @@ function Inspector({ bot, local, onClose, onOpenLibrary }: { bot: Bot; local: bo
           {goals?.map(goal => (
             <article key={goal.id} className="goal-card">
               <header><strong>{goal.title}</strong><span>{GOAL_STATUS[goal.status] ?? goal.status}</span></header>
-              <p>{goal.goal}</p><p className="muted small">{goal.operation_target?.startsWith("remote:")?"执行位置：云端机器":goal.operation_target?.startsWith("device:")?"执行位置：原电脑":"执行位置待指定"}</p>
+              <p>{goal.goal}</p>
               <p className="muted small">{goal.progress || '还没有进展'}</p>
             </article>
           ))}
         </div>
       ) : (
         <div className="inspector-body">
+          <label>文件来源<select aria-label="文件来源" value={source} onChange={e => {++libraryTicket.current;setFile(null);setEntries(null);setSource(e.target.value);}}>
+            {!sources.length && <option value="">暂无文件来源</option>}
+            {sources.map(x => <option key={x.target} value={x.target}>{x.label} · {x.online ? '在线' : '离线'}</option>)}
+          </select></label>
           {libraryError && <p className="error small">{libraryError}</p>}
           {path && <button type="button" className="link" onClick={() => loadLibrary(parent)}>返回上一级</button>}
           {entries?.map(entry => (
             <button type="button" key={entry.name} className="library-entry" onClick={() => {
               const next = path ? `${path}/${entry.name}` : entry.name;
               if (entry.type === 'dir') loadLibrary(next);
-              else void call<LibraryFile>('libraryRead', { id: bot.id, path: next }).then(setFile).catch(e => setLibraryError(errorText(e)));
+              else { const ticket=++libraryTicket.current; void call<LibraryFile>('libraryRead', { id: bot.id, path: next, target:source }).then(r => {if(ticket===libraryTicket.current)setFile(r);}).catch(e => {if(ticket===libraryTicket.current)setLibraryError(errorText(e));}); }
             }}>
               <span>{entry.type === 'dir' ? '文件夹' : '文件'}</span>
               <strong>{entry.name}</strong>
@@ -186,7 +202,7 @@ function Inspector({ bot, local, onClose, onOpenLibrary }: { bot: Bot; local: bo
           ))}
           {file?.kind === 'text' && <pre className="file-preview">{file.content}{file.truncated ? '\n…' : ''}</pre>}
           {file && file.kind !== 'text' && <p className="muted small">这个文件不能在这里预览</p>}
-          {local && <button type="button" className="ghost" onClick={onOpenLibrary}>在文件管理器中打开</button>}
+          {source === "device:"+currentDeviceId && <button type="button" className="ghost" onClick={onOpenLibrary}>在文件管理器中打开</button>}
         </div>
       )}
     </aside>
@@ -334,7 +350,7 @@ function App() {
                 <PiBot avatar={bot.avatar} mood={botMood(bot, activities[bot.id], now)} size={52} followPointer />
                 <span className="bot-title">
                   <h1>{bot.name}</h1>
-                  <span className="muted small">{devices.find(d=>d.id===bot.execution_device_id)?.label ?? '未绑定电脑'} · {devices.find(d=>d.id===bot.execution_device_id)?.online ? '在线' : '离线，云端聊天'} · {bot.is_main ? '主智能体 · ' : ''}{models.find(m => m.id === bot.model_id)?.name ?? '默认模型'} · ~/pi-bot/{bot.slug}</span>
+                  <span className="muted small">{bot.is_main ? '主智能体 · ' : ''}{models.find(m => m.id === bot.model_id)?.name ?? '默认模型'}</span>
                 </span>
               </button>
               <button type="button" className="ghost" aria-label="打开手机预览" onClick={() => setPhoneTarget({ botId: bot.id, deviceId: null })}>手机</button>
@@ -347,7 +363,7 @@ function App() {
                 return { ...p, [bot.id]: { messages: [...byId.values()].sort((a, b) => a.seq - b.seq), hasMore: old?.hasMore ?? sent.has_more } };
               });
             }} />
-            {inspector && <Inspector key={bot.id} bot={bot} local={bot.execution_device_id === account.deviceId} onClose={() => setInspector(false)} onOpenLibrary={() => bridge.openLibrary(bot.id).catch(e => alert(errorText(e)))} />}
+            {inspector && <Inspector key={bot.id} bot={bot} currentDeviceId={account.deviceId ?? null} onClose={() => setInspector(false)} onOpenLibrary={() => bridge.openLibrary(bot.id).catch(e => alert(errorText(e)))} />}
           </>
         ) : (
           <div className="empty">
@@ -378,8 +394,8 @@ function App() {
           }}>删除</button>}
         </div>
       </>}
-      {phoneTarget && <PhoneDock key={phoneAssociationKey(account.serverUrl, account.user?.id ?? null)} associationKey={phoneAssociationKey(account.serverUrl, account.user?.id ?? null)} botId={phoneTarget.botId ? bot?.id ?? phoneTarget.botId : null} pinnedDeviceId={phoneTarget.deviceId} devices={devices} executionDeviceId={phoneTarget.botId ? bot?.execution_device_id ?? null : null} onClose={() => setPhoneTarget(null)} />}
-      {editor && <BotEditor bot={editor === 'new' ? undefined : editor} models={models} devices={devices} currentDeviceId={account.deviceId ?? null} onClose={() => setEditor(null)} onSaved={b => { setEditor(null); setSelected(b.id); void loadBots(); }} />}
+      {phoneTarget && <PhoneDock key={phoneAssociationKey(account.serverUrl, account.user?.id ?? null)} associationKey={phoneAssociationKey(account.serverUrl, account.user?.id ?? null)} botId={phoneTarget.botId ? bot?.id ?? phoneTarget.botId : null} pinnedDeviceId={phoneTarget.deviceId} devices={devices} executionDeviceId={null} onClose={() => setPhoneTarget(null)} />}
+      {editor && <BotEditor bot={editor === 'new' ? undefined : editor} models={models} onClose={() => setEditor(null)} onSaved={b => { setEditor(null); setSelected(b.id); void loadBots(); }} />}
       {settings && <Settings state={account} onClose={() => setSettings(false)} onOpenPhone={device => { setSettings(false); setPhoneTarget({ botId: null, deviceId: device.id }); }} />}
     </div>
   );

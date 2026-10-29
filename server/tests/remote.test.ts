@@ -28,7 +28,7 @@ import { ensureEnvironment } from "../src/remote/environments.js";
 import { Hub } from "../src/hub.js";
 import { issueLlmToken, Vault } from "../src/security.js";
 import { createBot, insertRun, finishRun } from "../src/bots.js";
-import { createTask } from "../src/agents.js";
+import { createTask, startTask } from "../src/agents.js";
 import {
   AutomationScheduler,
   manageGoals,
@@ -381,7 +381,7 @@ test(
   },
 );
 test(
-  "Android tasks select remote, pure cloud tasks do not provision, original offline computers do not fall back",
+  "Android tasks dispatch automatically to cloud when no computer is available; explicit targets never fall back",
   { skip },
   async () => {
     const parent = await run("remote", "conversation"),
@@ -402,8 +402,11 @@ test(
         s,
       ),
     );
-    assert.equal(result.task.operation_target, "remote:" + envId);
-    assert.equal(result.run?.executor, "cloud");
+    assert.equal(result.task.operation_target,"pending");
+    await service.connect(await db.tx(tx=>tx.get("remote_environments",envId)));
+    const dispatched=await db.tx(async tx=>startTask(tx,hub,await tx.get("agent_tasks",result.task.id),s));
+    assert.equal(dispatched?.operation_target,"remote:"+envId);
+    assert.equal(dispatched?.executor,"cloud");
     const plain = await db.tx((tx) =>
       createTask(
         tx,
@@ -449,10 +452,10 @@ test(
           s,
         ),
       ),
-      /已离线/,
+      /离线/,
     );
     await db.tx(async (tx) => {
-      await finishRun(tx, result.run!.run_id, "cancelled", null);
+      await finishRun(tx, dispatched!.run_id, "cancelled", null);
       await finishRun(tx, plain.run!.run_id, "cancelled", null);
       await finishRun(tx, parent.run_id, "completed", null);
     });
@@ -595,7 +598,7 @@ test(
     hub.attach({
       userId,
       deviceId: id,
-      capabilities: ["always-on-v1"],
+      capabilities: ["always-on-v1","files","shell"],
       send() {},
       close() {},
     });
@@ -648,8 +651,8 @@ test(
     );
     const goals = await db.tx((tx) =>
       tx.rows(
-        "SELECT * FROM bot_goals WHERE bot_id=$1 AND operation_target=$2",
-        [parent.bot_id, remote!.operation_target],
+        "SELECT g.* FROM bot_goals g JOIN bot_automations a ON a.bot_id=g.bot_id AND a.operation_target=g.operation_target WHERE g.bot_id=$1 AND a.automation_id=$2",
+        [parent.bot_id, remote!.automation_id],
       ),
     );
     await db.tx((tx) =>

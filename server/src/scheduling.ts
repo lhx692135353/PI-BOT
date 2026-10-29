@@ -1,10 +1,13 @@
+import { resolveTaskTarget, RemotePreparationRequired } from "./targets.js";
+import { finishRun } from "./bots.js";
+import type { Hub } from "./hub.js";
 import type { Row, Tx } from "./db.js";
 import type { Settings } from "./config.js";
 
 export const TASK_CONCURRENCY = 2;
 
 /** Lock the bot before the run: all executors share the same capacity checks. */
-export async function claimExecution(tx: Tx, id: string, s: Settings, workerId?: string): Promise<Row | null> {
+export async function claimExecution(tx: Tx, id: string, s: Settings, workerId?: string, hub?:Hub): Promise<Row | null> {
   const candidate = await tx.get("bot_runs", id);
   if (!candidate || candidate.status !== "queued" || (workerId && candidate.execution_policy === "device_only" && !candidate.operation_target?.startsWith("remote:"))) return null;
   const bot = await tx.one("SELECT * FROM bots WHERE bot_id=$1 FOR NO KEY UPDATE SKIP LOCKED", [candidate.bot_id]);
@@ -26,6 +29,21 @@ export async function claimExecution(tx: Tx, id: string, s: Settings, workerId?:
     const { n: used } = (await tx.one(`SELECT count(*) AS n FROM bot_runs WHERE worker_id=$1 AND lane=$2
       AND status IN ('running','waiting_approval') AND waiting_on_task_id IS NULL`, [workerId, run.lane]))!;
     if (used >= (run.lane === "conversation" ? s.conversationConcurrency : s.workerConcurrency)) return null;
+  }
+  if (hub && run.lane === "task" && run.routing) {
+    try {
+      const location = await resolveTaskTarget(tx,s,hub,run.user_id,bot.slug,run.routing);
+      const executor = location.execution === "device" ? "device" : "cloud";
+      await tx.update("bot_runs",id,{executor,device_id:location.device_id,operation_target:location.operation_target});
+      if (run.task_id) await tx.update("agent_tasks",run.task_id,location);
+      await tx.rows("UPDATE bot_messages SET executor=$2 WHERE message_id=$1",[run.assistant_message_id,executor]);
+      Object.assign(run,{executor,device_id:location.device_id,operation_target:location.operation_target});
+      if (workerId ? executor !== "cloud" : executor !== "device") return null;
+    } catch (error) {
+      if (error instanceof RemotePreparationRequired) throw error;
+      await finishRun(tx,id,"failed",error instanceof Error ? error.message : "没有可用执行资源");
+      return null;
+    }
   }
   if (run.lane === "task" && run.task_id) await tx.rows("UPDATE agent_tasks SET status='running', updated_at=now() WHERE task_id=$1", [run.task_id]);
   return (await tx.one(`UPDATE bot_runs SET status='running', started_at=coalesce(started_at,now()),
