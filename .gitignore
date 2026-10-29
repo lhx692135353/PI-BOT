@@ -46,6 +46,8 @@ htmlcov/
 test-results/
 playwright-report/
 
+# Client CI build identity and short Windows packaging scratch paths.
+/client-build.json
 # Short Windows installer output and per-build NuGet scratch directories.
 /.w/
 /.t-*/

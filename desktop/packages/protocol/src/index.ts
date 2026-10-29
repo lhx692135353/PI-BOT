@@ -99,10 +99,27 @@ export type AppEvent =
   | { type: 'bot.mood'; bot_id: string; name: string; mood: Mood };
 
 export interface DesktopBridge {
+  updates?: {
+    state(): Promise<ClientUpdateState>;
+    check(channel: UpdateChannel): Promise<ClientUpdateState>;
+    download(): Promise<ClientUpdateState>;
+    install(): Promise<boolean>;
+  };
   call(method: Method, input?: unknown): Promise<unknown>;
   subscribe(listener: (event: AppEvent) => void): () => void;
   computerName(): Promise<string>;
   defaultServerUrl(): Promise<string>;
   openLibrary(botId: string): Promise<void>;
   openExternal(url: string): Promise<void>;
+}
+
+export type UpdateChannel = 'stable' | 'test';
+export interface ClientUpdateState {
+  supported?: boolean;
+  channel: UpdateChannel;
+  phase: 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'launching' | 'error';
+  version: string;
+  buildNumber: number;
+  message: string;
+  candidate?: { version: string; buildNumber: number; commit: string; size: number };
 }

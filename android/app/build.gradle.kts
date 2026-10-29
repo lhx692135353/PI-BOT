@@ -12,14 +12,27 @@ android {
         applicationId = "dev.pibot.android"
         minSdk = 26
         targetSdk = 37
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = providers.environmentVariable("PI_BOT_BUILD_NUMBER").orNull?.toInt() ?: 3
+        versionName = providers.environmentVariable("PI_BOT_VERSION").orNull ?: "0.3.0"
         buildConfigField("String", "DEFAULT_SERVER_URL", "\"http://10.0.2.2:8000\"")
     }
 
+    // Never generate a fresh CI key for updates. A missing key blocks publication.
+    signingConfigs {
+        create("continuousTest") {
+            val path = providers.environmentVariable("PI_BOT_KEYSTORE_PATH").orNull
+            if (path != null) {
+                storeFile = file(path)
+                storePassword = providers.environmentVariable("PI_BOT_KEYSTORE_PASSWORD").orNull
+                keyAlias = providers.environmentVariable("PI_BOT_KEY_ALIAS").orNull
+                keyPassword = providers.environmentVariable("PI_BOT_KEY_PASSWORD").orNull
+            }
+        }
+    }
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("continuousTest")
         }
     }
 

@@ -7,6 +7,7 @@ import { bridge, call, errorText } from './bridge.js';
 import { BotEditor } from './editor.js';
 import { Timeline } from './timeline.js';
 import { BotListItem } from './bot-list-item.js';
+import { ClientUpdates } from './client-updates.js';
 import { phoneAssociationKey } from './phone-client.js';
 import { DevicePhoneButton, PhoneDock } from './phone-control.js';
 import './style.css';
@@ -96,6 +97,7 @@ function Settings({ state, onClose, onOpenPhone }: { state: AccountState; onClos
             <dt>资料库</dt><dd className="mono">{state.libraryRoot}</dd>
           </dl>
           <p className="muted small">对话由云端统一处理；每个任务优先本机，再选择其他可用电脑，最后使用云端。文件保存在实际使用的机器上，访问资料库以外的路径仍需授权。</p>
+          <ClientUpdates />
           <h3>执行电脑</h3>
           {devices.filter(d=>!d.revoked_at).map(d=>(
             <div key={d.id} className="device-row">

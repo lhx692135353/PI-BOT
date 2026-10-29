@@ -1,5 +1,12 @@
 package dev.pibot.android.ui
 
+import android.graphics.Rect
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
@@ -81,6 +88,7 @@ import dev.pibot.android.data.Bot
 import dev.pibot.android.data.FromBot
 import dev.pibot.android.data.Message
 import dev.pibot.android.data.PiBotRepository
+import dev.pibot.android.domain.selectionScrollDelta
 import dev.pibot.android.domain.Timeline
 import dev.pibot.android.domain.delegationLabel
 import dev.pibot.android.domain.mood
@@ -154,6 +162,19 @@ fun TimelineScreen(
         return
     }
     val mood = current.mood(now, timeline.runningTool)
+    val selection = remember(botId) { MessageSelectionSession() }
+    var frozenTimeline by remember(botId) { mutableStateOf<Timeline?>(null) }
+    var frozenBot by remember(botId) { mutableStateOf<Bot?>(null) }
+    val latestTimeline by rememberUpdatedState(timeline)
+    val latestBot by rememberUpdatedState(current)
+    selection.onActiveChanged = { active ->
+        frozenTimeline = if (active) latestTimeline else null
+        frozenBot = if (active) latestBot else null
+    }
+    val displayTimeline = frozenTimeline ?: timeline
+    val displayBot = frozenBot ?: current
+    BackHandler(selection.active != null) { selection.clear() }
+    DisposableEffect(selection) { onDispose { selection.clear() } }
 
     Scaffold(
         topBar = {
@@ -193,39 +214,54 @@ fun TimelineScreen(
                 return@Column
             }
             val list = androidx.compose.runtime.key(botId) { rememberLazyListState() }
-            val reversed = remember(timeline.messages) { timeline.messages.asReversed() }
+            val reversed = remember(displayTimeline.messages) { displayTimeline.messages.asReversed() }
+            var viewport by remember { mutableStateOf(Rect()) }
+            selection.reveal = { view, rect ->
+                val location = IntArray(2)
+                view.getLocationInWindow(location)
+                val top = location[1] + rect.top
+                val bottom = location[1] + rect.bottom
+                val margin = (24 * view.resources.displayMetrics.density).toInt()
+                val delta = selectionScrollDelta(top, bottom, viewport.top, viewport.bottom, margin)
+                if (delta != 0f) scope.launch { list.scrollBy(delta) }
+            }
             val atTop by remember(list) { derivedStateOf { list.layoutInfo.visibleItemsInfo.lastOrNull()?.index == list.layoutInfo.totalItemsCount - 1 } }
-            LaunchedEffect(botId, atTop, timeline.hasMore) {
-                if (atTop && timeline.hasMore && !loadingMore) {
+            LaunchedEffect(botId, atTop, timeline.hasMore, selection.active) {
+                if (selection.active == null && atTop && timeline.hasMore && !loadingMore) {
                     loadingMore = true
                     runCatching { repository.loadMore(botId) }.onFailure { error = errorText(it) }
                     loadingMore = false
                 }
             }
-            LazyColumn(
-                state = list,
-                reverseLayout = true,
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                items(current.pendingApprovals, key = { "approval-${it.id}" }) { approval ->
-                    ApprovalCard(approval) { approve ->
-                        scope.launch { runCatching { repository.decide(approval, approve) }.onFailure { error = errorText(it) } }
-                    }
-                }
-                current.activity?.summary?.let { summary ->
-                    item(key = "task-activity") {
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 6.dp)) {
-                            PiBotFace(current.avatar, mood, 26.dp, seed = seedOf(current.id))
-                            Spacer(Modifier.size(8.dp))
-                            Text(summary, color = Muted, fontSize = 13.sp)
+            CompositionLocalProvider(LocalMessageSelection provides selection) {
+                LazyColumn(
+                    state = list,
+                    reverseLayout = true,
+                    modifier = Modifier.weight(1f).fillMaxWidth().onGloballyPositioned {
+                        val bounds = it.boundsInWindow()
+                        viewport = Rect(bounds.left.toInt(), bounds.top.toInt(), bounds.right.toInt(), bounds.bottom.toInt())
+                    },
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    items(displayBot.pendingApprovals, key = { "approval-${it.id}" }) { approval ->
+                        ApprovalCard(approval) { approve ->
+                            scope.launch { runCatching { repository.decide(approval, approve) }.onFailure { error = errorText(it) } }
                         }
                     }
-                }
-                items(reversed, key = { it.id }) { message -> MessageItem(message, onOpenBot, repository) }
-                if (timeline.loaded && timeline.messages.isEmpty()) {
-                    item { Intro(current) }
+                    displayBot.activity?.summary?.let { summary ->
+                        item(key = "task-activity") {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 6.dp)) {
+                                PiBotFace(current.avatar, mood, 26.dp, seed = seedOf(current.id))
+                                Spacer(Modifier.size(8.dp))
+                                Text(summary, color = Muted, fontSize = 13.sp)
+                            }
+                        }
+                    }
+                    items(reversed, key = { it.id }) { message -> MessageItem(message, onOpenBot, repository) }
+                    if (displayTimeline.loaded && displayTimeline.messages.isEmpty()) {
+                        item { Intro(current) }
+                    }
                 }
             }
             error?.let {
@@ -269,11 +305,12 @@ private fun RelayItem(message: Message, from: FromBot, onOpenBot: (String) -> Un
             Text(relayLabel(from), fontSize = 12.sp, color = Muted)
         }
         Spacer(Modifier.height(4.dp))
-        Box(
-            Modifier.widthIn(max = bubbleWidth)
+        CopyableMessage(
+            text = message.content,
+            modifier = Modifier.widthIn(max = bubbleWidth)
                 .background(AccentSoft, RoundedCornerShape(18.dp))
                 .padding(horizontal = 14.dp, vertical = 10.dp),
-        ) { MarkdownText(message.content) }
+        )
         Spacer(Modifier.height(3.dp))
         Text(dayLabel(message.createdAt) + " " + clockTime(message.createdAt), fontSize = 11.sp, color = Muted)
     }
@@ -302,12 +339,12 @@ private fun MessageItem(message: Message, onOpenBot: (String) -> Unit, repositor
                     .padding(horizontal = 14.dp, vertical = 10.dp)
                 if (!user && remarks.isNotEmpty()) {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        for (line in remarks) Box(bubble) { MarkdownText(line) }
+                        for (line in remarks) CopyableMessage(text = line, modifier = bubble)
                     }
                     Spacer(Modifier.height(6.dp))
                 }
                 if (!user) for (segment in message.replySegments) {
-                    Box(bubble) { MarkdownText(segment.text) }
+                    CopyableMessage(text = segment.text, modifier = bubble)
                     Text(clockTime(segment.createdAt), color = Muted, fontSize = 11.sp, modifier = Modifier.padding(vertical = 3.dp))
                     Spacer(Modifier.height(3.dp))
                 }
@@ -356,15 +393,14 @@ private fun MessageItem(message: Message, onOpenBot: (String) -> Unit, repositor
                     }
                     Spacer(Modifier.height(6.dp))
                 }
-                if (user && message.content.isNotBlank() || !user && (showContent || message.replySegments.isEmpty())) Box(bubble) {
+                if (user && message.content.isNotBlank() || !user && (showContent || message.replySegments.isEmpty())) {
                     when {
-                        user -> Text(message.content, color = Color.White, lineHeight = 21.sp)
-                        message.content.isBlank() && message.status == "running" -> Text("…", color = Muted)
-                        message.content.isBlank() && message.status == "cancelled" -> Text("已停止", color = Muted)
-                        else -> Column {
-                            MarkdownText(message.content)
-                            artifactError?.let { Text(it,color=Danger) }
-                        }
+                        message.content.isNotBlank() -> CopyableMessage(
+                            text = message.content, modifier = bubble,
+                            markdown = !user, color = if (user) Color.White else Ink,
+                        )
+                        message.status == "running" -> Box(bubble) { Text("…", color = Muted) }
+                        message.status == "cancelled" -> Box(bubble) { Text("已停止", color = Muted) }
                     }
                 }
                 if (!user && message.ui != null) {

@@ -1,0 +1,221 @@
+name: Client test prerelease
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: client-prerelease-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    uses: ./.github/workflows/ci.yml
+
+  identity:
+    runs-on: ubuntu-24.04
+    outputs:
+      build_number: ${{ steps.version.outputs.build_number }}
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - id: version
+        run: node scripts/client-update/prepare.mjs
+      - run: node --test scripts/client-update/update.test.mjs
+
+  android:
+    needs: identity
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    outputs:
+      signed: ${{ steps.signing.outputs.ready }}
+    env:
+      PI_BOT_BUILD_NUMBER: ${{ needs.identity.outputs.build_number }}
+      PI_BOT_VERSION: ${{ needs.identity.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: android-actions/setup-android@v4
+      - name: Install Android SDK 37
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager --install "platforms;android-37.0" "build-tools;36.0.0"
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Test, lint and build debug (never published as an update)
+        working-directory: android
+        run: ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-client-test-results
+          path: |
+            android/app/build/reports/tests/
+            android/app/build/reports/lint-results-debug.*
+      - name: Check continuous signing availability
+        id: signing
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_TEST_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_TEST_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_TEST_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_TEST_KEY_PASSWORD }}
+          CERT_SHA256: ${{ vars.ANDROID_TEST_CERT_SHA256 }}
+        run: |
+          if [[ -n "$KEYSTORE" && -n "$STORE_PASSWORD" && -n "$KEY_ALIAS" && -n "$KEY_PASSWORD" && "$CERT_SHA256" =~ ^[[:xdigit:]]{64}$ ]]; then
+            echo 'ready=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            echo '::warning::Continuous signing is not configured. Android tests run, but no update release will be published. See docs/client-updates.md.'
+          fi
+      - name: Build signed continuous-test APK
+        if: steps.signing.outputs.ready == 'true'
+        working-directory: android
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_TEST_KEYSTORE_BASE64 }}
+          PI_BOT_KEYSTORE_PATH: ${{ runner.temp }}/pibot-test.keystore
+          PI_BOT_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_TEST_STORE_PASSWORD }}
+          PI_BOT_KEY_ALIAS: ${{ secrets.ANDROID_TEST_KEY_ALIAS }}
+          PI_BOT_KEY_PASSWORD: ${{ secrets.ANDROID_TEST_KEY_PASSWORD }}
+          CERT_SHA256: ${{ vars.ANDROID_TEST_CERT_SHA256 }}
+        run: |
+          trap 'rm -f "$PI_BOT_KEYSTORE_PATH"' EXIT
+          umask 077
+          printf '%s' "$KEYSTORE" | base64 --decode > "$PI_BOT_KEYSTORE_PATH"
+          ./gradlew :app:assembleRelease --no-daemon
+          APK=app/build/outputs/apk/release/app-release.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$APK" > "$RUNNER_TEMP/pibot-cert.txt"
+          actual=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' "$RUNNER_TEMP/pibot-cert.txt" | tr '[:upper:]' '[:lower:]')
+          test "$actual" = "${CERT_SHA256,,}"
+          mkdir -p ../release-assets
+          cp "$APK" ../release-assets/Pi-Bot-Android.apk
+      - uses: actions/upload-artifact@v4
+        if: steps.signing.outputs.ready == 'true'
+        with:
+          name: client-android-signed
+          if-no-files-found: error
+          path: release-assets/Pi-Bot-Android.apk
+
+  windows:
+    needs: identity
+    runs-on: windows-2022
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: node scripts/client-update/prepare.mjs
+      - run: npm rebuild electron
+      - run: npm run typecheck --workspace=pi-bot-desktop
+      - run: npm run pack:win --workspace=pi-bot-desktop
+      - uses: actions/upload-artifact@v4
+        with:
+          name: client-windows-installer
+          if-no-files-found: error
+          path: .w/make/squirrel.windows/x64/Pi-Bot-Windows-x64-Setup.exe
+
+  linux:
+    needs: identity
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: node scripts/client-update/prepare.mjs
+      - run: npm rebuild electron
+      - run: npm run typecheck --workspace=pi-bot-desktop
+      - run: node --import tsx --test desktop/tests/client-updates.test.ts desktop/tests/linux-updates.test.ts
+      - run: npm run pack:linux --workspace=pi-bot-desktop
+      - name: Verify complete Linux update bundle
+        run: |
+          tar -tzf desktop/out/linux/pi-bot-desktop-linux-x64.tar.gz | grep -F 'Pi Bot-linux-x64/.pi-bot-linux-tar'
+          test -f 'desktop/apps/desktop/out/Pi Bot-linux-x64/resources/runtime/bin/node'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: client-linux-desktop
+          if-no-files-found: error
+          path: desktop/out/linux/pi-bot-desktop-linux-x64.tar.gz
+
+  publish:
+    needs: [checks, identity, android, windows, linux]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Require fixed Android signing
+        env:
+          SIGNED: ${{ needs.android.outputs.signed }}
+        run: |
+          if [[ "$SIGNED" != true ]]; then
+            echo '::error::Release blocked: configure existing compatible Android signing secrets and expected certificate fingerprint. Do not generate a replacement key.'
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node scripts/client-update/prepare.mjs
+      - uses: actions/download-artifact@v4
+        with:
+          name: client-android-signed
+          path: release-assets
+      - uses: actions/download-artifact@v4
+        with:
+          name: client-windows-installer
+          path: release-assets
+      - uses: actions/download-artifact@v4
+        with:
+          name: client-linux-desktop
+          path: release-assets
+      - run: node scripts/client-update/manifest.mjs release-assets
+      - name: Publish complete immutable test release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.identity.outputs.tag }}
+          VERSION: ${{ needs.identity.outputs.version }}
+        run: |
+          set -euo pipefail
+          # Do not overwrite published bytes on reruns. Failed drafts must be reviewed.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo '::error::Release/tag already exists; refusing overwrite. Inspect draft or use a new workflow run.'
+            exit 1
+          fi
+          cat > release-notes.md <<NOTES
+          Test channel build $VERSION from main commit $GITHUB_SHA.
+          Android: Pi-Bot-Android.apk (fixed signing key, increasing versionCode).
+          Windows x64: Pi-Bot-Windows-x64-Setup.exe (unsigned; Windows may display a warning).
+          Linux x64: pi-bot-desktop-linux-x64.tar.gz (in-app verified replacement; python3 and writable installation required).
+          Install only after finishing tasks, calls and phone control. Keep existing app data; do not uninstall first.
+          Server compatibility: no new Server change is required by the update feature; see update-manifest.json.
+          Download SHA256SUMS.txt to verify packages. This is a test prerelease, not a stable release.
+          NOTES
+          gh release create "$TAG" --target "$GITHUB_SHA" --draft --prerelease --latest=false \
+            --title "Pi Bot $VERSION (test)" --notes-file release-notes.md release-assets/*
+          gh release edit "$TAG" --draft=false --prerelease --latest=false

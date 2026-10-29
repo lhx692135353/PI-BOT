@@ -21,6 +21,7 @@ if (!serviceOnly) {
   const electron=require('electron');
   if (!electron) throw new Error('请先安装 Electron 运行时');
   run(resolve(root,'node_modules/.bin/electron-forge'),['package','--platform','linux','--arch','x64'],resolve(root,'apps/desktop'));
+  writeFileSync(resolve(root,'apps/desktop/out/Pi Bot-linux-x64/.pi-bot-linux-tar'),'pi-bot-linux-tar-v1\n');
   run('tar',['-czf',resolve(out,'pi-bot-desktop-linux-x64.tar.gz'),'-C',resolve(root,'apps/desktop/out'),'Pi Bot-linux-x64'],root);
 }
 console.log(`Linux packages: ${out}`);
