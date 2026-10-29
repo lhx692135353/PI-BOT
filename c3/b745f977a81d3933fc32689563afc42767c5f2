@@ -1,0 +1,48 @@
+admin/src/main.tsx
+  s_4114c4a0a3d0c7::t_3018c0325a9869 399
+  s_4114c4a0a3d0c7::t_11abb862a439ba 337,367,403
+admin/src/api.ts
+  s_4114c4a0a3d0c7::t_11abb862a439ba 66
+packages/agent/src/tasks.ts
+  s_4114c4a0a3d0c7::t_11abb862a439ba 22
+packages/agent/src/replies.ts
+  s_4114c4a0a3d0c7::t_11abb862a439ba 16
+server/src/llm.ts
+  s_4114c4a0a3d0c7::t_477c398649d531 7,122,128,197
+server/tests/providers.test.ts
+  s_4114c4a0a3d0c7::t_5e519d85c2d224 117
+  s_4114c4a0a3d0c7::t_241552507a731f 3,55-59,65-116,118
+server/tests/llm.test.ts
+  s_4114c4a0a3d0c7::t_241552507a731f 44-56
+server/MEMORY-OBSERVABILITY.md
+  s_4114c4a0a3d0c7::t_ce166beab65457 58
+  s_4114c4a0a3d0c7::t_096b3ba6d2ec94 52-57,59-63
+server/src/observations.ts
+  s_4114c4a0a3d0c7::t_477c398649d531 3,319,359
+  s_4114c4a0a3d0c7::t_ce166beab65457 323-329,343
+server/tests/observations.test.ts
+  s_4114c4a0a3d0c7::t_ce166beab65457 486-537
+server/src/providers.ts
+  s_4114c4a0a3d0c7::t_477c398649d531 2,35-60,62-67,71-72,75-80,83,85-95,171-174
+  s_4114c4a0a3d0c7::t_5e519d85c2d224 61,68-70,73-74
+server/src/routes.ts
+  s_4114c4a0a3d0c7::t_11abb862a439ba 42,132
+server/src/bots.ts
+  s_4114c4a0a3d0c7::t_11abb862a439ba 518-519
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c3b745f977a81d3933fc32689563afc42767c5f2",
+  "prompts": {},
+  "sessions": {
+    "s_4114c4a0a3d0c7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a182a9-c2d9-7b32-95eb-5964920c4baf",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
