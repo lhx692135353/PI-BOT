@@ -152,7 +152,7 @@ button.menu-backdrop:hover { background: transparent; }
 @keyframes pulse { 50% { opacity: 0.3; } }
 .approval { background: var(--accent-soft); border: 1px solid #ffd5bb; border-radius: 14px; padding: 14px 16px; display: grid; gap: 6px; }
 .approval code { font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; background: #fff; padding: 4px 8px; border-radius: 6px; word-break: break-all; }
-.row-end { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.row-end { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
 
 .composer { padding: 6px 0 18px; display: grid; gap: 6px; }
 .composer > * { width: min(760px, calc(100% - 48px)); margin: 0 auto; }
@@ -192,11 +192,14 @@ button.menu-backdrop:hover { background: transparent; }
 .swatches button { width: 26px; height: 26px; border-radius: 50%; padding: 0; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--line); }
 .swatches button.picked { box-shadow: 0 0 0 2px var(--accent); }
 .swatches .scheme { width: auto; height: 26px; border-radius: 999px; padding: 0 12px; font-size: 12px; background: #ebe7e1; border: 0; box-shadow: none; margin-left: auto; }
-.settings { width: min(460px, 100%); padding: 22px 24px; display: grid; gap: 14px; }
+.settings { width: min(540px, 100%); padding: 22px 24px; display: grid; gap: 14px; max-height: 90vh; overflow-y: auto; }
 .settings dl { display: grid; grid-template-columns: 76px 1fr; gap: 8px 12px; margin: 0; }
 .settings dt { color: var(--muted); }
 .settings dd { margin: 0; }
 .settings footer { justify-content: space-between; }
+.authorization-rule { display: grid; gap: 6px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.authorization-rule code, .settings details code { overflow-wrap: anywhere; }
+.settings progress { width: 100%; }
 
 .task-activity { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; padding: 8px 2px 14px; }
 

@@ -6,6 +6,7 @@ import type { Route, Context } from "../routes.js";
 import { fail, HttpError } from "../db.js";
 import { callerRun } from "../agents.js";
 import { recordAutomationEffect } from "../automations.js";
+import { approvalScope, matchAuthorization, type Access } from '../authorizations.js';
 import {
   ensureEnvironment,
   environmentOut,
@@ -74,6 +75,7 @@ const args: Record<string, z.ZodType> = {
   request_outside_access: z.object({
     path,
     reason: z.string().min(1).max(1000),
+    access: z.enum(['read','write','execute']).default('read'),
   }),
 };
 const mutation = (action: string, a: any) =>
@@ -136,7 +138,7 @@ export async function remoteOperation(ctx: Context) {
         a.path === "/home/pibot"
       )
         fail(422, "请指定具体的绝对文件或目录路径");
-      a.path = (
+      const validated = (
         await ctx.remote.action(
           env,
           run,
@@ -146,59 +148,66 @@ export async function remoteOperation(ctx: Context) {
           a,
           abort.signal,
         )
-      ).path;
-      const approval = await ctx.db.tx(async (tx) => {
-        const v = await tx.insert("approvals", {
-          approval_id: randomUUID(),
-          run_id: run.run_id,
-          bot_id: run.bot_id,
-          user_id: run.user_id,
-          kind: "outside_access",
-          detail: {
-            path: a.path,
-            reason: a.reason,
-            operation_target: run.operation_target,
-          },
-          status: "pending",
-          expires_at: new Date(Date.now() + ctx.s.approvalTtl * 1000),
-        });
-        await tx.rows(
-          "UPDATE bot_runs SET status='waiting_approval' WHERE run_id=$1",
-          [run.run_id],
-        );
-        await tx.notify({ user_id: run.user_id, bot_id: run.bot_id });
-        return v;
-      });
-      while (true) {
-        if (abort.signal.aborted) throw new Error("操作已取消");
-        const row = await ctx.db.tx(async (tx) => {
-          const current = await tx.get("bot_runs", run.run_id);
-          if (
-            current.cancel_requested ||
-            !["running", "waiting_approval"].includes(current.status)
-          )
-            throw new Error("任务已取消");
-          return tx.get("approvals", approval.approval_id);
-        });
-        if (
-          row.status !== "pending" ||
-          new Date(row.expires_at).getTime() < Date.now()
-        ) {
-          result = { approved: row.status === "approved", path: a.path };
-          await ctx.db.tx(async (tx) => {
-            if (row.status === "pending")
-              await tx.rows(
-                "UPDATE approvals SET status='expired' WHERE approval_id=$1",
-                [row.approval_id],
-              );
-            await tx.rows(
-              "UPDATE bot_runs SET status='running' WHERE run_id=$1 AND status='waiting_approval' AND NOT EXISTS(SELECT 1 FROM approvals WHERE run_id=$1 AND status='pending')",
-              [run.run_id],
-            );
+      );
+      a.path = validated.path;
+      const matched = await ctx.db.tx(async tx => matchAuthorization(tx,await callerRun(tx,ctx.user.user_id,ctx.llm!,run.run_id),a.path,a.access));
+      if (matched) result = {approved:true,path:a.path,access:a.access,remembered:true};
+      else {
+        const approval = await ctx.db.tx(async (tx) => {
+          const v = await tx.insert("approvals", {
+            approval_id: randomUUID(),
+            run_id: run.run_id,
+            bot_id: run.bot_id,
+            user_id: run.user_id,
+            kind: "outside_access",
+            detail: {
+              path: a.path,
+              reason: a.reason,
+              operation_target: run.operation_target,
+              access: a.access,
+              authorization_scope: await approvalScope(tx,run,a.path,a.access,validated.resource_type ?? 'unknown'),
+            },
+            status: "pending",
+            expires_at: new Date(Date.now() + ctx.s.approvalTtl * 1000),
           });
-          break;
+          await tx.rows(
+            "UPDATE bot_runs SET status='waiting_approval' WHERE run_id=$1",
+            [run.run_id],
+          );
+          await tx.notify({ user_id: run.user_id, bot_id: run.bot_id });
+          return v;
+        });
+        while (true) {
+          if (abort.signal.aborted) throw new Error("操作已取消");
+          const row = await ctx.db.tx(async (tx) => {
+            const current = await tx.get("bot_runs", run.run_id);
+            if (
+              current.cancel_requested ||
+              !["running", "waiting_approval"].includes(current.status)
+            )
+              throw new Error("任务已取消");
+            return tx.get("approvals", approval.approval_id);
+          });
+          if (
+            row.status !== "pending" ||
+            new Date(row.expires_at).getTime() < Date.now()
+          ) {
+            result = { approved: row.status === "approved", path: a.path };
+            await ctx.db.tx(async (tx) => {
+              if (row.status === "pending")
+                await tx.rows(
+                  "UPDATE approvals SET status='expired' WHERE approval_id=$1",
+                  [row.approval_id],
+                );
+              await tx.rows(
+                "UPDATE bot_runs SET status='running' WHERE run_id=$1 AND status='waiting_approval' AND NOT EXISTS(SELECT 1 FROM approvals WHERE run_id=$1 AND status='pending')",
+                [run.run_id],
+              );
+            });
+            break;
+          }
+          await new Promise((r) => setTimeout(r, 750));
         }
-        await new Promise((r) => setTimeout(r, 750));
       }
     } else {
       if (run.execution_policy === "device_only" && mutation(body.action, a))
@@ -211,12 +220,17 @@ export async function remoteOperation(ctx: Context) {
             summary: JSON.stringify(a).slice(0, 2000),
           }),
         );
-      const approved = await ctx.db.tx((tx) =>
-        tx.rows(
-          "SELECT detail FROM approvals WHERE run_id=$1 AND status='approved'",
-          [run.run_id],
-        ),
-      );
+      const operation: Access = ['read_file','list_files','artifact'].includes(body.action) ? 'read' : ['write_file','edit_file'].includes(body.action) ? 'write' : 'execute';
+      const approved = await ctx.db.tx(async tx => {
+        const current = await callerRun(tx,ctx.user.user_id,ctx.llm!,run.run_id);
+        const once = await tx.rows("SELECT detail FROM approvals WHERE run_id=$1 AND status='approved' AND COALESCE(detail->>'remembered','false') <> 'true'",[run.run_id]);
+        const paths = once.filter(x => !x.detail.access || x.detail.access === 'legacy' || x.detail.access === operation).map(x => x.detail.path);
+        if (operation === 'read' && typeof a.path === 'string' && posix.isAbsolute(a.path)) {
+          const rule = await matchAuthorization(tx,current,posix.normalize(a.path),operation);
+          if (rule) paths.push(rule.resource);
+        }
+        return paths;
+      });
       result = await ctx.remote.action(
         env,
         run,
@@ -225,7 +239,7 @@ export async function remoteOperation(ctx: Context) {
         body.action,
         a,
         abort.signal,
-        approved.map((x) => x.detail.path),
+        approved,
       );
       if (run.execution_policy === "device_only" && mutation(body.action, a))
         await ctx.db.tx((tx) =>

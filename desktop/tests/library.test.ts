@@ -118,6 +118,44 @@ test('phone previews list and read only inside the library', async () => {
   } finally { dir.cleanup(); }
 });
 
+test('saved read permission is checked on every access and cannot authorize writes, commands or symlink escapes', async t => {
+  const dir = temp(); t.after(() => dir.cleanup());
+  const root = await libraryDir(dir.path,'bot'), outside = join(dir.path,'project'), sibling = join(dir.path,'other');
+  mkdirSync(outside); mkdirSync(sibling);
+  writeFileSync(join(outside,'readme.txt'),'project'); writeFileSync(join(sibling,'private.txt'),'private');
+  symlinkSync(sibling,join(outside,'escape'),process.platform === 'win32' ? 'junction' : 'dir');
+  let active = true, checks = 0;
+  const sandbox = new Sandbox(root,[],async path => { checks++; return active && (path === outside || path.startsWith(outside + (process.platform === 'win32' ? '\\' : '/'))); });
+  const tools = libraryTools(sandbox,{requestOutside:async()=> 'saved'});
+  assert.equal(await call(tools,'read_file',{path:join(outside,'readme.txt')}),'project');
+  await assert.rejects(call(tools,'write_file',{path:join(outside,'readme.txt'),content:'bad'}),OutsideError);
+  await assert.rejects(call(tools,'edit_file',{path:join(outside,'readme.txt'),old_text:'project',new_text:'bad'}),OutsideError);
+  await assert.rejects(sandbox.resolve(outside,{access:'execute'}),OutsideError);
+  await assert.rejects(call(tools,'read_file',{path:join(outside,'escape','private.txt')}),OutsideError);
+  active = false;
+  await assert.rejects(call(tools,'read_file',{path:join(outside,'readme.txt')}),OutsideError,'revocation is not cached until task end');
+  assert.ok(checks >= 3);
+  active = true;
+  assert.match(await call(tools,'request_outside_access',{path:outside,reason:'read project'}),/无需申请/);
+  active = false;
+  await assert.rejects(call(tools,'read_file',{path:join(outside,'readme.txt')}),OutsideError);
+  assert.equal(readFileSync(join(outside,'readme.txt'),'utf8'),'project');
+});
+
+test('one-time outside read and write grants retain separate operation scopes', async t => {
+  const dir = temp(); t.after(() => dir.cleanup());
+  const root = await libraryDir(dir.path,'bot'), outside = join(dir.path,'project'); mkdirSync(outside);
+  writeFileSync(join(outside,'a.txt'),'a');
+  const requests: string[] = [];
+  const tools = libraryTools(new Sandbox(root),{requestOutside:async (_p,_r,_s,access) => { requests.push(access!); return true; }});
+  await call(tools,'request_outside_access',{path:outside,reason:'read'});
+  assert.equal(await call(tools,'read_file',{path:join(outside,'a.txt')}),'a');
+  await assert.rejects(call(tools,'write_file',{path:join(outside,'a.txt'),content:'b'}),OutsideError);
+  await call(tools,'request_outside_access',{path:outside,reason:'write',access:'write'});
+  await call(tools,'write_file',{path:join(outside,'a.txt'),content:'b'});
+  assert.deepEqual(requests,['read','write']);
+});
+
 test('library mutations serialize across runs, abort queued waiters and release after failures', async () => {
   let release!: () => void;
   const gate = new Promise<void>(resolve => { release = resolve; });

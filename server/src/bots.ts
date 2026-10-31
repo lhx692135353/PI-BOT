@@ -13,6 +13,7 @@ import { z } from "zod";
 import { SHAPES, COLORS, SCHEMES, DEFAULT_AVATAR, avatarFor } from "@pi-bot/bot-face";
 import { fail, type Row, type Tx } from "./db.js";
 import type { Settings } from "./config.js";
+import { canRemember, scopeText } from './authorizations.js';
 import { searchAvailable } from "./search.js";
 import { directory, privateMemoryContext, forgottenContext, maskForgotten } from "./memory.js";
 import { estimateTokens } from "@earendil-works/pi-coding-agent";
@@ -141,6 +142,9 @@ export const approvalOut = (a: Row) => ({
   kind: a.kind,
   path: a.detail.path,
   reason: a.detail.reason,
+  access: a.detail.access ?? 'legacy',
+  scope: scopeText(a.detail.authorization_scope),
+  can_remember: canRemember(a.detail.authorization_scope),
   status:
     a.status === "pending" && new Date(a.expires_at) < new Date()
       ? "expired"

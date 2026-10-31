@@ -50,10 +50,10 @@ interface Active {
   received: Set<string>;
   pending: { id: string; text: string }[];
   /** request_id → resolver */
-  waiting: Map<string, (approved: boolean) => void>;
+  waiting: Map<string, (approved: boolean | 'saved') => void>;
   /** approval_id → request_id */
   approvals: Map<string, string>;
-  early: Map<string, boolean>;
+  early: Map<string, boolean | 'saved'>;
 }
 const TOKEN_REFRESH_MS = 10 * 60 * 1000;
 
@@ -83,17 +83,27 @@ export class Executor {
     let latest = '', lastSent = 0, pendingText: NodeJS.Timeout | undefined, refresh: NodeJS.Timeout | undefined;
     const flush = () => { clearTimeout(pendingText); pendingText = undefined; lastSent = Date.now(); event({ kind: 'text', text: latest }); };
     try {
-      const sandbox = new Sandbox(await libraryDir(this.deps.libraryRoot, run.bot.slug));
       let token = await this.deps.llmToken(run.bot.id);
+      const authorizationApi = this.deps.proxyUrl.replace(/\/llm\/v1\/?$/, '');
+      const sandbox = new Sandbox(await libraryDir(this.deps.libraryRoot, run.bot.slug), [], async path => {
+        const response = await fetch(`${authorizationApi}/agent/authorizations/check`, {
+          method:'POST', headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
+          body:JSON.stringify({run_id:run.run_id,path,access:'read'}), redirect:'error', signal:AbortSignal.timeout(15000),
+        });
+        // An older server has no rule endpoint; fall back to explicit approval, never implicit access.
+        if (response.status === 404) return false;
+        if (!response.ok) throw new Error(`无法验证已保存授权（${response.status}），请检查服务器连接`);
+        return (await response.json() as {approved?:boolean}).approved === true;
+      });
       const phone = PhoneAdb.open(this.deps.phoneConfigPath);
       const phoneEnvironment = phone
         ? await phone.environment(run.lane === 'conversation', !!run.automation_readonly, this.commandsSuspended)
         : '\n本执行节点没有有效的显式手机配置；不能把其他电脑或其他智能体的手机当作本节点设备。';
       let tools = run.lane === "conversation" ? [] : libraryTools(sandbox, {
-        requestOutside: (path, reason, signal) => new Promise<boolean>(resolve => {
+        requestOutside: (path, reason, signal, access, resourceType) => new Promise<boolean | 'saved'>(resolve => {
           const requestId = randomUUID();
           const timer = setTimeout(() => settle(false), this.deps.approvalTimeoutMs ?? 15 * 60 * 1000);
-          const settle = (approved: boolean) => {
+          const settle = (approved: boolean | 'saved') => {
             clearTimeout(timer); signal?.removeEventListener('abort', abort); state.waiting.delete(requestId);
             this.deps.activity(run, null, 'thinking');
             resolve(approved);
@@ -102,7 +112,7 @@ export class Executor {
           signal?.addEventListener('abort', abort, { once: true });
           state.waiting.set(requestId, settle);
           this.deps.activity(run, null, 'waiting');
-          event({ kind: 'approval', request_id: requestId, path, reason });
+          event({ kind: 'approval', request_id: requestId, path, reason, access, resource_type:resourceType });
         }),
       });
       if (run.automation_readonly) tools = tools.filter(t => toolDescriptor(t.name)?.readonly);
@@ -121,7 +131,7 @@ export class Executor {
             if (isPhoneAdbCommand(command)) {
               if (!phone) throw new Error('本执行节点未显式配置受控手机');
               const input = args as { cwd?: string; timeout_seconds?: number };
-              await sandbox.resolve(input.cwd ?? '.', { mustExist: true });
+              await sandbox.resolve(input.cwd ?? '.', { mustExist: true, access:'execute' });
               return await phone.command(command, (input.timeout_seconds ?? 120) * 1000, controller.signal);
             }
             return await tool.execute(id, args, controller.signal, update, ctx);
@@ -245,8 +255,8 @@ export class Executor {
     const early = state.early.get(approvalId);
     if (early !== undefined) this.decided(runId, approvalId, early);
   }
-  approvalDecided(runId: string, approvalId: string, decision: 'approve' | 'reject') { this.decided(runId, approvalId, decision === 'approve'); }
-  private decided(runId: string, approvalId: string, approved: boolean) {
+  approvalDecided(runId: string, approvalId: string, decision: 'approve' | 'approve_always' | 'reject') { this.decided(runId, approvalId, decision === 'approve_always' ? 'saved' : decision === 'approve'); }
+  private decided(runId: string, approvalId: string, approved: boolean | 'saved') {
     const state = this.active.get(runId);
     if (!state) return;
     const requestId = state.approvals.get(approvalId);

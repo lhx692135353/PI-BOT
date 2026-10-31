@@ -27,7 +27,7 @@ window.__handler = (method, input) => {
       }],
     };
   }
-  if (method === 'models') return [];
+  if (['models','authorizations','authorizationLogs'].includes(method)) return [];
   if (method === 'messages') return { messages: [], has_more: false };
   if (method === 'phoneStatus') return { available: true, occupied: false, label: '验证机', phoneId: 'pixel' };
   if (method === 'phonePreview') return { mime: 'image/jpeg', data: JPEG, width: 720, height: 1280 };

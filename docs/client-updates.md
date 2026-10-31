@@ -89,6 +89,13 @@ requires the user to confirm that all activities have ended. If tasks are runnin
 installation is deferred; users must also end calls/phone control first. No
 silent installation, background forced restart, uninstall or data migration.
 Windows installer is currently unsigned, and must be confirmed by the user.
+
+Windows/Linux settings expose the existing updater through the renderer bridge,
+including byte progress and explicit manual-check outcomes. Android settings
+also show download percentage and a distinct failure message. Desktop platforms
+without an automatic installation channel (including macOS) keep a visible
+“check updates” entry opening the official releases page and explicitly explain
+the manual installation requirement; that link is not an automatic upgrade.
 Existing installations without the updater need one manual bootstrap install.
 Network/rate-limit/download/hash/signature failure must leave the old app usable.
 

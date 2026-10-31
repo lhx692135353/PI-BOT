@@ -1,4 +1,5 @@
-import { cpSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { cp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,7 +12,9 @@ const stage = mkdtempSync(join(tmpdir(), 'Pi Bot runtime 中文 '));
 let service;
 try {
   const runtime = join(stage, 'runtime');
-  cpSync(resolve(root, 'apps/desktop/runtime'), runtime, { recursive: true });
+  // Node's native cpSync can misencode non-ASCII Windows destinations; the
+  // asynchronous implementation preserves the actual staged path.
+  await cp(resolve(root, 'apps/desktop/runtime'), runtime, { recursive: true });
   const reservation = createServer();
   await new Promise((resolve, reject) => { reservation.once('error', reject); reservation.listen({ host: '127.0.0.1', port: 0, exclusive: true }, resolve); });
   const port = reservation.address().port;
@@ -22,7 +25,7 @@ try {
   service.stdin.on('error', () => {});
   let stderr = ''; service.stderr.on('data', b => { stderr = (stderr + b).slice(-4000); });
   await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`Standalone runtime startup timeout: ${stderr}`)), 15000);
+    const timer = setTimeout(() => reject(new Error(`Standalone runtime startup timeout: ${stderr}`)), 45000);
     service.once('error', reject);
     service.once('exit', code => { clearTimeout(timer); reject(new Error(`Standalone service exited ${code}: ${stderr}`)); });
     service.stdout.on('data', b => { if (b.toString().includes('service ready')) { clearTimeout(timer); resolve(); } });

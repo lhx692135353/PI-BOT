@@ -80,3 +80,30 @@ test('release pagination exhaustion is visible rather than false up-to-date', as
   const state = await new ClientUpdater(dir, '0.3.0', 0).check('stable');
   assert.equal(calls, 5); assert.equal(state.phase, 'error'); assert.match(state.message, /发布记录过多/);
 });
+
+test('a streamed package exposes byte progress before verification completes', async t => {
+  const dir = mkdtempSync(join(tmpdir(),'pibot-progress-')); t.after(()=>rmSync(dir,{recursive:true,force:true}));
+  const original = globalThis.fetch; t.after(()=>{globalThis.fetch=original;});
+  let stream!: ReadableStreamDefaultController<Uint8Array>;
+  globalThis.fetch = async input => new Response(String(input).includes('api.github.com') ? JSON.stringify([release]) : String(input).endsWith('.json') ? JSON.stringify(manifest) : new ReadableStream({start(controller){stream=controller;}}));
+  const updater = new ClientUpdater(dir,'0.3.0',0);
+  await updater.check('test');
+  const downloading = updater.download();
+  for (let i=0;!stream && i<100;i++) await new Promise(r=>setTimeout(r,10));
+  stream.enqueue(new TextEncoder().encode('a'));
+  for (let i=0;(await updater.state()).downloadedBytes !== 1 && i<100;i++) await new Promise(r=>setTimeout(r,10));
+  const progress = await updater.state();
+  assert.equal(progress.phase,'downloading'); assert.equal(progress.downloadedBytes,1); assert.equal(progress.totalBytes,3);
+  stream.enqueue(new TextEncoder().encode('bc')); stream.close();
+  assert.equal((await downloading).phase,'ready');
+  assert.equal((await updater.state()).packageReady,true);
+});
+
+test('restart verifies installed build against the persisted target rather than assuming installation succeeded', async t => {
+  const dir = mkdtempSync(join(tmpdir(),'pibot-receipt-')); t.after(()=>rmSync(dir,{recursive:true,force:true}));
+  writeFileSync(join(dir,'installation.json'),JSON.stringify({fromVersion:'0.3.1000',toVersion:'0.3.1001',toBuild:1001}));
+  const old = await new ClientUpdater(dir,'0.3.1000',1000).state();
+  assert.equal(old.lastInstall?.verified,false); assert.match(old.message,/尚未完成/);
+  const upgraded = await new ClientUpdater(dir,'0.3.1001',1001).state();
+  assert.equal(upgraded.lastInstall?.verified,true); assert.match(upgraded.message,/升级已验证/);
+});

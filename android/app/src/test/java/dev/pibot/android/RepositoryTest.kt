@@ -89,6 +89,36 @@ class RepositoryTest {
     }
 
     @Test
+    fun savedAuthorizationsUseScopedServerDataAndExplicitDecisionAndRevoke() = runBlocking {
+        login()
+        val approvalJson = """{"id":"a1","run_id":"r1","bot_id":"b1","kind":"outside_access","path":"/projects/demo","reason":"read","status":"pending","expires_at":"2099-01-01T00:00:00Z","access":"read","scope":"当前账号 · 办公电脑 · 读取 · /projects/demo，不包含写入或命令","can_remember":true}"""
+        val approval = Json { ignoreUnknownKeys = true }.decodeFromString<dev.pibot.android.data.Approval>(approvalJson)
+        assertTrue(approval.canRemember)
+        assertTrue(approval.scope.contains("办公电脑"))
+        respond(200, approvalJson.replace("pending", "approved"))
+        respond(200, BOT)
+        repo.decide(approval, "approve_always")
+        val decision = server.takeRequest()
+        assertEquals("/pibot/approvals/a1", decision.requestUrl!!.encodedPath)
+        assertEquals("Bearer tok", decision.getHeader("Authorization"))
+        assertEquals("approve_always", Json.parseToJsonElement(decision.body.readUtf8()).jsonObject["decision"]!!.jsonPrimitive.content)
+        server.takeRequest()
+        respond(200, """[{"id":"rule1","target":"device:pc1","target_label":"办公电脑","resource":"/projects/demo","resource_type":"directory","operation":"read","created_at":"2026-10-31T00:00:00Z","last_used_at":null}]""")
+        val rules = repo.authorizations()
+        assertEquals("办公电脑", rules.single().targetLabel)
+        assertEquals("read", rules.single().operation)
+        assertEquals("/pibot/authorizations", server.takeRequest().requestUrl!!.encodedPath)
+        respond(200, """{"revoked":true}""")
+        repo.revokeAuthorization("rule1")
+        val revoke = server.takeRequest()
+        assertEquals("DELETE", revoke.method)
+        assertEquals("/pibot/authorizations/rule1", revoke.requestUrl!!.encodedPath)
+        respond(200, """[{"id":1,"action":"revoke","target":"device:pc1","operation":"read","resource":"/projects/demo","created_at":"2026-10-31T00:00:00Z"}]""")
+        assertEquals("revoke", repo.authorizationLogs().single().action)
+        assertEquals("/pibot/authorizations/logs", server.takeRequest().requestUrl!!.encodedPath)
+    }
+
+    @Test
     fun pushRegistrationUsesCurrentBindingBearerAndPathPrefix() = runBlocking {
         login()
         val session = repo.session.value!!

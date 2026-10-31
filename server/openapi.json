@@ -5,6 +5,89 @@
     "version": "0.4.0"
   },
   "paths": {
+    "/authorizations": {
+      "get": {
+        "tags": [
+          "bots"
+        ],
+        "summary": "查看当前账号已保存授权",
+        "security": [
+          {
+            "UserBearer": []
+          },
+          {
+            "DeviceSignature": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "{ detail }"
+          }
+        }
+      }
+    },
+    "/authorizations/logs": {
+      "get": {
+        "tags": [
+          "bots"
+        ],
+        "summary": "查看最近授权及使用日志",
+        "security": [
+          {
+            "UserBearer": []
+          },
+          {
+            "DeviceSignature": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "{ detail }"
+          }
+        }
+      }
+    },
+    "/authorizations/{id}": {
+      "delete": {
+        "tags": [
+          "bots"
+        ],
+        "summary": "撤销当前账号的已保存授权",
+        "security": [
+          {
+            "UserBearer": []
+          },
+          {
+            "DeviceSignature": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "{ detail }"
+          }
+        }
+      }
+    },
     "/push/config": {
       "get": {
         "tags": [
@@ -2865,13 +2948,15 @@
                     "type": "string",
                     "enum": [
                       "approve",
+                      "approve_always",
                       "reject"
                     ]
                   }
                 },
                 "required": [
                   "decision"
-                ]
+                ],
+                "additionalProperties": false
               }
             }
           }

@@ -6,7 +6,8 @@ import { protectWindowsDirectory } from '../../../packages/service/src/windows.j
 import { app, BrowserWindow, ipcMain, shell, dialog, nativeImage } from 'electron';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { join, basename, dirname } from 'node:path';
-import { mkdirSync, existsSync } from 'node:fs';
+import { mkdirSync, existsSync, readFileSync } from 'node:fs';
+import { writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { dataDir, libraryRoot } from '../../../packages/service/src/paths.js';
 import { libraryDir } from '../../../packages/service/src/library.js';
@@ -101,6 +102,9 @@ else {
           if (offline.response !== 1) return false;
         }
         if (hasActiveWork(status, bots)) throw new Error('仍有活动任务，请结束后再安装；安装包已保留');
+        await writeFile(join(dataDir,'electron','window-state.json'),JSON.stringify({width:window!.getBounds().width,height:window!.getBounds().height,maximized:window!.isMaximized()}),{mode:0o600});
+        window!.webContents.session.flushStorageData();
+        await window!.webContents.session.cookies.flushStore();
         return true;
       });
       if (launched) app.quit();
@@ -118,7 +122,13 @@ else {
       if (error) throw new Error('无法在文件管理器中打开资料库');
     });
     const createWindow = () => {
-      window = new BrowserWindow({ width: 1180, height: 820, minWidth: 900, minHeight: 600, show: false, icon: iconPath, title: 'Pi Bot', backgroundColor: '#f6f4f1', titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default', webPreferences: { preload: join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false } });
+      let saved = {width:1180,height:820,maximized:false};
+      try {
+        const value = JSON.parse(readFileSync(join(dataDir,'electron','window-state.json'),'utf8'));
+        if (Number.isInteger(value.width) && value.width >= 900 && value.width <= 7680 && Number.isInteger(value.height) && value.height >= 600 && value.height <= 4320) saved = value;
+      } catch { /* First launch uses defaults. */ }
+      window = new BrowserWindow({ width: saved.width, height: saved.height, minWidth: 900, minHeight: 600, show: false, icon: iconPath, title: 'Pi Bot', backgroundColor: '#f6f4f1', titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default', webPreferences: { preload: join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false } });
+      if (saved.maximized) window.maximize();
       window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
       window.webContents.on('will-navigate', event => event.preventDefault());
       window.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));

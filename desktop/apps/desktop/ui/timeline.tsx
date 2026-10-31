@@ -9,6 +9,7 @@ import '@pi-bot/a2ui/styles';
 import { bridge, call, errorText } from './bridge.js';
 import { IMAGE_LIMIT_HINT, IMAGE_TYPES, imageSource, type ChatImage } from '@pi-bot/agent/images';
 import { MessagePicture, readImages } from './images.js';
+import { readDrafts, stageDrafts, flushDrafts } from './drafts.js';
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
 const day = (iso: string) => new Date(iso).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' });
@@ -127,10 +128,12 @@ function RelayMessage({ m, onOpenBot }: { m: Message & { from_bot: FromBot }; on
   );
 }
 
-function ApprovalCard({ approval }: { approval: Approval }) {
+export function ApprovalCard({ approval }: { approval: Approval }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const decide = async (decision: 'approve' | 'reject') => {
+  const decide = async (decision: 'approve' | 'approve_always' | 'reject') => {
+    if (decision === 'approve_always' && !confirm(`一直允许以下范围？\n${approval.scope}\n可在设置 → 已保存授权中撤销。`)) return;
+    setError('');
     setBusy(true);
     try { await call('decide', { approvalId: approval.id, decision }); } catch (e) { setError(errorText(e)); setBusy(false); }
   };
@@ -139,10 +142,12 @@ function ApprovalCard({ approval }: { approval: Approval }) {
       <strong>想访问资料库以外的位置</strong>
       <code>{approval.path}</code>
       <p>{approval.reason}</p>
+      <p className="small">{approval.scope ?? '仅本次任务访问此路径。旧版执行端无法保存授权，请更新执行电脑客户端。'}</p>
       {error && <p className="error small">{error}</p>}
       <div className="row-end">
         <button className="ghost" disabled={busy} onClick={() => decide('reject')}>拒绝</button>
-        <button className="primary" disabled={busy} onClick={() => decide('approve')}>允许本次任务访问</button>
+        <button className="primary" disabled={busy} onClick={() => decide('approve')}>仅本次允许</button>
+        <button className="ghost" disabled={busy || !approval.can_remember} title={approval.can_remember ? '保存上述读取权限，可在设置中撤销' : '写入、命令和旧版宽泛权限需要逐次确认'} onClick={() => decide('approve_always')}>一直允许</button>
       </div>
     </div>
   );
@@ -151,11 +156,12 @@ function ApprovalCard({ approval }: { approval: Approval }) {
 export function Timeline({ bot, messages, hasMore, mood, online, onLoadMore, onSent, onOpenBot }: { bot: Bot; messages: Message[]; hasMore: boolean; mood: Mood; online: boolean; onLoadMore(): void; onSent(page: MessagePage): void; onOpenBot(id: string): void }) {
   const scroller = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
-  const [text, setText] = useState('');
+  const [drafts, setDrafts] = useState(readDrafts);
+  const text = drafts[bot.id]?.text ?? '';
+  const setText = (update: string | ((current: string) => string)) => setDrafts(current => ({...current,[bot.id]:{images:current[bot.id]?.images ?? [],text:typeof update === 'function' ? update(current[bot.id]?.text ?? '') : update}}));
   const [conversationTask, setConversationTask] = useState<AgentTaskRef | null>(null);
-  const [imageDrafts, setImageDrafts] = useState<Record<string, ChatImage[]>>({});
-  const images = imageDrafts[bot.id] ?? NO_IMAGES;
-  const setImages = (update: ChatImage[] | ((current: ChatImage[]) => ChatImage[])) => setImageDrafts(current => ({ ...current, [bot.id]: typeof update === 'function' ? update(current[bot.id] ?? NO_IMAGES) : update }));
+  const images = drafts[bot.id]?.images ?? NO_IMAGES;
+  const setImages = (update: ChatImage[] | ((current: ChatImage[]) => ChatImage[])) => setDrafts(current => ({ ...current, [bot.id]: {text:current[bot.id]?.text ?? '', images:typeof update === 'function' ? update(current[bot.id]?.images ?? NO_IMAGES) : update} }));
   const picker = useRef<HTMLInputElement>(null);
   const [reading, setReading] = useState(false);
   const readingRef = useRef(false);
@@ -164,6 +170,12 @@ export function Timeline({ bot, messages, hasMore, mood, online, onLoadMore, onS
   const submitting = useRef(false);
   const retry = useRef<{ text: string; images: ChatImage[]; bot: string; id: string } | null>(null);
   const activeBot = useRef(bot.id);
+  useLayoutEffect(() => { stageDrafts(drafts); }, [drafts]);
+  useEffect(() => {
+    const save = () => { try { flushDrafts(); } catch { /* Installation retries this write and surfaces a blocking error. */ } };
+    window.addEventListener('pagehide',save);
+    return () => { save(); window.removeEventListener('pagehide',save); };
+  },[]);
   activeBot.current = bot.id;
   const run = bot.latest_run;
   useLayoutEffect(() => {
@@ -194,8 +206,14 @@ export function Timeline({ bot, messages, hasMore, mood, online, onLoadMore, onS
     try {
       const result = await call<{ messages: Message[] }>('send', { botId, text: value, images, request_id: retry.current.id });
       onSent({ messages: result.messages, has_more: hasMore });
-      if (activeBot.current === botId) setText(current => current === draft ? '' : current);
-      setImages(current => current === images ? [] : current);
+      setDrafts(current => {
+        const latest = current[botId];
+        if (!latest) return current;
+        return {...current,[botId]:{
+          text:latest.text === draft ? '' : latest.text,
+          images:latest.images === images ? [] : latest.images,
+        }};
+      });
       retry.current = null;
     } catch (e) { if (activeBot.current === botId) setError(errorText(e)); }
     finally { submitting.current = false; setSending(false); }

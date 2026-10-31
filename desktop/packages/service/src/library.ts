@@ -36,7 +36,8 @@ export async function libraryDir(root: string, slug: string) {
 /** Resolves paths for one run: the bot library plus any outside paths the user approved. */
 export class Sandbox {
   private roots: string[];
-  constructor(readonly root: string, approved: string[] = []) { this.roots = [root, ...approved]; }
+  private grants: {path: string; access: 'read' | 'write' | 'execute'}[] = [];
+  constructor(readonly root: string, approved: string[] = [], private authorizeSaved?: (path: string, access: 'read') => Promise<boolean>) { this.roots = [root, ...approved]; }
   get allowed() { return [...this.roots]; }
   expand(input: string) {
     const value = input || '.';
@@ -45,7 +46,7 @@ export class Sandbox {
     return isAbsolute(value) ? resolve(value) : resolve(this.root, value);
   }
   /** Follows symlinks on the existing part of the path so links cannot escape the allowed roots. */
-  async resolve(input: string, options: { mustExist?: boolean } = {}) {
+  async canonical(input: string) {
     const full = this.expand(input);
     let existing = full;
     while (!(await lstat(existing).catch(() => null))) {
@@ -54,16 +55,22 @@ export class Sandbox {
       existing = parent;
     }
     const real = join(await realpath(existing), relative(existing, full));
-    if (!this.roots.some(r => inside(r, real))) throw new OutsideError(full);
-    if (options.mustExist && !(await lstat(full).catch(() => null))) throw new Error(`文件不存在：${this.display(full)}`);
     return real;
   }
-  async allow(input: string) {
+  async resolve(input: string, options: { mustExist?: boolean; access?: 'read' | 'write' | 'execute' } = {}) {
+    const real = await this.canonical(input), access = options.access ?? 'read';
+    if (!this.roots.some(r => inside(r, real)) && !this.grants.some(g => g.access === access && inside(g.path,real)) &&
+        !(access === 'read' && await this.authorizeSaved?.(real,access))) throw new OutsideError(real);
+    if (options.mustExist && !(await lstat(real).catch(() => null))) throw new Error(`文件不存在：${this.display(real)}`);
+    return real;
+  }
+  async allow(input: string, access?: 'read' | 'write' | 'execute') {
     const full = this.expand(input);
     if (full === parse(full).root || full === resolve(homedir())) throw new Error('不能授权整个磁盘或整个主目录，请指定更具体的路径');
     const real = await realpath(full).catch(() => full);
     if (real === parse(real).root || real === resolve(homedir())) throw new Error('不能授权整个磁盘或整个主目录，请指定更具体的路径');
-    if (!this.roots.includes(real)) this.roots.push(real);
+    if (access) this.grants.push({path:real,access});
+    else if (!this.roots.includes(real)) this.roots.push(real);
     return real;
   }
   display(path: string) { return inside(this.root, path) ? relative(this.root, path).split(sep).join('/') || '.' : path; }
@@ -157,7 +164,7 @@ function globRegex(glob: string) {
 
 export interface ToolHooks {
   /** Resolves true when the user approves access to a path outside the library. */
-  requestOutside(path: string, reason: string, signal?: AbortSignal): Promise<boolean>;
+  requestOutside(path: string, reason: string, signal?: AbortSignal, access?: 'read' | 'write' | 'execute', resourceType?: 'file' | 'directory'): Promise<boolean | 'saved'>;
 }
 export function libraryTools(sandbox: Sandbox, hooks: ToolHooks): ToolDefinition[] {
   const tools: ToolDefinition[] = [
@@ -216,7 +223,7 @@ export function libraryTools(sandbox: Sandbox, hooks: ToolHooks): ToolDefinition
       name: 'write_file', label: '写入文件', description: '创建或覆盖 UTF-8 文本文件，自动创建上级目录。产出的文件默认保存在资料库内。',
       parameters: Type.Object({ path: Type.String(), content: Type.String({ maxLength: 2_000_000 }) }),
       execute: async (_id, args: any) => {
-        const file = await sandbox.resolve(args.path);
+        const file = await sandbox.resolve(args.path, { access: 'write' });
         await mkdir(dirname(file), { recursive: true });
         const tmp = `${file}.${randomUUID()}.tmp`;
         await writeFile(tmp, args.content);
@@ -228,7 +235,7 @@ export function libraryTools(sandbox: Sandbox, hooks: ToolHooks): ToolDefinition
       name: 'edit_file', label: '修改文件', description: '把文件中的 old_text 精确替换为 new_text。old_text 必须唯一，除非 replace_all 为 true。',
       parameters: Type.Object({ path: Type.String(), old_text: Type.String({ minLength: 1 }), new_text: Type.String(), replace_all: Type.Optional(Type.Boolean()) }),
       execute: async (_id, args: any) => {
-        const file = await sandbox.resolve(args.path, { mustExist: true });
+        const file = await sandbox.resolve(args.path, { mustExist: true, access: 'write' });
         const content = await readFile(file, 'utf8');
         const count = content.split(args.old_text).length - 1;
         if (!count) throw new Error('找不到 old_text，请先读取文件确认原文');
@@ -241,20 +248,24 @@ export function libraryTools(sandbox: Sandbox, hooks: ToolHooks): ToolDefinition
       name: 'run_command', label: '执行命令', description: `在执行电脑上用 ${commandShell()} 执行命令，默认工作目录是资料库。返回退出码和最后 30000 个字符输出。不要执行破坏性或需要交互的命令。`,
       parameters: Type.Object({ command: Type.String({ minLength: 1, maxLength: 20000 }), cwd: Type.Optional(Type.String()), timeout_seconds: Type.Optional(Type.Integer({ minimum: 1, maximum: 600 })) }),
       execute: async (_id, args: any, signal) => {
-        const cwd = await sandbox.resolve(args.cwd ?? '.', { mustExist: true });
+        const cwd = await sandbox.resolve(args.cwd ?? '.', { mustExist: true, access: 'execute' });
         const r = await runCommand(args.command, cwd, (args.timeout_seconds ?? 120) * 1000, signal);
         return text(JSON.stringify(r));
       },
     },
     {
-      name: 'request_outside_access', label: '申请访问', description: '申请读写资料库以外的文件或目录。会请用户在客户端批准；批准后本次任务内可访问该路径及其子路径。',
-      parameters: Type.Object({ path: Type.String({ minLength: 1 }), reason: Type.String({ minLength: 1, maxLength: 1000 }) }),
+      name: 'request_outside_access', label: '申请访问', description: '申请资料库以外的文件或目录访问；access 默认为 read（可选择 write 或 execute）。读取授权不含写入或命令；只有读取权限可以被用户记住，其他权限仅本次任务有效。',
+      parameters: Type.Object({ path: Type.String({ minLength: 1 }), reason: Type.String({ minLength: 1, maxLength: 1000 }), access: Type.Optional(Type.Union([Type.Literal('read'),Type.Literal('write'),Type.Literal('execute')])) }),
       execute: async (_id, args: any, signal) => {
-        const full = sandbox.expand(args.path);
-        try { await sandbox.resolve(full); return text(`已可访问 ${full}，无需申请`); } catch (e) { if (!(e instanceof OutsideError)) throw e; }
-        const approved = await hooks.requestOutside(full, args.reason, signal);
+        const full = await sandbox.canonical(args.path), access = args.access ?? 'read';
+        if (full === parse(full).root || full === resolve(homedir())) throw new Error('请指定具体资源，不能授权整个磁盘或主目录');
+        try { await sandbox.resolve(full, { access }); return text(`已可${access}访问 ${full}，无需申请`); } catch (e) { if (!(e instanceof OutsideError)) throw e; }
+        const info = await stat(full).catch(() => null);
+        if (access === 'read' && !info) throw new Error('读取授权需要已存在的文件或目录');
+        const approved = await hooks.requestOutside(full, args.reason, signal, access, info?.isDirectory() ? 'directory' : 'file');
         if (!approved) return text(`用户拒绝了访问 ${full}。请不要再访问该路径，改用其他方式或向用户说明。`);
-        return text(`用户已批准访问 ${await sandbox.allow(full)}（本次任务有效）`);
+        if (approved !== 'saved') await sandbox.allow(full,access);
+        return text(`用户已批准 ${access} 访问 ${full}（${approved === 'saved' ? '已保存，每次使用仍会校验，可在设置中撤销' : '本次任务有效'}）`);
       },
     },
   ] as ToolDefinition[];

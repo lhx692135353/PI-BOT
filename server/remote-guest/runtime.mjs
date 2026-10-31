@@ -65,7 +65,8 @@ async function action(q, signal) {
   if (!inside(await fs.realpath(base), root)) throw new Error("无效资料库");
   await fs.mkdir(root, { recursive: true });
   const a = q.args || {},
-    allowed = await Promise.all((q.approved || []).map(realPath));
+    // Grants contain canonical resources; do not follow a replaced grant root symlink.
+    allowed = (q.approved || []).map(p => path.resolve(p));
   const file = async (input) => resolvePath(root, input, allowed);
   const resultPath = async (ext) => {
     const out = path.join(root, "outputs");
@@ -77,7 +78,9 @@ async function action(q, signal) {
       const p = await realPath(path.resolve(a.path));
       if (["/", path.dirname(base), "/home", "/root"].includes(p))
         throw new Error("不能授权整个磁盘或主目录");
-      return { path: p };
+      const info = await fs.stat(p).catch(() => null);
+      if (a.access === 'read' && !info) throw new Error('读取授权需要已存在的文件或目录');
+      return { path: p, resource_type: info?.isDirectory() ? 'directory' : 'file' };
     }
     case "list_files": {
       const dir = await file(a.path);

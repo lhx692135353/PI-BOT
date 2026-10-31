@@ -1,4 +1,5 @@
 import { routingFields } from "./targets.js";
+import { authorizationRoutes } from './authorizations.js';
 import { reportRoutes } from "./reports.js";
 import { conversation } from "./task-conversation.js";
 import { remoteRoutes } from './remote/routes.js';
@@ -199,6 +200,7 @@ async function deviceFiles(ctx: Context, method: "list" | "read") {
 }
 
 export const routes: Route[] = [
+  ...authorizationRoutes,
   ...pushRoutes,
   ...reportRoutes,
   {method:"GET",path:"/bots/:id/files/sources",auth:"actor",tag:"files",summary:"资料库的可选文件来源",tx:false,handler:fileSources},
@@ -515,7 +517,7 @@ export const routes: Route[] = [
   },
   {
     method: "POST", path: "/approvals/:id", auth: "actor", tag: "bots", summary: "批准或拒绝 Bot 访问资料库以外的路径",
-    body: z.object({ decision: z.enum(["approve", "reject"]) }),
+    body: z.object({ decision: z.enum(["approve", "approve_always", "reject"]) }).strict(),
     handler: async ({ tx, hub, user, params, body, after }) => {
       const { approval, send } = await decideApproval(tx, hub, user.user_id, params.id, body.decision);
       if (send) after(send);

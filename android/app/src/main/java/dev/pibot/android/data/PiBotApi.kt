@@ -74,9 +74,26 @@ data class Approval(
     val kind: String = "outside_access",
     val path: String = "",
     val reason: String = "",
+    val access: String = "legacy",
+    val scope: String = "仅本次任务访问此路径。旧版执行端无法保存授权，请更新执行电脑客户端。",
+    @SerialName("can_remember") val canRemember: Boolean = false,
     val status: String = "pending",
     @SerialName("expires_at") val expiresAt: String,
 )
+
+@Serializable
+data class SavedAuthorization(
+    val id: String, val target: String,
+    @SerialName("target_label") val targetLabel: String,
+    val resource: String,
+    @SerialName("resource_type") val resourceType: String,
+    val operation: String,
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("last_used_at") val lastUsedAt: String? = null,
+)
+
+@Serializable
+data class AuthorizationLog(val id: Long, val action: String, val target: String, val operation: String, val resource: String, @SerialName("created_at") val createdAt: String)
 
 @Serializable
 data class Bot(
@@ -304,7 +321,14 @@ class PiBotApi(private val http: OkHttpClient, private val json: Json = API_JSON
     fun cancel(url: ServerUrl, token: String, runId: String): Run = call(url, "POST", "/runs/$runId/cancel", token, EmptyBody())
 
     fun decide(url: ServerUrl, token: String, approvalId: String, approve: Boolean): Approval =
-        call(url, "POST", "/approvals/$approvalId", token, DecisionBody(if (approve) "approve" else "reject"))
+        decide(url, token, approvalId, if (approve) "approve" else "reject")
+
+    fun decide(url: ServerUrl, token: String, approvalId: String, decision: String): Approval =
+        call(url, "POST", "/approvals/$approvalId", token, DecisionBody(decision))
+
+    fun authorizations(url: ServerUrl, token: String): List<SavedAuthorization> = call(url, "GET", "/authorizations", token)
+    fun authorizationLogs(url: ServerUrl, token: String): List<AuthorizationLog> = call(url, "GET", "/authorizations/logs", token)
+    fun revokeAuthorization(url: ServerUrl, token: String, id: String): JsonObject = call(url, "DELETE", "/authorizations/$id", token)
 
     fun fileSources(url: ServerUrl, token: String, botId: String): FileSources = call(url,"GET","/bots/$botId/files/sources",token)
 

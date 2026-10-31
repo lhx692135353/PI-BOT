@@ -22,6 +22,8 @@ fun ClientUpdateSettings(repository: PiBotRepository) {
     var candidate by remember { mutableStateOf<UpdateCandidate?>(null) }
     var ready by remember { mutableStateOf(false) }
     var confirm by remember { mutableStateOf(false) }
+    var failed by remember { mutableStateOf(false) }
+    var progress by remember { mutableStateOf<Float?>(null) }
     val scope = rememberCoroutineScope()
     Column {
         Text("客户端更新 · ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
@@ -30,15 +32,15 @@ fun ClientUpdateSettings(repository: PiBotRepository) {
             listOf("stable" to "稳定版", "test" to "测试版").forEach { (value, label) ->
                 TextButton(enabled = !busy, onClick = {
                     channel = value; prefs.edit().putString("channel", value).apply()
-                    candidate = null; ready = false; message = ""
+                    candidate = null; ready = false; message = ""; failed = false; progress = null
                 }) { Text(if (channel == value) "✓ $label" else label) }
             }
         }
         OutlinedButton(enabled = !busy, onClick = {
-            busy = true; candidate = null; ready = false; message = "正在检查…"
+            busy = true; candidate = null; ready = false; message = "正在检查更新…"; failed = false; progress = null
             scope.launch {
-                try { candidate = updater.check(channel); message = candidate?.let { "可更新至 ${it.version} · ${it.commit.take(7)}" } ?: "当前通道暂无更高版本" }
-                catch (e: Exception) { message = e.message ?: "检查失败" }
+                try { candidate = updater.check(channel); message = candidate?.let { "可更新至 ${it.version} · ${it.commit.take(7)}" } ?: "已是当前通道最新版本（暂无更高构建）" }
+                catch (e: Exception) { failed = true; message = "检查失败：${e.message ?: "网络不可用"}" }
                 finally { busy = false }
             }
         }) { Text("检查更新") }
@@ -47,16 +49,20 @@ fun ClientUpdateSettings(repository: PiBotRepository) {
             OutlinedButton(enabled = !busy, onClick = {
                 if (ready) confirm = true
                 else {
-                    busy = true; message = "正在下载并校验…"
+                    busy = true; message = "正在下载并校验…"; failed = false; progress = 0f
                     scope.launch {
-                        try { updater.download(update); ready = true; message = "安装包及签名已校验，等待你确认安装" }
-                        catch (e: Exception) { message = e.message ?: "下载失败，旧版仍可使用" }
-                        finally { busy = false }
+                        try { updater.download(update) { downloaded, total ->
+                            progress = downloaded.toFloat() / total
+                            message = if (downloaded == total) "下载完成，正在校验安装包和签名…" else "正在下载 ${(downloaded * 100 / total)}%"
+                        }; ready = true; message = "安装包及签名已校验，等待你确认安装" }
+                        catch (e: Exception) { failed = true; message = "下载失败：${e.message ?: "旧版仍可使用"}" }
+                        finally { busy = false; progress = null }
                     }
                 }
             }) { Text(if (ready) "安装更新" else "下载更新") }
         }
-        if (message.isNotEmpty()) Text(message, color = Muted)
+        progress?.let { LinearProgressIndicator(progress = { it }) }
+        if (message.isNotEmpty()) Text(message, color = if (failed) Danger else Muted)
     }
     if (confirm) AlertDialog(
         onDismissRequest = { confirm = false },
@@ -77,7 +83,7 @@ fun ClientUpdateSettings(repository: PiBotRepository) {
                     val permission = updater.permissionIntent()
                     context.startActivity(permission ?: updater.installIntent())
                     message = if (permission != null) "请允许此来源安装，返回后再次点击安装更新" else "已交给系统安装器，请确认安装"
-                } catch (e: Exception) { message = e.message ?: "暂不能安装，旧版不受影响" }
+                } catch (e: Exception) { failed = true; message = "安装失败：${e.message ?: "旧版不受影响"}" }
                 finally { busy = false }
             }
         }) { Text("已结束活动，继续") } },

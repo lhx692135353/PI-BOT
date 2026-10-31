@@ -249,6 +249,7 @@ const fakeConnection = {
       );
     if (q.action === "run_command")
       return { exit_code: 0, output: "remote-ok", timed_out: false };
+    if (q.action === 'validate_approval') return {path:q.args.path,resource_type:'directory'};
     if (q.action === "desktop_screenshot")
       return {
         path: "/home/pibot/workspaces/test/outputs/screen.png",
@@ -358,6 +359,37 @@ async function run(
 async function llm(r: Row) {
   return issueLlmToken({ sub: userId, src: "cloud", bot: r.bot_id }, s);
 }
+
+test('remembered remote read scopes are matched per operation and revoked within an active run', {skip}, async()=>{
+  const first = await run(), firstToken = await llm(first), path = '/srv/projects/demo';
+  const waiting = api('/agent/remote/action',{run_id:first.run_id,call_id:randomUUID(),action:'request_outside_access',args:{path,reason:'读取项目',access:'read'}},firstToken);
+  const pending = await eventually(()=>db.tx(tx=>tx.one("SELECT * FROM approvals WHERE run_id=$1 AND status='pending'",[first.run_id])));
+  const grant = await api(`/approvals/${pending.approval_id}`,{decision:'approve_always'});
+  assert.equal(grant.statusCode,200,grant.body);
+  const finished = await waiting; assert.equal(finished.statusCode,200,finished.body); assert.equal(finished.json().approved,true);
+  const rules = (await api('/authorizations')).json();
+  const rule = rules.find((r:any)=>r.target === `remote:${envId}` && r.resource === path);
+  assert.ok(rule);
+  const next = await run(), nextToken = await llm(next);
+  const request = async(action:string,args:object)=>{
+    const response = await api('/agent/remote/action',{run_id:next.run_id,call_id:randomUUID(),action,args},nextToken);
+    assert.equal(response.statusCode,200,response.body);return response.json();
+  };
+  const savedRequest = {run_id:next.run_id,call_id:randomUUID(),action:'request_outside_access',args:{path,reason:'再次读取'}};
+  const savedResult = await api('/agent/remote/action',savedRequest,nextToken);
+  assert.equal(savedResult.statusCode,200,savedResult.body);
+  assert.equal(savedResult.json().remembered,true);
+  const replay = await api('/agent/remote/action',savedRequest,nextToken);
+  assert.equal(replay.statusCode,200,replay.body);
+  assert.deepEqual(replay.json(),savedResult.json(),'saved-scope requests complete their operation record for safe retries');
+  await request('read_file',{path:path+'/readme.txt'}); assert.deepEqual(operations.at(-1).approved,[path]);
+  await request('write_file',{path:path+'/readme.txt',content:'change'}); assert.deepEqual(operations.at(-1).approved,[],'read grant must not reach a mutating guest operation');
+  await request('run_command',{command:'echo ok',cwd:path}); assert.deepEqual(operations.at(-1).approved,[]);
+  const revoked = await app.inject({method:'DELETE',url:`/authorizations/${rule.id}`,headers:{authorization:`Bearer ${token}`}});
+  assert.equal(revoked.statusCode,200,revoked.body);
+  await request('read_file',{path:path+'/readme.txt'}); assert.deepEqual(operations.at(-1).approved,[],'revocation is rechecked in the same run');
+  for(const r of [first,next])await db.tx(tx=>finishRun(tx,r.run_id,'completed',null));
+});
 test(
   "remote configuration never returns credentials and requires ownership",
   { skip },
