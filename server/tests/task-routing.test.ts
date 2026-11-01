@@ -6,11 +6,11 @@ import { migrate } from '../src/migrate.js';
 import { Hub, type DeviceConnection } from '../src/hub.js';
 import { settings } from '../src/config.js';
 import { createBot, updateBot, insertRun, finishRun } from '../src/bots.js';
-import { createTask, startTask } from '../src/agents.js';
+import { AgentDispatcher, createTask, startTask } from '../src/agents.js';
 import { dispatchDevice, failDeviceRuns } from '../src/runs.js';
 import { resolveTaskTarget, taskRouting, RemotePreparationRequired, resourceSchema } from '../src/targets.js';
 import { manageGoals, AutomationScheduler, saveGoalDecision } from '../src/automations.js';
-import { TEST_DB, resetDatabase } from './helpers.js';
+import { TEST_DB, resetDatabase, eventually } from './helpers.js';
 
 test('task routing uses machines as per-task resources, never Bot identity', {skip:!TEST_DB}, async t => {
   await resetDatabase(TEST_DB!);
@@ -115,6 +115,35 @@ test('task routing uses machines as per-task resources, never Bot identity', {sk
     assert.equal((await db.tx(tx=>tx.get('bot_runs',result.run!.run_id))).status,'failed');assert.equal(sent.filter(x=>x.message.type==='run').length,0);
     ca=connect(a);
   });
+  await t.test('concurrent queued starts reread the task after locking the bot and create one child run',async()=>{
+    const result=await db.tx(tx=>createTask(tx,hub,user,claims,{run_id:parent.run_id,kind:'background',task:'concurrent starts',wait:false},s));
+    const snapshot=await db.tx(tx=>tx.get('agent_tasks',result.task.id));
+    const starts=await Promise.all([db.tx(tx=>startTask(tx,hub,snapshot,s)),db.tx(tx=>startTask(tx,hub,{...snapshot},s))]);
+    assert.equal(starts.filter(Boolean).length,1);
+    const runs=await db.tx(tx=>tx.rows('SELECT * FROM bot_runs WHERE task_id=$1',[snapshot.task_id]));
+    assert.equal(runs.length,1);assert.equal((await db.tx(tx=>tx.get('agent_tasks',snapshot.task_id))).child_run_id,runs[0].run_id);
+    assert.equal(await db.tx(tx=>startTask(tx,hub,snapshot,s)),null,'a stale task snapshot cannot restart queued work');
+    await db.tx(tx=>finishRun(tx,runs[0].run_id,'completed',null,'done'));
+  });
+  await t.test('dispatcher waits for the bot before locking its queued task',async()=>{
+    const result=await db.tx(tx=>createTask(tx,hub,user,claims,{run_id:parent.run_id,kind:'background',task:'lock ordering',wait:false},s));
+    const blocker=await db.pool.connect();
+    const dispatcher=new AgentDispatcher(db,s,hub);
+    let pass:Promise<void>|undefined;
+    try {
+      await blocker.query('BEGIN');
+      await blocker.query('SELECT bot_id FROM bots WHERE bot_id=$1 FOR NO KEY UPDATE',[bot.bot_id]);
+      pass=dispatcher.once();
+      await eventually(()=>db.tx(tx=>tx.one("SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE 'SELECT * FROM bots WHERE bot_id=%FOR NO KEY UPDATE%'")));
+      await blocker.query('SELECT task_id FROM agent_tasks WHERE task_id=$1 FOR NO KEY UPDATE NOWAIT',[result.task.id]);
+      await blocker.query('COMMIT');
+      await pass;
+      const task=await db.tx(tx=>tx.get('agent_tasks',result.task.id));assert.ok(task.child_run_id);
+      await db.tx(tx=>finishRun(tx,task.child_run_id,'completed',null,'done'));
+    } finally {
+      await blocker.query('ROLLBACK').catch(()=>{});blocker.release();await pass;await dispatcher.stop();
+    }
+  });
   await t.test('goal policy remembers source preference while a review uses an available machine',async()=>{
     await db.tx(tx=>finishRun(tx,parent.run_id,'completed',null,'done'));
     parent=await makeParent();
@@ -183,6 +212,9 @@ test('cloud worker finalizes queued routing through authenticated API; file read
   const response=await app.inject({method:'POST',url:`/internal/runs/${queued.run_id}/claim`,headers:{authorization:'Bearer '+s.runnerToken},payload:{worker_id:randomUUID()}});
   assert.equal(response.statusCode,200,response.body);assert.equal(response.json().run,null);
   assert.equal((await db.tx(tx=>tx.get('bot_runs',queued.run_id))).device_id,a,'a newly available computer replaces queued cloud selection');
+  await dispatchDevice(db,s,hub,queued.run_id);
+  // The live dispatcher may already hold the claim while constructing context.
+  await eventually(()=>sends.filter(x=>x.message.type==='run').length===1);
   await dispatchDevice(db,s,hub,queued.run_id);assert.equal(sends.filter(x=>x.message.type==='run').length,1);
   const sources=(await api('GET',`/bots/${bot.id}/files/sources`)).json().sources;assert.equal(sources.length,2);
   const list=(await api('GET',`/bots/${bot.id}/files?target=device:${b}`)).json();assert.equal(list.target,'device:'+b);
