@@ -28,7 +28,7 @@ import { ensureEnvironment } from "../src/remote/environments.js";
 import { Hub } from "../src/hub.js";
 import { issueLlmToken, Vault } from "../src/security.js";
 import { createBot, insertRun, finishRun } from "../src/bots.js";
-import { createTask, startTask } from "../src/agents.js";
+import { createTask } from "../src/agents.js";
 import {
   AutomationScheduler,
   manageGoals,
@@ -436,7 +436,10 @@ test(
     );
     assert.equal(result.task.operation_target,"pending");
     await service.connect(await db.tx(tx=>tx.get("remote_environments",envId)));
-    const dispatched=await db.tx(async tx=>startTask(tx,hub,await tx.get("agent_tasks",result.task.id),s));
+    const dispatched=await eventually(()=>db.tx(async tx=>{
+      const task=await tx.get("agent_tasks",result.task.id);
+      return task.child_run_id ? tx.get("bot_runs",task.child_run_id) : undefined;
+    }));
     assert.equal(dispatched?.operation_target,"remote:"+envId);
     assert.equal(dispatched?.executor,"cloud");
     const plain = await db.tx((tx) =>

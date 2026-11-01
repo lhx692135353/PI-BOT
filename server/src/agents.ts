@@ -174,6 +174,11 @@ async function failQueued(tx: Tx, task: Row, error: string) {
 export async function startTask(tx: Tx, hub: Hub, task: Row, settings?:Settings) {
   if (task.child_run_id) return null;
   const target = await tx.one("SELECT * FROM bots WHERE bot_id=$1 FOR NO KEY UPDATE", [task.target_bot_id]);
+  // All starters take the bot lock before the task lock. Refresh after waiting:
+  // another dispatcher may have started or cancelled this task in the meantime.
+  const current = await tx.one("SELECT * FROM agent_tasks WHERE task_id=$1 AND status='queued' AND child_run_id IS NULL FOR NO KEY UPDATE", [task.task_id]);
+  if (!current) return null;
+  task = current;
   if (!target || target.archived_at) {
     await failQueued(tx, task, "目标智能体已归档");
     return null;
@@ -404,7 +409,7 @@ export class AgentDispatcher {
       if (this.stopped) return;
       try {
         const run = await this.db.tx(async (tx) => {
-          const t = await tx.one("SELECT * FROM agent_tasks WHERE task_id=$1 AND status='queued' FOR NO KEY UPDATE SKIP LOCKED", [task_id]);
+          const t = await tx.get("agent_tasks",task_id);
           return t ? startTask(tx, this.hub, t,this.s) : null;
         });
         if (run?.executor === "device") await dispatchDevice(this.db, this.s, this.hub, run.run_id);
@@ -414,7 +419,7 @@ export class AgentDispatcher {
             const task = await this.db.tx(tx => tx.get("agent_tasks",task_id));
             await this.hub.prepareRemote(task.user_id);
             const run = await this.db.tx(async tx => {
-              const current = await tx.one("SELECT * FROM agent_tasks WHERE task_id=$1 AND status='queued' AND child_run_id IS NULL FOR NO KEY UPDATE SKIP LOCKED",[task_id]);
+              const current = await tx.get("agent_tasks",task_id);
               return current ? startTask(tx,this.hub,current,this.s) : null;
             });
             if (run?.executor === "device") await dispatchDevice(this.db,this.s,this.hub,run.run_id);
