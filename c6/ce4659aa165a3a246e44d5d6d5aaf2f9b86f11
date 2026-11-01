@@ -1,0 +1,19 @@
+server/tests/task-routing.test.ts
+  s_4e78786025b63f::t_69620fd91b9e67 13,118-140,209-216
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c6ce4659aa165a3a246e44d5d6d5aaf2f9b86f11",
+  "prompts": {},
+  "sessions": {
+    "s_4e78786025b63f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a184b5-8849-7430-8138-a3d423e9dd63",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
