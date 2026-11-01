@@ -314,9 +314,17 @@ class PiBotRepository(
     }
 
     suspend fun decide(approval: Approval, approve: Boolean) {
-        authed { u, t -> api.decide(u, t, approval.id, approve) }
+        decide(approval, if (approve) "approve" else "reject")
+    }
+
+    suspend fun decide(approval: Approval, decision: String) {
+        authed { u, t -> api.decide(u, t, approval.id, decision) }
         refreshBot(approval.botId)
     }
+
+    suspend fun authorizations(): List<SavedAuthorization> = authed { u,t -> api.authorizations(u,t) }
+    suspend fun authorizationLogs(): List<AuthorizationLog> = authed { u,t -> api.authorizationLogs(u,t) }
+    suspend fun revokeAuthorization(id: String) { authed { u,t -> api.revokeAuthorization(u,t,id) } }
 
     suspend fun fileSources(botId: String): FileSources = authed { u, t -> api.fileSources(u,t,botId) }
 

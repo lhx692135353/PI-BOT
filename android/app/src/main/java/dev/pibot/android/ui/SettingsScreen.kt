@@ -109,6 +109,8 @@ fun SettingsScreen(repository: PiBotRepository, onBack: () -> Unit, onPhone: (St
             Spacer(Modifier.height(20.dp))
             ClientUpdateSettings(repository)
             Spacer(Modifier.height(20.dp))
+            SavedAuthorizations(repository)
+            Spacer(Modifier.height(20.dp))
             Text("Pi Bot ${BuildConfig.VERSION_NAME}", color = Muted, fontSize = 12.sp, modifier = Modifier.fillMaxWidth())
         }
     }

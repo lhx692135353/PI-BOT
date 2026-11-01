@@ -42,21 +42,35 @@ export class ClientUpdater {
   private selected: Candidate | null = null;
   private readyFile: string | null = null;
   private busy = false;
+  private restored = false;
   private stateValue: ClientUpdateState;
   constructor(private directory: string, version: string, private currentBuild: number, private platform: UpdatePlatform = 'windows-x64', private linuxInstall?: (archive: string) => Promise<void>) {
     this.stateValue = { channel: 'stable', phase: 'idle', version, buildNumber: currentBuild, message: '' };
   }
   async state(): Promise<ClientUpdateState> {
+    if (!this.restored) {
+      this.restored = true;
+      try {
+        const receipt = JSON.parse(await readFile(join(this.directory,'installation.json'),'utf8'));
+        if (typeof receipt.fromVersion === 'string' && typeof receipt.toVersion === 'string' && Number.isSafeInteger(receipt.toBuild) && receipt.toBuild > 0) {
+          const verified = this.currentBuild >= receipt.toBuild;
+          this.stateValue.lastInstall = {...receipt,verified};
+          if (this.stateValue.phase === 'idle') this.stateValue.message = verified
+            ? `升级已验证：${receipt.fromVersion} → ${this.stateValue.version}（构建 ${this.currentBuild}）`
+            : `上次升级尚未完成：当前 ${this.stateValue.version}，目标 ${receipt.toVersion}。请重试更新或检查安装器提示。`;
+        }
+      } catch { /* No prior installation receipt. */ }
+    }
     if (!this.busy && this.stateValue.phase === 'idle') {
       try { this.stateValue.channel = channel(JSON.parse(await readFile(join(this.directory, 'preferences.json'), 'utf8')).channel); } catch { /* default stable */ }
     }
-    return { ...this.stateValue };
+    return { ...this.stateValue, packageReady: !!this.readyFile };
   }
   async check(value: unknown): Promise<ClientUpdateState> {
     const selected = channel(value);
     if (this.busy) throw new Error('已有更新操作正在进行');
     this.busy = true; this.selected = null; this.readyFile = null;
-    this.stateValue = { ...this.stateValue, channel: selected, phase: 'checking', candidate: undefined, message: '正在检查…' };
+    this.stateValue = { ...this.stateValue, channel: selected, phase: 'checking', candidate: undefined, downloadedBytes: undefined, totalBytes: undefined, message: '正在检查更新…' };
     try {
       await mkdir(this.directory, { recursive: true, mode: 0o700 });
       const temp = join(this.directory, `preferences-${randomUUID()}.tmp`);
@@ -78,7 +92,7 @@ export class ClientUpdater {
       this.selected = best;
       this.stateValue = { ...this.stateValue, phase: best ? 'available' : 'idle',
         candidate: best ? { version: best.version, buildNumber: best.buildNumber, commit: best.commit, size: best.size } : undefined,
-        message: best ? `可更新至 ${best.version} · ${best.commit.slice(0,7)}` : '当前通道暂无更高版本' };
+        message: best ? `可更新至 ${best.version} · ${best.commit.slice(0,7)}` : '已是当前通道最新版本（暂无更高构建）' };
     } catch (e) { this.failure(e); } finally { this.busy = false; }
     return this.state();
   }
@@ -88,7 +102,7 @@ export class ClientUpdater {
     const candidate = this.selected;
     if (!candidate) throw new Error('请先检查更新');
     this.busy = true; this.readyFile = null;
-    this.stateValue = { ...this.stateValue, phase: 'downloading', message: '正在下载并校验…' };
+    this.stateValue = { ...this.stateValue, phase: 'downloading', downloadedBytes: 0, totalBytes: candidate.size, message: '正在下载安装包…' };
     const partial = join(this.directory, `update-${randomUUID()}.part`), target = partial.replace(/\.part$/, this.platform === 'linux-x64' ? '.tar.gz' : '.exe');
     try {
       const result = await response(candidate.url, 10 * 60 * 1000); const reader = result.body?.getReader();
@@ -99,8 +113,10 @@ export class ClientUpdater {
           const { done, value } = await reader.read(); if (done) break;
           total += value.length; if (total > candidate.size) throw new Error('下载大小不匹配');
           await handle.writeFile(value);
+          this.stateValue = { ...this.stateValue, downloadedBytes: total, message: `正在下载 ${Math.floor(total / candidate.size * 100)}%` };
         }
       } finally { await handle.close(); await reader.cancel(); }
+      this.stateValue = { ...this.stateValue, message: '下载完成，正在校验 SHA256…' };
       await verifyPackage(partial, candidate); await rename(partial, target);
       this.readyFile = target;
       this.stateValue = { ...this.stateValue, phase: 'ready', message: this.platform === 'linux-x64' ? '安装包已校验，等待确认替换并重启（保留旧版备份）' : '安装包已校验，等待你确认安装（Windows 安装器未签名）' };
@@ -115,6 +131,10 @@ export class ClientUpdater {
     try {
       if (!await confirmAndCheckActivity()) return false;
       await verifyPackage(this.readyFile, this.selected);
+      const receipt = {fromVersion:this.stateValue.version,toVersion:this.selected.version,toBuild:this.selected.buildNumber};
+      const temp = join(this.directory,`installation-${randomUUID()}.tmp`);
+      await writeFile(temp,JSON.stringify(receipt),{flag:'wx',mode:0o600});
+      await rename(temp,join(this.directory,'installation.json'));
       if (this.platform === 'linux-x64') {
         if (!this.linuxInstall) throw new Error('当前 Linux 安装格式不支持原位更新，请手动安装官方 tar.gz 桌面包');
         await this.linuxInstall(this.readyFile);

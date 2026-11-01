@@ -1,5 +1,6 @@
 import { RuntimeError, errorInfo } from "@pi-bot/runtime-contracts";
-import type { DesktopBridge, Method } from '../../../packages/protocol/src/index.js';
+import type { DesktopBridge, Method, UpdateChannel } from '../../../packages/protocol/src/index.js';
+import { flushDrafts } from './drafts.js';
 
 declare global { interface Window { agent: DesktopBridge } }
 function agent(): DesktopBridge {
@@ -8,6 +9,13 @@ function agent(): DesktopBridge {
 }
 /** Resolved on use so renderer modules can be imported without a preload bridge. */
 export const bridge: DesktopBridge = {
+  get updates() {
+    const updates = agent().updates;
+    return updates ? {
+      state: () => updates.state(), check: (channel: UpdateChannel) => updates.check(channel), download: () => updates.download(),
+      install: () => { flushDrafts(); return updates.install(); },
+    } : undefined;
+  },
   call: async (method,input) => {
     // Construct errors in the renderer. Electron strips custom Error properties
     // when exceptions cross contextBridge, so IPC carries a plain envelope.

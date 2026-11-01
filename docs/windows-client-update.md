@@ -39,3 +39,29 @@ Build identity is injected by `desktop/scripts/build.mjs` from generated root
 See [client-updates.md](client-updates.md) for metadata contract and Android
 signing prerequisites. A first manual bootstrap install is necessary for old
 clients without this updater.
+
+The renderer bridge now forwards the existing preload `updates` interface.
+Previously the missing forwarding caused Settings to hide the whole updater,
+even though the packaged main process already implemented it. Manual checks
+show checking, latest, available and failure separately. The UI polls byte
+progress while downloading and after reopening Settings during an operation;
+cancelled installation keeps the verified package available for retry.
+
+Before installer IPC, message text and image drafts are flushed to the existing
+Electron profile. A storage failure prevents installation and is shown to the
+user. After confirmation and activity checks, the main process persists window
+size and flushes profile storage. SHA256 and size are checked again immediately
+before the existing installer is launched. An installation receipt records the
+old version and target build; reopening Settings compares the running build
+with that target. Merely launching the installer never counts as a verified
+upgrade. Windows still uses the Squirrel installer with app identity `PiBot`.
+
+For installed-client acceptance, first install a compatible build containing
+the updater over the existing installation, then publish a newer build and
+matching manifest in the selected channel. In Settings, run check → download
+(observe progress) → install → confirm. After the installer restarts the app,
+verify the displayed version/build and receipt, account binding, channel,
+message drafts and library files. Cancel once and retry; also check that network
+and corrupted-package failures leave the old client usable. This requires real
+release assets and interactive confirmation; mocked UI tests and package builds
+do not establish installed-client upgrade acceptance.

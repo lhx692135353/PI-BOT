@@ -1,4 +1,5 @@
 import { errorInfo } from "@pi-bot/runtime-contracts";
+import { approvalScope, rememberAuthorization, authorizationLog } from './authorizations.js';
 import { taskMessage } from "./task-conversation.js";
 import { recordReply, replySchema } from "./replies.js";
 import { randomUUID } from "node:crypto";
@@ -80,6 +81,8 @@ const runEvent = z.discriminatedUnion("kind", [
     request_id: z.string().max(80),
     path: z.string().min(1).max(4000),
     reason: z.string().max(2000),
+    access: z.enum(['read','write','execute']).optional(),
+    resource_type: z.enum(['file','directory']).optional(),
   }),
   z.object({
     kind: z.literal("done"),
@@ -178,7 +181,8 @@ export async function handleRunEvent(
       bot_id: run.bot_id,
       user_id: run.user_id,
       kind: "outside_access",
-      detail: { path: e.path, reason: e.reason },
+      detail: { path: e.path, reason: e.reason, access: e.access ?? 'legacy',
+        authorization_scope: await approvalScope(tx, run, e.path, e.access ?? 'legacy', e.resource_type ?? 'unknown') },
       status: "pending",
       expires_at: new Date(Date.now() + s.approvalTtl * 1000),
     });
@@ -278,8 +282,13 @@ export async function decideApproval(
   hub: Hub,
   userId: string,
   approvalId: string,
-  decision: "approve" | "reject",
+  decision: "approve" | "approve_always" | "reject",
 ) {
+  const snapshot = await tx.one('SELECT run_id FROM approvals WHERE approval_id=$1 AND user_id=$2',[approvalId,userId]);
+  if (!snapshot) fail(404,'审批不存在');
+  // Match finishRun/cancelRun: lock the run before its approval. This also
+  // makes a concurrent cancellation visible before persisting a new grant.
+  const run = await tx.one('SELECT * FROM bot_runs WHERE run_id=$1 FOR NO KEY UPDATE',[snapshot!.run_id]);
   const a = await tx.one(
     "SELECT * FROM approvals WHERE approval_id=$1 AND user_id=$2 FOR UPDATE",
     [approvalId, userId],
@@ -287,9 +296,16 @@ export async function decideApproval(
   if (!a) fail(404, "审批不存在");
   if (a!.status !== "pending" || new Date(a!.expires_at) < new Date())
     fail(409, "审批已失效");
-  const status = decision === "approve" ? "approved" : "rejected";
+  if (!run || run.cancel_requested || !['running','waiting_approval'].includes(run.status)) fail(409,'任务已结束，审批已失效');
+  if (decision === 'approve_always') await rememberAuthorization(tx, a!);
+  else {
+    const scope = a!.detail.authorization_scope ?? await approvalScope(tx,run!,a!.detail.path,'legacy','unknown');
+    await authorizationLog(tx,userId,scope,decision === 'reject' ? 'reject' : 'allow_once',{approval_id:approvalId,run_id:a!.run_id});
+  }
+  const status = decision !== "reject" ? "approved" : "rejected";
   const updated = await tx.update("approvals", approvalId, {
     status,
+    detail: decision === 'approve_always' ? {...a!.detail, remembered:true} : a!.detail,
     decided_at: new Date(),
   });
   const pending = await tx.one(
@@ -301,7 +317,6 @@ export async function decideApproval(
     await tx.rows("UPDATE agent_tasks SET status='running', updated_at=now() WHERE child_run_id=$1 AND status='waiting_approval'", [a!.run_id]);
   }
   await tx.notify({ user_id: userId, bot_id: a!.bot_id });
-  const run = await tx.get("bot_runs", a!.run_id);
   const conn = hub.device(userId,run?.device_id);
   return {
     approval: approvalOut(updated),

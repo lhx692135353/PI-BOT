@@ -51,7 +51,10 @@ export const schemas = {
   uiState: z.object({ botId: id, messageId: id, revision: z.number().int().positive(), states: z.unknown() }),
   uiAction: z.object({ botId: id, messageId: id, revision: z.number().int().positive(), states: z.unknown(), action: z.unknown(), request_id: id }),
   cancel: z.object({ runId: id }),
-  decide: z.object({ approvalId: id, decision: z.enum(['approve', 'reject']) }),
+  decide: z.object({ approvalId: id, decision: z.enum(['approve', 'approve_always', 'reject']) }),
+  authorizations: z.object({}),
+  authorizationRevoke: z.object({ id }),
+  authorizationLogs: z.object({}),
 } as const;
 export type Method = keyof typeof schemas;
 export function parseInput(method: Method, input: unknown) {
@@ -71,7 +74,9 @@ export interface ReplySegment { id: string; text: string; phase: 'opening' | 'up
 export interface TaskConversation { execution_label?:string; operation_target?:string; task_id: string; status: RunStatus; bots: { id: string; name: string; avatar: Avatar }[]; messages: { id: string; seq: number; from_bot_id: string; to_bot_id: string; kind: string; content: string; created_at: string | null }[]; total: number; has_more: boolean; next_after: number }
 export interface AgentTaskRef { message_count?: number; operation_target?:string; id: string; bot_id: string; bot_name: string; status: 'queued' | 'running' | 'waiting_approval' | 'completed' | 'failed' | 'cancelled'; mode: 'wait' | 'report'; kind?: 'background' | 'delegation'; title?: string; updated_at?: string; activity?: string | null }
 export interface Message { attachments?: ArtifactRef[]; reply_segments?: ReplySegment[]; task_id?: string | null; id: string; bot_id: string; run_id: string | null; seq: number; role: 'user' | 'assistant'; content: string; images?: MessageImage[]; status: 'completed' | 'running' | 'failed' | 'cancelled'; executor: 'device' | 'cloud' | null; tools: ToolEntry[]; progress?: string[]; ui?: UiDocument | null; from_bot?: FromBot | null; agent_tasks?: AgentTaskRef[]; created_at: string; updated_at: string }
-export interface Approval { id: string; run_id: string; bot_id: string; kind: 'outside_access'; path: string; reason: string; status: string; expires_at: string }
+export interface Approval { id: string; run_id: string; bot_id: string; kind: 'outside_access'; path: string; reason: string; status: string; expires_at: string; access?: string; scope?: string; can_remember?: boolean }
+export interface SavedAuthorization { id: string; target: string; target_label: string; resource: string; resource_type: string; operation: string; created_at: string; last_used_at: string | null }
+export interface AuthorizationLog { id: number; action: string; resource: string; operation: string; target: string; created_at: string }
 export interface Bot { execution_device_id?: string | null; active_tasks?: AgentTaskRef[]; activity?: { status: RunStatus | null; tool: string | null; summary: string | null; running_count: number; queued_count: number }; id: string; name: string; slug: string; persona: string; model_id: string | null; avatar: Avatar; is_main?: boolean; created_at: string; last_active_at: string; latest_run: Run | null; last_message: { role: string; preview: string; status: string; created_at: string } | null; pending_approvals: Approval[] }
 export interface ModelOption { id: string; name: string; is_default: boolean }
 export interface Device { id: string; label: string; platform: 'linux' | 'darwin' | 'win32'; online: boolean; revoked_at: string | null; last_seen_at: string | null }
@@ -122,4 +127,8 @@ export interface ClientUpdateState {
   buildNumber: number;
   message: string;
   candidate?: { version: string; buildNumber: number; commit: string; size: number };
+  downloadedBytes?: number;
+  totalBytes?: number;
+  lastInstall?: { fromVersion: string; toVersion: string; toBuild: number; verified: boolean };
+  packageReady?: boolean;
 }

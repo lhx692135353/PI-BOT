@@ -60,6 +60,7 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -245,8 +246,8 @@ fun TimelineScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     items(displayBot.pendingApprovals, key = { "approval-${it.id}" }) { approval ->
-                        ApprovalCard(approval) { approve ->
-                            scope.launch { runCatching { repository.decide(approval, approve) }.onFailure { error = errorText(it) } }
+                        ApprovalCard(approval) { decision ->
+                            repository.decide(approval, decision)
                         }
                     }
                     displayBot.activity?.summary?.let { summary ->
@@ -420,8 +421,18 @@ private fun MessageItem(message: Message, onOpenBot: (String) -> Unit, repositor
 }
 
 @Composable
-private fun ApprovalCard(approval: Approval, onDecide: (Boolean) -> Unit) {
+private fun ApprovalCard(approval: Approval, onDecide: suspend (String) -> Unit) {
     var deciding by remember { mutableStateOf(false) }
+    var confirmAlways by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    fun decide(decision: String) {
+        deciding = true; error = null
+        scope.launch {
+            try { onDecide(decision) } catch (e: Exception) { error = errorText(e) }
+            finally { deciding = false }
+        }
+    }
     Column(
         Modifier.fillMaxWidth().background(AccentSoft, RoundedCornerShape(18.dp)).padding(14.dp),
     ) {
@@ -433,12 +444,22 @@ private fun ApprovalCard(approval: Approval, onDecide: (Boolean) -> Unit) {
             Text(approval.reason, color = Ink.copy(alpha = 0.8f))
         }
         Spacer(Modifier.height(10.dp))
+        Text(approval.scope, fontSize = 12.sp)
+        error?.let { Text(it, color = Danger) }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            OutlinedButton(onClick = { deciding = true; onDecide(false) }, enabled = !deciding) { Text("拒绝") }
+            TextButton(onClick = { decide("reject") }, enabled = !deciding) { Text("拒绝") }
             Spacer(Modifier.size(8.dp))
-            Button(onClick = { deciding = true; onDecide(true) }, enabled = !deciding) { Text("允许本次任务访问") }
+            TextButton(onClick = { decide("approve") }, enabled = !deciding) { Text("仅本次允许") }
+            TextButton(onClick = { confirmAlways = true }, enabled = !deciding && approval.canRemember) { Text("一直允许") }
         }
+        if (!approval.canRemember) Text("写入、命令和旧版宽泛权限需要逐次确认。", color = Muted, fontSize = 12.sp)
     }
+    if (confirmAlways) AlertDialog(
+        onDismissRequest = { confirmAlways = false }, title = { Text("记住以下权限？") },
+        text = { Text("${approval.scope}\n可在设置 → 已保存授权中撤销。") },
+        confirmButton = { TextButton(onClick = { confirmAlways = false; decide("approve_always") }) { Text("一直允许") } },
+        dismissButton = { TextButton(onClick = { confirmAlways = false }) { Text("取消") } },
+    )
 }
 
 @Composable

@@ -106,10 +106,11 @@ export function remoteTools(
     ],
     [
       "request_outside_access",
-      "申请本次任务访问资料库之外的具体绝对路径；等待用户批准后才可访问",
+      "申请访问资料库之外的具体绝对路径。access 默认 read；读取不含写入或命令，用户可记住读取权限并随时撤销；write/execute 需要逐次确认。",
       Type.Object({
         path: str(),
         reason: Type.String({ minLength: 1, maxLength: 1000 }),
+        access: opt(Type.Union([Type.Literal('read'),Type.Literal('write'),Type.Literal('execute')])),
       }),
     ],
   ];

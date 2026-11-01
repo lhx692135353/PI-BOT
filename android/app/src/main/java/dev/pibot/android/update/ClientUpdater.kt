@@ -57,7 +57,7 @@ class ClientUpdater(context: Context) {
         }
         best
     }
-    suspend fun download(candidate: UpdateCandidate): File = withContext(Dispatchers.IO) {
+    suspend fun download(candidate: UpdateCandidate, onProgress: (Long, Long) -> Unit = { _, _ -> }): File = withContext(Dispatchers.IO) {
         require(trustedAsset(candidate.url, candidate.tag, "Pi-Bot-Android.apk"))
         val partial = File(directory, "update.part")
         val target = File(directory, "update.apk")
@@ -67,11 +67,18 @@ class ClientUpdater(context: Context) {
                 check(response.isSuccessful) { "下载安装包失败：${response.code}" }
                 val body = response.body ?: error("安装包为空")
                 var total = 0L
+                var lastProgress = 0L
+                withContext(Dispatchers.Main) { onProgress(0, candidate.size) }
                 body.byteStream().use { input -> partial.outputStream().use { output ->
                     val buffer = ByteArray(65536)
                     while (true) {
                         val n = input.read(buffer); if (n < 0) break
                         total += n; require(total <= candidate.size) { "安装包大小不匹配" }; output.write(buffer, 0, n)
+                        val now = System.nanoTime()
+                        if (now - lastProgress >= 100_000_000L || total == candidate.size) {
+                            lastProgress = now
+                            withContext(Dispatchers.Main) { onProgress(total, candidate.size) }
+                        }
                     }
                 } }
                 require(total == candidate.size) { "安装包下载不完整" }

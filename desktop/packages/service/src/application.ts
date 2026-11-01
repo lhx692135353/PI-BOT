@@ -236,6 +236,9 @@ export class Application {
       case 'uiAction': return this.cloud('POST', `/bots/${input.botId}/messages/${input.messageId}/ui-actions`, { client:"desktop", revision: input.revision, states: input.states, action: input.action, request_id: input.request_id });
       case 'cancel': this.executor?.cancel(input.runId); return this.cloud('POST', `/runs/${input.runId}/cancel`);
       case 'decide': return this.cloud('POST', `/approvals/${input.approvalId}`, { decision: input.decision });
+      case 'authorizations': return this.cloud('GET', '/authorizations');
+      case 'authorizationRevoke': return this.cloud('DELETE', `/authorizations/${input.id}`);
+      case 'authorizationLogs': return this.cloud('GET', '/authorizations/logs');
     }
     throw new RuntimeError(httpErrorInfo(501,'未知方法','local-service'));
   }
