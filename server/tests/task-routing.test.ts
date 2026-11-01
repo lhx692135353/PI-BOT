@@ -10,7 +10,7 @@ import { createTask, startTask } from '../src/agents.js';
 import { dispatchDevice, failDeviceRuns } from '../src/runs.js';
 import { resolveTaskTarget, taskRouting, RemotePreparationRequired, resourceSchema } from '../src/targets.js';
 import { manageGoals, AutomationScheduler, saveGoalDecision } from '../src/automations.js';
-import { TEST_DB, resetDatabase } from './helpers.js';
+import { TEST_DB, resetDatabase, eventually } from './helpers.js';
 
 test('task routing uses machines as per-task resources, never Bot identity', {skip:!TEST_DB}, async t => {
   await resetDatabase(TEST_DB!);
@@ -115,6 +115,29 @@ test('task routing uses machines as per-task resources, never Bot identity', {sk
     assert.equal((await db.tx(tx=>tx.get('bot_runs',result.run!.run_id))).status,'failed');assert.equal(sent.filter(x=>x.message.type==='run').length,0);
     ca=connect(a);
   });
+  await t.test('a locked Bot defers dispatch and retries deliver the task exactly once',async()=>{
+    const run=await db.tx(tx=>insertRun(tx,{
+      userId:user,botId:bot.bot_id,requestId:randomUUID(),text:'contended dispatch',
+      computer:{deviceId:a},lane:'task',operationTarget:'device:'+a,routing:route(),
+    }));
+    const deliveries=()=>sent.filter(x=>x.message.type==='run' && x.message.run.run_id===run.run_id);
+    const blocker=await db.pool.connect();
+    try {
+      await blocker.query('BEGIN');
+      await blocker.query('SELECT bot_id FROM bots WHERE bot_id=$1 FOR NO KEY UPDATE',[bot.bot_id]);
+      await dispatchDevice(db,s,hub,run.run_id);
+      assert.equal((await db.tx(tx=>tx.get('bot_runs',run.run_id))).status,'queued');
+      assert.equal(deliveries().length,0,'SKIP LOCKED must not dispatch before capacity can be claimed');
+    } finally {
+      await blocker.query('ROLLBACK');
+      blocker.release();
+    }
+    await dispatchDevice(db,s,hub,run.run_id);
+    await dispatchDevice(db,s,hub,run.run_id);
+    assert.equal(deliveries().length,1);
+    assert.equal((await db.tx(tx=>tx.get('bot_runs',run.run_id))).status,'running');
+    await db.tx(tx=>finishRun(tx,run.run_id,'completed',null,'done'));
+  });
   await t.test('goal policy remembers source preference while a review uses an available machine',async()=>{
     await db.tx(tx=>finishRun(tx,parent.run_id,'completed',null,'done'));
     parent=await makeParent();
@@ -183,7 +206,14 @@ test('cloud worker finalizes queued routing through authenticated API; file read
   const response=await app.inject({method:'POST',url:`/internal/runs/${queued.run_id}/claim`,headers:{authorization:'Bearer '+s.runnerToken},payload:{worker_id:randomUUID()}});
   assert.equal(response.statusCode,200,response.body);assert.equal(response.json().run,null);
   assert.equal((await db.tx(tx=>tx.get('bot_runs',queued.run_id))).device_id,a,'a newly available computer replaces queued cloud selection');
-  await dispatchDevice(db,s,hub,queued.run_id);assert.equal(sends.filter(x=>x.message.type==='run').length,1);
+  const deliveries=()=>sends.filter(x=>x.message.type==='run' && x.message.run.run_id===queued.run_id);
+  // The API dispatcher can hold the Bot lock; a skipped claim is retried on its next pass.
+  await eventually(async()=>{
+    await dispatchDevice(db,s,hub,queued.run_id);
+    return deliveries().length>0;
+  });
+  await dispatchDevice(db,s,hub,queued.run_id);
+  assert.equal(deliveries().length,1);
   const sources=(await api('GET',`/bots/${bot.id}/files/sources`)).json().sources;assert.equal(sources.length,2);
   const list=(await api('GET',`/bots/${bot.id}/files?target=device:${b}`)).json();assert.equal(list.target,'device:'+b);
   const content=(await api('GET',`/bots/${bot.id}/files/content?target=device:${b}&path=data.csv`)).json();assert.equal(content.content,b);assert.equal(content.target,'device:'+b);
