@@ -1,7 +1,7 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { PiBot } from '@pi-bot/bot-face/react';
+import { PiBot } from './bot-avatar.js';
 import type { Mood } from '@pi-bot/bot-face';
 import type { AgentTaskRef, Approval, Bot, FromBot, Message, MessagePage, TaskConversation } from '../../../packages/protocol/src/index.js';
 import { UiView } from '@pi-bot/a2ui/react';
@@ -10,6 +10,7 @@ import { bridge, call, errorText } from './bridge.js';
 import { IMAGE_LIMIT_HINT, IMAGE_TYPES, imageSource, type ChatImage } from '@pi-bot/agent/images';
 import { MessagePicture, readImages } from './images.js';
 import { readDrafts, stageDrafts, flushDrafts } from './drafts.js';
+import { Icon } from './icons.js';
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
 const day = (iso: string) => new Date(iso).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' });
@@ -272,9 +273,9 @@ export function Timeline({ bot, messages, hasMore, mood, online, onLoadMore, onS
         {!!images.length && <div className="image-drafts">{images.map((image, i) => <div key={i}><img src={imageSource(image)} alt={image.name} /><button disabled={sending || reading} aria-label={`移除 ${image.name}`} onClick={() => setImages(current => current.filter((_, index) => index !== i))}>×</button></div>)}</div>}
         <div className="input">
           <input ref={picker} type="file" accept={IMAGE_TYPES.join(',')} multiple hidden onChange={e => { void addImages(Array.from(e.target.files ?? [])); e.target.value = ''; }} />
-          <button className="attach ghost" disabled={!online || sending || reading || images.length >= 4} onClick={() => picker.current?.click()} title={IMAGE_LIMIT_HINT} aria-label="上传图片">＋</button>
+          <button className="attach ghost" disabled={!online || sending || reading || images.length >= 4} onClick={() => picker.current?.click()} title={IMAGE_LIMIT_HINT} aria-label="上传图片"><Icon name="plus" /></button>
           <textarea value={text} onChange={e => setText(e.target.value)} onKeyDown={key} onPaste={e => { const files = Array.from(e.clipboardData.files).filter(file => file.type.startsWith('image/')); if (files.length) { e.preventDefault(); void addImages(files); } }} rows={Math.min(8, Math.max(1, text.split('\n').length))} placeholder={`给 ${bot.name} 发消息`} disabled={!online} />
-          <button className="send" disabled={(!text.trim() && !images.length) || !online || sending || reading} onClick={send} title="发送（Enter）">↑</button>
+          <button className="send" disabled={(!text.trim() && !images.length) || !online || sending || reading} onClick={send} title="发送（Enter）" aria-label="发送消息"><Icon name="arrow" size={19} /></button>
         </div>
       </div>
     </>

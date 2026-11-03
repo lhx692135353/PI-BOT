@@ -1,6 +1,6 @@
 import { StrictMode, useCallback, useEffect, useRef, useState, type FormEvent, type MouseEvent } from 'react';
 import { createRoot } from 'react-dom/client';
-import { PiBot } from '@pi-bot/bot-face/react';
+import { PiBot } from './bot-avatar.js';
 import { DEFAULT_AVATAR, moodFor, sleepLabel, type Mood } from '@pi-bot/bot-face';
 import type { AccountState, AppEvent, Bot, Device, LocalActivity, Message, MessagePage, ModelOption } from '../../../packages/protocol/src/index.js';
 import { bridge, call, errorText } from './bridge.js';
@@ -11,6 +11,8 @@ import { ClientUpdates } from './client-updates.js';
 import { SavedAuthorizations } from './saved-authorizations.js';
 import { phoneAssociationKey } from './phone-client.js';
 import { DevicePhoneButton, PhoneDock } from './phone-control.js';
+import { ThemeToggle } from './theme.js';
+import { Icon } from './icons.js';
 import './style.css';
 
 const ORANGE = DEFAULT_AVATAR;
@@ -41,6 +43,7 @@ function Login({ state }: { state: AccountState }) {
   };
   return (
     <div className="login">
+      <div className="login-appearance"><ThemeToggle compact /></div>
       <form className="login-card" onSubmit={submit}>
         <PiBot avatar={ORANGE} mood={mood} size={150} followPointer />
         <h1>Pi Bot</h1>
@@ -91,6 +94,7 @@ function Settings({ state, onClose, onOpenPhone }: { state: AccountState; onClos
       <div className="backdrop" onMouseDown={e => e.target === e.currentTarget && onClose()}>
         <div className="modal settings">
           <h2>设置</h2>
+          <ThemeToggle />
           <dl>
             <dt>账号</dt><dd>{state.user?.display_name}（{state.user?.username}）</dd>
             <dt>这台电脑</dt><dd>{state.deviceLabel}</dd>
@@ -166,7 +170,7 @@ function Inspector({ bot, currentDeviceId, onClose, onOpenLibrary }: { bot: Bot;
   const parent = path.split('/').slice(0, -1).join('/');
   return (
     <aside className="inspector" aria-label={`${bot.name} 的目标和资料库`}>
-      <button type="button" className="ghost inspector-close" onClick={onClose} aria-label="关闭">×</button>
+      <button type="button" className="ghost icon-button inspector-close" onClick={onClose} aria-label="关闭"><Icon name="close" size={18} /></button>
       <PiBot avatar={bot.avatar} mood="idle" size={72} />
       <h2>{bot.name}</h2>
       <button className="ghost" onClick={()=>void call<{url:string}>("remoteDesktop",{botId:bot.id}).then(r=>bridge.openExternal(r.url)).catch(e=>setLibraryError(errorText(e)))}>云端桌面与文件</button>
@@ -229,6 +233,8 @@ function App() {
   const [phoneTarget, setPhoneTarget] = useState<{ botId: string | null; deviceId: string | null } | null>(null);
   const [now, setNow] = useState(Date.now());
   const [loadError, setLoadError] = useState('');
+  const [query, setQuery] = useState('');
+  const searchRef = useRef<HTMLInputElement>(null);
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
   const online = account?.connection === 'online';
@@ -308,20 +314,36 @@ function App() {
     window.addEventListener('focus', refresh); document.addEventListener('visibilitychange', visible);
     return () => { clearInterval(poll); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', visible); };
   }, [online, loadBots, loadTail]);
+  useEffect(() => {
+    const shortcut = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k' && searchRef.current) {
+        event.preventDefault(); searchRef.current.focus(); searchRef.current.select();
+      }
+      if (event.key === 'Escape') { setMenu(null); setInspector(false); }
+    };
+    window.addEventListener('keydown', shortcut);
+    return () => window.removeEventListener('keydown', shortcut);
+  }, []);
 
   if (!service || !account) return <div className="splash"><PiBot avatar={ORANGE} mood="sleeping" size={110} /><p className="muted">正在连接本地服务…</p></div>;
   if (account.connection === 'signed_out' || account.connection === 'revoked') return <Login state={account} />;
   const bot = bots.find(b => b.id === selected) ?? null;
   const page = bot ? pages[bot.id] : undefined;
+  const matchingBots = bots.filter(b => `${b.name} ${b.last_message?.preview ?? ''}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
   return (
-    <div className={phoneTarget ? 'shell with-phone' : 'shell'}>
-      <aside>
+    <div className={`shell${phoneTarget ? ' with-phone' : ''}${inspector && bot ? ' with-inspector' : ''}`}>
+      <aside className="sidebar">
         <div className="titlebar">
           <span className="brand">Pi Bot</span>
           <span className={`pill ${account.connection}`}>{online ? '电脑在线' : account.connection === 'connecting' ? '连接中…' : '离线 · 重连中'}</span>
         </div>
+        <div className="sidebar-tools">
+          <div className="bot-search"><Icon name="search" size={17} /><input ref={searchRef} aria-label="搜索 Bot" placeholder="搜索 Bot" value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') { setQuery(''); event.currentTarget.blur(); } }} />{query && <button type="button" className="ghost icon-button" aria-label="清除搜索" onClick={() => { setQuery(''); searchRef.current?.focus(); }}><Icon name="close" size={14} /></button>}</div>
+          <button type="button" className="icon-button new-bot" title="新建 Bot" aria-label="新建 Bot" disabled={!online} onClick={() => setEditor('new')}><Icon name="plus" /></button>
+        </div>
+        <div className="list-label">你的智能体<span>{bots.length}</span></div>
         <div className="bot-list">
-          {bots.map(b => {
+          {matchingBots.map(b => {
             const mood = botMood(b, activities[b.id], now);
             return (
               <BotListItem
@@ -336,14 +358,17 @@ function App() {
             );
           })}
           {!bots.length && online && !loadError && <p className="muted small empty-list">还没有 Bot</p>}
+          {!!bots.length && !matchingBots.length && <p className="muted small empty-list">没有找到匹配的 Bot</p>}
           {loadError && <p className="error small empty-list">{loadError}</p>}
         </div>
-        <button className="new-bot" disabled={!online} onClick={() => setEditor('new')}>＋ 新建 Bot</button>
-        <button className="me" onClick={() => setSettings(true)}>
-          <span className="avatar-letter">{(account.user?.display_name ?? '?').slice(0, 1).toUpperCase()}</span>
-          <span>{account.user?.display_name}</span>
-          <span className="muted">⚙︎</span>
-        </button>
+        <div className="sidebar-footer">
+          <button className="me" onClick={() => setSettings(true)}>
+            <span className="avatar-letter">{(account.user?.display_name ?? '?').slice(0, 1).toUpperCase()}</span>
+            <span>{account.user?.display_name}</span>
+            <Icon name="settings" size={17} />
+          </button>
+          <ThemeToggle compact />
+        </div>
       </aside>
       <main>
         {!online && <div className="banner">{account.connection === 'connecting' ? '正在连接服务器…' : '与服务器的连接已断开，正在自动重连。断开期间 Bot 无法在这台电脑上工作。'}</div>}
@@ -357,7 +382,8 @@ function App() {
                   <span className="muted small">{bot.is_main ? '主智能体 · ' : ''}{models.find(m => m.id === bot.model_id)?.name ?? '默认模型'}</span>
                 </span>
               </button>
-              <button type="button" className="ghost" aria-label="打开手机预览" onClick={() => setPhoneTarget({ botId: bot.id, deviceId: null })}>手机</button>
+              <button type="button" className="ghost icon-button" title="打开手机预览" aria-label="打开手机预览" onClick={() => setPhoneTarget({ botId: bot.id, deviceId: null })}><Icon name="phone" /></button>
+              <button type="button" className={`ghost icon-button${inspector ? ' selected' : ''}`} title={inspector ? '收起资料面板' : '打开目标和资料库'} aria-label={inspector ? '收起资料面板' : '打开目标和资料库'} aria-expanded={inspector} onClick={() => setInspector(open => !open)}><Icon name="panel" /></button>
             </header>
             <Timeline bot={bot} messages={page?.messages ?? []} hasMore={page?.hasMore ?? false} mood={botMood(bot, activities[bot.id], now)} online={online} onLoadMore={() => loadMore(bot.id)} onOpenBot={id => { if (bots.some(b => b.id === id)) setSelected(id); }} onSent={sent => {
               setPages(p => {
@@ -367,7 +393,6 @@ function App() {
                 return { ...p, [bot.id]: { messages: [...byId.values()].sort((a, b) => a.seq - b.seq), hasMore: old?.hasMore ?? sent.has_more } };
               });
             }} />
-            {inspector && <Inspector key={bot.id} bot={bot} currentDeviceId={account.deviceId ?? null} onClose={() => setInspector(false)} onOpenLibrary={() => bridge.openLibrary(bot.id).catch(e => alert(errorText(e)))} />}
           </>
         ) : (
           <div className="empty">
@@ -387,6 +412,7 @@ function App() {
           </div>
         )}
       </main>
+      {inspector && bot && <Inspector key={bot.id} bot={bot} currentDeviceId={account.deviceId ?? null} onClose={() => setInspector(false)} onOpenLibrary={() => bridge.openLibrary(bot.id).catch(e => alert(errorText(e)))} />}
       {menu && <>
         <button type="button" className="menu-backdrop" aria-label="关闭菜单" onClick={() => setMenu(null)} />
         <div className="bot-menu" style={{ left: menu.x, top: menu.y }}>
