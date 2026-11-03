@@ -3,10 +3,10 @@ import { ClientUpdater } from './client-updater.js';
 import { hasActiveWork } from './update-policy.js';
 import { errorInfo, httpErrorInfo } from "@pi-bot/runtime-contracts";
 import { protectWindowsDirectory } from '../../../packages/service/src/windows.js';
-import { app, BrowserWindow, ipcMain, shell, dialog, nativeImage } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, dialog, nativeImage, nativeTheme } from 'electron';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { join, basename, dirname } from 'node:path';
-import { mkdirSync, existsSync, readFileSync } from 'node:fs';
+import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { dataDir, libraryRoot } from '../../../packages/service/src/paths.js';
@@ -102,7 +102,8 @@ else {
           if (offline.response !== 1) return false;
         }
         if (hasActiveWork(status, bots)) throw new Error('仍有活动任务，请结束后再安装；安装包已保留');
-        await writeFile(join(dataDir,'electron','window-state.json'),JSON.stringify({width:window!.getBounds().width,height:window!.getBounds().height,maximized:window!.isMaximized()}),{mode:0o600});
+        const bounds = window!.getNormalBounds();
+        await writeFile(join(dataDir,'electron','window-state.json'),JSON.stringify({width:bounds.width,height:bounds.height,maximized:window!.isMaximized()}),{mode:0o600});
         window!.webContents.session.flushStorageData();
         await window!.webContents.session.cookies.flushStore();
         return true;
@@ -122,17 +123,23 @@ else {
       if (error) throw new Error('无法在文件管理器中打开资料库');
     });
     const createWindow = () => {
-      let saved = {width:1180,height:820,maximized:false};
+      let saved = {width:1280,height:860,maximized:true};
       try {
         const value = JSON.parse(readFileSync(join(dataDir,'electron','window-state.json'),'utf8'));
         if (Number.isInteger(value.width) && value.width >= 900 && value.width <= 7680 && Number.isInteger(value.height) && value.height >= 600 && value.height <= 4320) saved = value;
       } catch { /* First launch uses defaults. */ }
-      window = new BrowserWindow({ width: saved.width, height: saved.height, minWidth: 900, minHeight: 600, show: false, icon: iconPath, title: 'Pi Bot', backgroundColor: '#f6f4f1', titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default', webPreferences: { preload: join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false } });
+      window = new BrowserWindow({ width: saved.width, height: saved.height, minWidth: 900, minHeight: 600, show: false, icon: iconPath, title: 'Pi Bot', backgroundColor: nativeTheme.shouldUseDarkColors ? '#101010' : '#ffffff', titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default', webPreferences: { preload: join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false } });
       if (saved.maximized) window.maximize();
       window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
       window.webContents.on('will-navigate', event => event.preventDefault());
       window.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
       window.once('ready-to-show', () => { if (window) present(window); });
+      window.on('close', () => {
+        if (!window) return;
+        const bounds = window.getNormalBounds();
+        try { writeFileSync(join(dataDir, 'electron', 'window-state.json'), JSON.stringify({ width: bounds.width, height: bounds.height, maximized: window.isMaximized() }), { mode: 0o600 }); }
+        catch { /* Window preferences should never prevent closing the app. */ }
+      });
       window.on('closed', () => { window = null; });
       void window.loadURL(page);
     };

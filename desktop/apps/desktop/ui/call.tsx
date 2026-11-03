@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
-import { PiBot } from '@pi-bot/bot-face/react';
+import { PiBot } from './bot-avatar.js';
 import type { Mood } from '@pi-bot/bot-face';
 import type { Bot } from '../../../packages/protocol/src/index.js';
 import { call, errorText } from './bridge.js';

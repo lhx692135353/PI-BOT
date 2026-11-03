@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
-import { PiBot } from '@pi-bot/bot-face/react';
-import { avatarFor, COLORS, SHAPES, spec, type Avatar } from '@pi-bot/bot-face';
+import { PiBot, AVATAR_COLORS, colorfulAvatar } from './bot-avatar.js';
+import { avatarFor, SHAPES, spec, type Avatar } from '@pi-bot/bot-face';
 import type { Bot, ModelOption } from '../../../packages/protocol/src/index.js';
 import { call, errorText } from './bridge.js';
 
@@ -8,7 +8,7 @@ export function BotEditor({ bot, models, onClose, onSaved }: { bot?: Bot; models
   const [name, setName] = useState(bot?.name ?? '');
   const [persona, setPersona] = useState(bot?.persona ?? '');
   const [modelId, setModelId] = useState<string>(bot?.model_id ?? '');
-  const [avatar, setAvatar] = useState<Avatar>(bot?.avatar ?? avatarFor(crypto.randomUUID()));
+  const [avatar, setAvatar] = useState<Avatar>(() => colorfulAvatar(bot?.avatar ?? avatarFor(crypto.randomUUID())));
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const submit = async (e: FormEvent) => {
@@ -25,11 +25,11 @@ export function BotEditor({ bot, models, onClose, onSaved }: { bot?: Bot; models
   return (
     <div className="backdrop" onMouseDown={e => e.target === e.currentTarget && onClose()}>
       <form className="modal editor" onSubmit={submit}>
-        <div className="editor-preview" data-scheme={avatar.scheme}>
+        <div className="editor-preview">
           <PiBot avatar={avatar} mood={name ? 'happy' : 'idle'} size={168} followPointer />
           <strong>{name || '新 Bot'}</strong>
           <span className="muted small">{spec.shapes[avatar.shape].label} · {spec.colors[avatar.color].label}</span>
-          <button type="button" className="ghost small" onClick={() => setAvatar({ ...avatarFor(crypto.randomUUID()), scheme: avatar.scheme })}>随机换一个</button>
+          <button type="button" className="ghost small" onClick={() => setAvatar(colorfulAvatar(avatarFor(crypto.randomUUID())))}>随机换一个</button>
         </div>
         <div className="editor-fields">
           <h2>{bot ? '编辑 Bot' : '新建 Bot'}</h2>
@@ -54,10 +54,9 @@ export function BotEditor({ bot, models, onClose, onSaved }: { bot?: Bot; models
           <div className="field">
             <span>颜色</span>
             <div className="swatches">
-              {COLORS.map(color => (
+              {AVATAR_COLORS.map(color => (
                 <button type="button" key={color} title={spec.colors[color].label} className={color === avatar.color ? 'picked' : ''} style={{ background: `linear-gradient(160deg, ${spec.colors[color].light[0]}, ${spec.colors[color].light[1]})` }} onClick={() => setAvatar({ ...avatar, color })} />
               ))}
-              <button type="button" className="scheme" onClick={() => setAvatar({ ...avatar, scheme: avatar.scheme === 'light' ? 'dark' : 'light' })}>{avatar.scheme === 'light' ? '浅色' : '深色'}</button>
             </div>
           </div>
           {!bot && <p className="muted small">任务按需选择机器，文件保存在实际使用的机器上。</p>}
