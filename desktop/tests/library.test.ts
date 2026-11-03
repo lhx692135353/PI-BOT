@@ -182,16 +182,16 @@ test('task preflight only checks existing resources and never creates a library 
   const dir=temp();
   try {
     const root=join(dir.path,'libraries');
-    assert.deepEqual(await preflightLibrary(root,'missing',['data.csv']),{available:false});
+    assert.deepEqual(await preflightLibrary(root,'missing',['data.csv']),{available:false,reason:'missing'});
     assert.equal(existsSync(root),false);
     const library=await libraryDir(root,'bot');
     writeFileSync(join(library,'data.csv'),'real source');
     assert.deepEqual(await preflightLibrary(root,'bot',['data.csv']),{available:true});
-    assert.deepEqual(await preflightLibrary(root,'bot',['missing.csv']),{available:false});
-    assert.deepEqual(await preflightLibrary(root,'bot',['../outside.csv']),{available:false});
+    assert.deepEqual(await preflightLibrary(root,'bot',['missing.csv']),{available:false,reason:'missing'});
+    assert.deepEqual(await preflightLibrary(root,'bot',['../outside.csv']),{available:false,reason:'outside_library'});
     const outside=join(dir.path,'outside');mkdirSync(outside);writeFileSync(join(outside,'secret'),'secret');
     symlinkSync(outside,join(library,'escape'),process.platform==='win32'?'junction':'dir');
-    assert.deepEqual(await preflightLibrary(root,'bot',['escape/secret']),{available:false});
+    assert.deepEqual(await preflightLibrary(root,'bot',['escape/secret']),{available:false,reason:'outside_library'});
     assert.equal(readFileSync(join(library,'data.csv'),'utf8'),'real source');
   } finally {dir.cleanup();}
 });
