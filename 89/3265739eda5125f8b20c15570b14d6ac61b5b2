@@ -1,0 +1,51 @@
+desktop/apps/desktop/ui/main.tsx
+  s_134818216db99f::t_d5d406281eb1bc 3
+  s_134818216db99f::t_dfc3c74fc70820 14-15,46,97,173,236-237,317-326,332,334-335,340-344,346,361,364,371,385-386,415
+  s_134818216db99f::t_88de73ac19cf14 365-370
+desktop/apps/desktop/ui/theme.tsx
+  s_134818216db99f::t_dfc3c74fc70820 1-42
+desktop/scripts/build-icon.ts
+  s_134818216db99f::t_6df44ef1b78a00 19-23,26,29,42,59
+  s_134818216db99f::t_ca0304cfe1986e 14
+  s_134818216db99f::t_633ac12dfa37da 6,8-9,15-18,24-25,27-28,30-41,43-58
+desktop/apps/desktop/src/main.ts
+  s_134818216db99f::t_41a0ccbfec3531 6,9,105-106,126,131,137-142
+desktop/apps/desktop/ui/timeline.tsx
+  s_134818216db99f::t_dfc3c74fc70820 13,276,278
+  s_134818216db99f::t_d5d406281eb1bc 4
+desktop/apps/desktop/ui/call.tsx
+  s_134818216db99f::t_d5d406281eb1bc 2
+desktop/README.md
+  s_134818216db99f::t_087b473312c2a5 60-69,106
+desktop/apps/desktop/ui/bot-list-item.tsx
+  s_134818216db99f::t_d5d406281eb1bc 2
+desktop/apps/desktop/ui/style.css
+  s_134818216db99f::t_4595ac3ea9804d 1,3-25,33-55,65-66,69-70,72,76,79,83-84,91-95,147,154,156-157,165-166,169-170,174-175,177,182,186-187,191,195-196,199-202,205-206,222,226,230-231,255,282,285,288,291-362
+  s_134818216db99f::t_029e992d782bf8 96-97,101-102,105,107,110,112,118,121-122,125,128,133,138,140
+  s_134818216db99f::t_9c277116a0616f 167
+desktop/apps/desktop/ui/icons.tsx
+  s_134818216db99f::t_dfc3c74fc70820 1-17
+desktop/apps/desktop/ui/bot-avatar.tsx
+  s_134818216db99f::t_c42bde6193cc0e 1-16
+desktop/apps/desktop/ui/editor.tsx
+  s_134818216db99f::t_d5d406281eb1bc 28
+  s_134818216db99f::t_c42bde6193cc0e 2-3,11,32,57
+docs/screenshots/desktop-appearance/README.md
+  s_134818216db99f::t_087b473312c2a5 1-11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "893265739eda5125f8b20c15570b14d6ac61b5b2",
+  "prompts": {},
+  "sessions": {
+    "s_134818216db99f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a1f9-4a5d-75d3-9f98-e4feed521cdf",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
