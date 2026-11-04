@@ -276,15 +276,22 @@ export function libraryTools(sandbox: Sandbox, hooks: ToolHooks): ToolDefinition
 }
 
 /** Probe existing resources without mkdir, shell execution or outside-library access. */
-export async function preflightLibrary(root: string, slug: string, paths: string[]) {
-  if (!SLUG.test(slug) || paths.length > 20) return {available:false};
+export type PreflightResult = {available:true} | {available:false;reason:'outside_library'|'missing'|'unavailable'};
+export async function preflightLibrary(root: string, slug: string, paths: string[]): Promise<PreflightResult> {
+  if (!SLUG.test(slug) || paths.length > 20) return {available:false,reason:'unavailable'};
   try {
     const base = await realpath(root), folder = join(base,libraryFolder(slug));
-    if ((await lstat(folder)).isSymbolicLink()) return {available:false};
+    if ((await lstat(folder)).isSymbolicLink()) return {available:false,reason:'unavailable'};
     const library = await realpath(folder);
-    if (!inside(base,library)) return {available:false};
+    if (!inside(base,library)) return {available:false,reason:'unavailable'};
     const sandbox = new Sandbox(library);
-    for (const path of paths) await sandbox.resolve(path,{mustExist:true});
+    for (const path of paths) {
+      const file = await sandbox.resolve(path);
+      await lstat(file);
+    }
     return {available:true};
-  } catch { return {available:false}; }
+  } catch (error) {
+    if (error instanceof OutsideError) return {available:false,reason:'outside_library'};
+    return {available:false,reason:(error as NodeJS.ErrnoException).code === 'ENOENT' ? 'missing' : 'unavailable'};
+  }
 }
