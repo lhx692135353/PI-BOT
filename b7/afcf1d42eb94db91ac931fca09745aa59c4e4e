@@ -1,0 +1,137 @@
+ios/PiBotKit/Sources/PiBotKit/Face/BotEngine.swift
+  s_cdb728f5bb9fe1::t_fc56217569e360 1-243
+server/src/routes.ts
+  s_cdb728f5bb9fe1::t_caa916ae3a9f5d 451,475,501
+ios/PiBotKit/Tests/PiBotKitTests/FaceTests.swift
+  s_cdb728f5bb9fe1::t_d2a7e7cd2efb96 52
+  s_cdb728f5bb9fe1::t_e18f005ef706b4 1-51,53-118
+ios/PiBotKit/Package.swift
+  s_cdb728f5bb9fe1::t_0736fbca18fe9c 1-15
+ios/Config/Info.plist
+  s_cdb728f5bb9fe1::t_7df19b304c9e0a 1-17
+ios/PiBot/Login/LoginView.swift
+  s_cdb728f5bb9fe1::t_0277e543b72059 1-94
+server/src/voice.ts
+  s_cdb728f5bb9fe1::t_caa916ae3a9f5d 153
+ios/PiBot/Editor/BotEditorView.swift
+  s_cdb728f5bb9fe1::t_3227515c95f9e7 1-211
+ios/PiBot/Bots/BotListView.swift
+  s_cdb728f5bb9fe1::t_37ed7ddaeb8765 1-199
+ios/README.md
+  s_cdb728f5bb9fe1::t_bb3f28f9f347c6 19-26
+  s_cdb728f5bb9fe1::t_cd8666e1a52095 1-18,27-49
+ios/PiBot/Conversation/ChatImages.swift
+  s_cdb728f5bb9fe1::t_97c01fe3198a92 109-110
+  s_cdb728f5bb9fe1::t_4ad8cb39a7629a 1-108,111-128
+ios/PiBot/Voice/CallAudio.swift
+  s_cdb728f5bb9fe1::t_c34d050915b5b4 1-24,26-157
+  s_cdb728f5bb9fe1::t_56bab65d5fd00d 25
+ios/PiBot/Voice/VoiceCallController.swift
+  s_cdb728f5bb9fe1::t_fc5b1d7484ab82 1-48,50-201
+  s_cdb728f5bb9fe1::t_664f8dce49293f 49
+ios/PiBot/Conversation/ConversationView.swift
+  s_cdb728f5bb9fe1::t_71728f54d2a06c 1-20,23-201
+  s_cdb728f5bb9fe1::t_51fec7f6d75dec 21-22
+ios/PiBot/Files/FilesView.swift
+  s_cdb728f5bb9fe1::t_78f98ee79d5709 1-67,69-210
+  s_cdb728f5bb9fe1::t_758d3e06c65f76 68
+ios/PiBot/Conversation/A2UIView.swift
+  s_cdb728f5bb9fe1::t_fa71ae9851824d 84
+  s_cdb728f5bb9fe1::t_eb431de5d0db7a 120
+  s_cdb728f5bb9fe1::t_99d729f6aee0f4 1-83,85-119,121-160
+README.md
+  s_cdb728f5bb9fe1::t_ec0543bd9a5564 3,12,23-26,37,51,124-125,130,158-162
+  s_cdb728f5bb9fe1::t_08900dc8a589a5 163-164
+ios/PiBotKit/Sources/PiBotKit/JSONValue.swift
+  s_cdb728f5bb9fe1::t_65e4adf6fb665f 1-88
+ios/PiBot/Conversation/Composer.swift
+  s_cdb728f5bb9fe1::t_e05be9fcbd7d30 146
+  s_cdb728f5bb9fe1::t_22e04e3df8c3ba 1-145,147-173
+.gitignore
+  s_cdb728f5bb9fe1::t_9dd87f8e32e2a7 60
+  s_cdb728f5bb9fe1::t_ec0543bd9a5564 54-59
+ios/PiBot/Common/Theme.swift
+  s_cdb728f5bb9fe1::t_c262f095a9b9df 1-94,132-141
+  s_cdb728f5bb9fe1::t_43e43a51fb639c 95,97-103,105-131
+  s_cdb728f5bb9fe1::t_c93a825de81562 96,104
+  s_cdb728f5bb9fe1::t_5ef07d04e6c306 142
+ios/PiBot/Assets.xcassets/AppIcon.appiconset/Contents.json
+  s_cdb728f5bb9fe1::t_585d326163eec0 1-14
+ios/REQUIREMENTS.md
+  s_cdb728f5bb9fe1::t_d23e6ff21497c6 43-45
+  s_cdb728f5bb9fe1::t_574ae6dd3ebcdc 1-42
+ios/PiBot.xcodeproj/project.pbxproj
+  s_cdb728f5bb9fe1::t_c9812ad252040a 1-15,17-59,61-215,217-249,251-320
+  s_cdb728f5bb9fe1::t_abd924fde1ac34 16,60,216,250
+ios/PiBot/PiBotApp.swift
+  s_cdb728f5bb9fe1::t_8ebd7b025347fa 1-48
+ios/scripts/copy-shared-assets.sh
+  s_cdb728f5bb9fe1::t_d4b2baed68f946 1-27
+ios/PiBot/Assets.xcassets/AccentColor.colorset/Contents.json
+  s_cdb728f5bb9fe1::t_f19917762567e8 1-20
+ios/PiBot/Bots/SignedInView.swift
+  s_cdb728f5bb9fe1::t_4753409ac40340 1-82
+ios/PiBot/Conversation/TaskConversationSheet.swift
+  s_cdb728f5bb9fe1::t_0c44706e861e02 1-109
+ios/PiBotKit/Sources/PiBotKit/Models.swift
+  s_cdb728f5bb9fe1::t_77d8ecc775fbcd 1-629
+ios/PiBotKit/Sources/PiBotKit/Face/BotFaceView.swift
+  s_cdb728f5bb9fe1::t_31330c8ff7ba0c 1-271
+ios/PiBotKit/Tests/PiBotKitTests/StoreTests.swift
+  s_cdb728f5bb9fe1::t_c1bdd241768f0a 1-52,54-121,123-140,164-242
+  s_cdb728f5bb9fe1::t_ca6b97151f5a54 141-163
+  s_cdb728f5bb9fe1::t_9f4b8382afa7a7 53,122
+ios/PiBotKit/Sources/PiBotKit/Markdown.swift
+  s_cdb728f5bb9fe1::t_fe839272e225b6 1-206
+ios/PiBot.xcodeproj/xcshareddata/xcschemes/PiBot.xcscheme
+  s_cdb728f5bb9fe1::t_9f12555283f632 1-76
+.github/workflows/ios.yml
+  s_cdb728f5bb9fe1::t_fad4791813997e 1-37
+ios/PiBotKit/Sources/PiBotKit/ServerURL.swift
+  s_cdb728f5bb9fe1::t_dc0868e0c5cb2b 1-65
+ios/PiBot/Common/SelectableText.swift
+  s_cdb728f5bb9fe1::t_20e99b9713c774 16,48-53
+  s_cdb728f5bb9fe1::t_f701dfe10b66d3 1-12,18-19,31-47,54-57,59-112
+  s_cdb728f5bb9fe1::t_f030b430ab0dc6 58
+  s_cdb728f5bb9fe1::t_27fd05abc188e4 13-15,17,20-30
+ios/PiBot/Settings/SettingsView.swift
+  s_cdb728f5bb9fe1::t_a4aa17e0527aa5 1-202
+ios/PiBot/Assets.xcassets/Contents.json
+  s_cdb728f5bb9fe1::t_970ae5a716f6b8 1-6
+ios/PiBot/Conversation/MessageRow.swift
+  s_cdb728f5bb9fe1::t_9476910e33d593 1-197
+ios/PiBotKit/Sources/PiBotKit/AppStore.swift
+  s_cdb728f5bb9fe1::t_e61d4e029f79f3 1-460
+ios/PiBotKit/Sources/PiBotKit/Timeline.swift
+  s_cdb728f5bb9fe1::t_c76c00f92b1f8a 1-152
+server/openapi.json
+  s_cdb728f5bb9fe1::t_1774ca3767cb1a 2357-2358,2577,2789-2790
+ios/PiBotKit/Sources/PiBotKit/Face/BotSpec.swift
+  s_cdb728f5bb9fe1::t_dc794a0184ef4e 1-21,23,25-67,69-78
+  s_cdb728f5bb9fe1::t_e6e2aae42188a5 22,24,68
+ios/PiBotKit/Sources/PiBotKit/API.swift
+  s_cdb728f5bb9fe1::t_a8e27a331ac7c8 1-13,16-28,39-57,59-116,122-134,140-219,222-230
+  s_cdb728f5bb9fe1::t_5cf3da60124a1f 14-15,29-38,58,117-121,135-139,220-221
+ios/PiBotKit/Tests/PiBotKitTests/DomainTests.swift
+  s_cdb728f5bb9fe1::t_4bbac624a64a3e 1-157
+ios/PiBotKit/Sources/PiBotKit/Session.swift
+  s_cdb728f5bb9fe1::t_654013b2319a58 1-66
+ios/Config/PiBot.xcconfig
+  s_cdb728f5bb9fe1::t_0be5e9c6aebc5f 1-6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b7afcf1d42eb94db91ac931fca09745aa59c4e4e",
+  "prompts": {},
+  "sessions": {
+    "s_cdb728f5bb9fe1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "41eece4d-550b-4526-99fe-0e4df59fbdfe",
+        "model": "default"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
