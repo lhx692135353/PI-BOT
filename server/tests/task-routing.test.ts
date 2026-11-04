@@ -18,7 +18,7 @@ test('task routing uses machines as per-task resources, never Bot identity', {sk
   t.after(()=>db.close());
   await migrate(db);
   const user=randomUUID(), otherUser=randomUUID(), a=randomUUID(), b=randomUUID(), c=randomUUID();
-  const s=settings({PI_BOT_DATABASE_URL:TEST_DB,PI_BOT_JWT_SECRET:'j'.repeat(40),PI_BOT_ADMIN_PASSWORD:'test-password',PI_BOT_RUNNER_TOKEN:'r'.repeat(40)});
+  const s=settings({PI_BOT_DATABASE_URL:TEST_DB,PI_BOT_JWT_SECRET:'j'.repeat(40),PI_BOT_ADMIN_PASSWORD:'test-password',PI_BOT_RUNNER_TOKEN:'r'.repeat(40),PI_BOT_REMOTE_BACKEND:'none'});
   const sent: {device:string;message:any}[]=[];
   const connect=(id:string,capabilities=['files','shell','always-on-v1','preflight-v1'],available=true,reason?:string):DeviceConnection=>{
     const connection:DeviceConnection={deviceId:id,userId:user,capabilities,close(){},send(message){
@@ -214,7 +214,7 @@ test('cloud worker finalizes queued routing through authenticated API; file read
   const {createApp}=await import('../src/app.js');
   const {tempDir,vaultFile}=await import('./helpers.js');
   await resetDatabase(TEST_DB!);const dir=tempDir(),db=new Database(TEST_DB!),hub=new Hub();
-  const s=settings({PI_BOT_DATABASE_URL:TEST_DB,PI_BOT_JWT_SECRET:'j'.repeat(40),PI_BOT_ADMIN_PASSWORD:'test-password',PI_BOT_RUNNER_TOKEN:'r'.repeat(40),PI_BOT_VAULT_FILE:vaultFile(dir.path)});
+  const s=settings({PI_BOT_DATABASE_URL:TEST_DB,PI_BOT_JWT_SECRET:'j'.repeat(40),PI_BOT_ADMIN_PASSWORD:'test-password',PI_BOT_RUNNER_TOKEN:'r'.repeat(40),PI_BOT_VAULT_FILE:vaultFile(dir.path),PI_BOT_REMOTE_BACKEND:'none'});
   const app=await createApp(s,db,hub);t.after(async()=>{await app.close();dir.cleanup();});
   const login=(await app.inject({method:'POST',url:'/auth/login',payload:{username:'admin',password:'test-password'}})).json(),user=login.user.id;
   const api=async(method:'GET'|'POST'|'PATCH',url:string,payload?:any)=>app.inject({method,url,payload,headers:{authorization:'Bearer '+login.access_token}});

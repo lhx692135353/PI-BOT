@@ -9,7 +9,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import androidx.core.content.ContextCompat
-import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioRecord
@@ -129,8 +128,8 @@ class VoiceCallService : Service() {
         try {
             audioRoute?.start()
         } catch (error: Exception) {
-            Log.w("PiBotVoice", "Unable to select speakerphone", error)
-            fail("无法开启免提，请重试")
+            Log.w("PiBotVoice", "Unable to take audio focus", error)
+            fail("无法开启外放，请重试")
             return false
         }
         try {
@@ -141,7 +140,7 @@ class VoiceCallService : Service() {
             recorder = record
             if (record.state != AudioRecord.STATE_INITIALIZED) { fail("无法打开麦克风"); return false }
             val track = AudioTrack.Builder()
-                .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
+                .setAudioAttributes(CALL_PLAYBACK_ATTRIBUTES)
                 .setAudioFormat(AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_16BIT).setSampleRate(RATE).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
                 .setBufferSizeInBytes(maxOf(minOut, 3200))
                 .setTransferMode(AudioTrack.MODE_STREAM)

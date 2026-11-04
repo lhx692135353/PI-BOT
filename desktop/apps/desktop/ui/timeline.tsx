@@ -256,7 +256,6 @@ export function Timeline({ bot, messages, hasMore, mood, online, onLoadMore, onS
                   action={async input => { const result=await call<{messages:Message[]}>('uiAction',{botId:bot.id,messageId:m.id,...input}); onSent({messages:result.messages,has_more:hasMore}); }} />}
                 <span className="meta">
                   {!m.reply_segments?.length && time(m.created_at)}
-                  {m.executor === 'cloud' && <span className="tag" title="电脑离线时在云端运行，只能对话和联网搜索">云端</span>}
                   {m.status === 'failed' && <span className="tag bad">{run?.assistant_message_id === m.id && run.error ? run.error : '运行失败'}</span>}
                   {m.status === 'cancelled' && <span className="tag">已停止</span>}
                 </span>

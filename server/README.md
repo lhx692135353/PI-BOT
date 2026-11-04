@@ -96,6 +96,6 @@ PI_BOT_TEST_DATABASE_URL=postgresql://pibot:pibot@127.0.0.1:5432/pibot npm test
 
 ## 云端机器操作
 
-默认关闭。`PI_BOT_REMOTE_BACKEND=ssh` 时，在用户后台配置每用户唯一的 SSH 虚机；`kubevirt` 时按照启动配置自动创建并复用每用户一台 VM。首版支持 Ubuntu 24.04 LTS amd64，包含文件／命令、浏览器、截图、桌面控制及人工接管。凭据保存在 API，Runner 通过当前任务授权调用。
+默认 `PI_BOT_REMOTE_BACKEND=local`：没有可用电脑时，任务直接在服务端 API 所在主机执行（Docker／Kubernetes 部署时即 API 容器内部），资料库位于 `PI_BOT_LOCAL_WORK_ROOT`（默认 `~/.pi-bot-server/workspaces`，容器示例为 `/data/workspaces` 卷），只提供文件与命令工具，没有浏览器和桌面。命令以 API 进程的系统用户运行，不继承 API 的环境变量；多用户部署请按需隔离或改用下面的虚机后端，设为 `none` 可关闭。`PI_BOT_REMOTE_BACKEND=ssh` 时，在用户后台配置每用户唯一的 SSH 虚机；`kubevirt` 时按照启动配置自动创建并复用每用户一台 VM。首版支持 Ubuntu 24.04 LTS amd64，包含文件／命令、浏览器、截图、桌面控制及人工接管。凭据保存在 API，Runner 通过当前任务授权调用。
 
 部署前请阅读 [云端环境部署与验收](deploy/remote/README.md)，包含 SSH 安装示例、KubeVirt 标准镜像构建、RBAC／VM 模板、启动配置及测试清单。API、Worker、Runner 和两端客户端需同步升级；文件不在电脑和云端之间自动同步。

@@ -102,7 +102,7 @@ struct MessageRow: View {
         let note: String? = switch message.status {
         case "failed": "失败"
         case "cancelled": "已停止"
-        default: !user && message.executor == "cloud" ? "云端" : nil
+        default: nil
         }
         if message.replySegments.isEmpty || note != nil {
             let time = message.replySegments.isEmpty ? dayLabel(message.createdAt) + " " + clockTime(message.createdAt) : nil

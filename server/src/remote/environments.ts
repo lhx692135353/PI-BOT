@@ -25,6 +25,24 @@ export async function ensureEnvironment(tx: Tx, s: Settings, userId: string) {
   );
   if (env && env.backend !== s.remoteBackend)
     fail(409, "执行后端已变化，请管理员处理原环境后重新配置");
+  if (s.remoteBackend === "local") {
+    if (!env)
+      return tx.insert("remote_environments", {
+        environment_id: randomUUID(),
+        user_id: userId,
+        backend: "local",
+        config: { work_root: s.localWorkRoot },
+        secret: {},
+        status: "preparing",
+      });
+    if (env.config?.work_root !== s.localWorkRoot)
+      env = await tx.update("remote_environments", env.environment_id, {
+        config: { ...env.config, work_root: s.localWorkRoot },
+        status: "preparing",
+        updated_at: new Date(),
+      });
+    return env;
+  }
   if (!env) {
     if (s.remoteBackend === "ssh") fail(422, "请管理员先为此用户配置 SSH 环境");
     const id = randomUUID();

@@ -23,6 +23,7 @@ const requestSchema = z.object({
   run: z.object({
     run_id: z.string().uuid(),
     operation_target:z.string().default("legacy"),
+    remote_capabilities:z.array(z.string().max(40)).max(20).optional(),
     memory_context:z.string().max(50000).optional(),
     task_id:z.string().uuid().optional(),checkpoint_version:z.number().int().min(0).optional(),
     observation_enabled:z.boolean().default(false),
@@ -132,7 +133,7 @@ export async function createRunner(options: { token: string; dir: string; factor
         ...(p.run.lane !== "conversation" && p.run.search_enabled ? [webSearchTool(api, () => p.token)] : []),
         ...(p.run.agents_enabled ? [askAgentTool(api, () => p.token, p.run.run_id, { conversation: p.run.lane === "conversation" })] : []),
       ];
-      if(p.run.lane === "task" && p.run.operation_target.startsWith("remote:")) tools.push(...remoteTools(api,()=>p.token,p.run.run_id));
+      if(p.run.lane === "task" && p.run.operation_target.startsWith("remote:")) tools.push(...remoteTools(api,()=>p.token,p.run.run_id,p.run.remote_capabilities));
       if(p.run.automation) tools.push(...automationTools(api,()=>p.token,p.run.run_id,true));
       tools.push(...reportTools(api, () => p.token, p.run.run_id, p.run.lane === "task" && !p.run.automation));
       tools.push(...a2uiTools(messages => { emit({ type: "ui", messages }); }));

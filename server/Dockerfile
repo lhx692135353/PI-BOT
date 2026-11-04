@@ -19,7 +19,7 @@ COPY --from=build /app/server/migrations ./server/migrations
 COPY --from=build /app/server/scripts/wait.mjs ./server/scripts/wait.mjs
 COPY --from=build /app/server/package.json ./server/package.json
 COPY --from=build /app/admin/dist ./admin/dist
-RUN mkdir -p /data && chown node:node /data
+RUN mkdir -p /data/workspaces && chown -R node:node /data
 USER node
 EXPOSE 8000
 CMD ["node", "server/dist/main.mjs"]

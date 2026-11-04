@@ -5,6 +5,8 @@ export function remoteTools(
   base: string,
   token: () => string,
   runId: string,
+  /** Environment capabilities; GUI tools are omitted when the machine has no browser or desktop. */
+  capabilities?: string[],
 ): ToolDefinition[] {
   const str = () => Type.String({ maxLength: 2000 }),
     opt = (t: any) => Type.Optional(t);
@@ -39,7 +41,7 @@ export function remoteTools(
     ],
     [
       "run_command",
-      "在本任务固定的云端 Linux 虚机执行 bash 命令，无法操作用户电脑；取消或断线后的未知结果必须先核实",
+      "在本任务固定的服务端执行环境（云端虚机或服务端主机）执行 bash 命令，无法操作用户电脑；取消或断线后的未知结果必须先核实",
       Type.Object({
         command: Type.String({ minLength: 1, maxLength: 20000 }),
         cwd: opt(str()),
@@ -114,7 +116,8 @@ export function remoteTools(
       }),
     ],
   ];
-  return definitions.map(
+  const needs: Record<string, string> = { browser: "browser", desktop_screenshot: "desktop", desktop_input: "desktop" };
+  return definitions.filter(([name]) => !capabilities || !needs[name] || capabilities.includes(needs[name])).map(
     ([name, description, parameters]) =>
       ({
         name,

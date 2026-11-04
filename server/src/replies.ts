@@ -8,6 +8,13 @@ export const replySchema = z.object({
   text: z.string().min(1).max(12000).refine(text => !!text.trim()), generated_at: z.string().datetime(), elapsed_ms: z.number().min(0).max(86400000).optional(),
 });
 
+/** Clients render only segments once any exist, so earlier plain progress remarks must become segments too. */
+export function withRemarks(segments: ReplySegment[], progress: string[], at: string): ReplySegment[] {
+  const known = new Set(segments.map(r => r.text));
+  const missing = progress.flatMap((text, i) => known.has(text) ? [] : [{ id: `progress:${i}`, phase: "update" as const, text, generated_at: at, created_at: at }]);
+  return [...segments, ...missing];
+}
+
 export async function recordReply(tx: Tx, run: Row, input: ReplyEvent, final = false) {
   const reply = (final ? replySchema.extend({ text: z.string().min(1).max(400000).refine(text => !!text.trim()) }) : replySchema).parse(input);
   // Quiet goal reviews never publish, even if an outdated/misbehaving executor asks.
@@ -18,10 +25,10 @@ export async function recordReply(tx: Tx, run: Row, input: ReplyEvent, final = f
   run = current;
   const m = await tx.one("SELECT * FROM bot_messages WHERE message_id=$1 FOR UPDATE", [run.assistant_message_id]);
   if (!m || m.status !== "running") return;
-  const segments: ReplySegment[] = m.reply_segments ?? [];
-  if (segments.some(r => r.id === reply.id)) return;
-  const segment = { ...reply, created_at: new Date().toISOString() };
-  segments.push(segment);
+  if ((m.reply_segments ?? []).some((r: ReplySegment) => r.id === reply.id)) return;
+  const now = new Date().toISOString();
+  const segments = withRemarks(m.reply_segments ?? [], m.progress ?? [], now);
+  segments.push({ ...reply, created_at: now });
   const progress = [...new Set([...(m.progress ?? []), ...segments.filter(r => r.phase !== "answer").map(r => r.text)])];
   await tx.rows("UPDATE bot_messages SET reply_segments=$2,progress=$3,content=$4,updated_at=now() WHERE message_id=$1",
     [m.message_id, JSON.stringify(segments), JSON.stringify(progress), replyAnswer(segments)]);

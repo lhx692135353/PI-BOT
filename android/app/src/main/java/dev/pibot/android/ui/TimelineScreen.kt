@@ -412,7 +412,7 @@ private fun MessageItem(message: Message, onOpenBot: (String) -> Unit, repositor
                 val note = when (message.status) {
                     "failed" -> "失败"
                     "cancelled" -> "已停止"
-                    else -> if (!user && message.executor == "cloud") "云端" else null
+                    else -> null
                 }
                 if (message.replySegments.isEmpty() || note != null) Text(listOfNotNull((dayLabel(message.createdAt) + " " + clockTime(message.createdAt)).takeIf { message.replySegments.isEmpty() }, note).joinToString(" · "), fontSize = 11.sp, color = if (message.status == "failed") Danger else Muted)
             }

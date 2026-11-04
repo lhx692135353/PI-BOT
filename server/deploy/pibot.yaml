@@ -31,7 +31,9 @@ stringData:
   PI_BOT_TAVILY_API_KEY: ""
   # Enable in this shared Secret after configuring the Worker-only pibot-langfuse Secret.
   LANGFUSE_TRACING_ENABLED: "false"
-  PI_BOT_REMOTE_BACKEND: none
+  # local: tasks run inside the API container (workspace below); none disables machine tasks without a computer.
+  PI_BOT_REMOTE_BACKEND: local
+  PI_BOT_LOCAL_WORK_ROOT: /data/workspaces
   # KubeVirt: mount a projected service account token and CA in the API pod.
   # PI_BOT_K8S_SERVER: https://kubernetes.default.svc
   # PI_BOT_K8S_TOKEN_FILE: /var/run/secrets/kubernetes.io/serviceaccount/token
@@ -154,6 +156,14 @@ spec:
           resources:
             limits: { cpu: "500m", memory: 512Mi }
             requests: { cpu: "100m", memory: 128Mi }
+        # hostPath is created as root; the API runs as the image's node user.
+        - name: workspaces-owner
+          image: registry.cn-beijing.aliyuncs.com/liuhx/pi-bot-server:latest
+          imagePullPolicy: Always
+          command: ["chown", "node:node", "/data/workspaces"]
+          securityContext: { runAsUser: 0 }
+          volumeMounts:
+            - { name: workspaces, mountPath: /data/workspaces }
       containers:
         - name: pibot
           image: registry.cn-beijing.aliyuncs.com/liuhx/pi-bot-server:latest
@@ -185,10 +195,15 @@ spec:
             requests: { cpu: "500m", memory: 512Mi }
           volumeMounts:
             - { name: vault, mountPath: /run/secrets/pibot, readOnly: true }
+            - { name: workspaces, mountPath: /data/workspaces }
       volumes:
         - name: vault
           secret:
             secretName: pibot-vault
+        - name: workspaces
+          hostPath:
+            path: /data/pibot-workspaces
+            type: DirectoryOrCreate
 ---
 apiVersion: apps/v1
 kind: Deployment

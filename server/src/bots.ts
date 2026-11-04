@@ -1,7 +1,7 @@
 import { messageAttachments } from "./reports.js";
 import { CONTEXT_DEFAULTS, toolDescriptor, internalTool, type AppError, type ModelCapabilities, ACTIVE_RUN_STATES } from "@pi-bot/runtime-contracts";
 import { replyAnswer, type ReplySegment } from "@pi-bot/agent";
-import { recordReply } from "./replies.js";
+import { recordReply, withRemarks } from "./replies.js";
 import { taskMessage } from "./task-conversation.js";
 import {targetPrompt} from "./targets.js";
 import { enqueueMessage } from "./push.js";
@@ -415,6 +415,7 @@ export interface RunContext {
   run_id: string;
   executor: "device" | "cloud";
   operation_target?:string;
+  remote_capabilities?: string[];
   bot: { id: string; name: string; slug: string };
   model: { id: string; name: string; context_window: number; max_tokens: number; capabilities?: Partial<ModelCapabilities> };
   system: string;
@@ -482,7 +483,7 @@ export function systemPrompt(
   bot: Row,
   memory: string,
   executor: "device" | "cloud",
-  options: { search?: boolean; providerSearch?: "xai" | "bailian"; now?: Date; agents?: Collaborator[]; depth?: number; lane?: "conversation" | "task"; remote?:boolean; quiet?:boolean } = {},
+  options: { search?: boolean; providerSearch?: "xai" | "bailian"; now?: Date; agents?: Collaborator[]; depth?: number; lane?: "conversation" | "task"; remote?:boolean | { backend: string; root: string }; quiet?:boolean } = {},
 ) {
   const now = options.now ?? new Date();
   const date = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
@@ -492,8 +493,10 @@ export function systemPrompt(
   if (bot.persona.trim()) parts.push(`你的人设与职责：\n${bot.persona.trim()}`);
   if (memory.trim()) parts.push(`你对之前对话的长期记忆（摘要）：\n${memory.trim()}`);
   parts.push(
-    options.remote
-      ? `执行环境：本轮在云端 Linux 虚机工作，文件与 shell 工具操作虚机。资料库是 /home/pibot/workspaces/${bot.slug}；界面操作前读取当前状态，人工接管时停止界面操作。`
+    typeof options.remote === "object" && options.remote.backend === "local"
+      ? `执行环境：本轮在服务端主机上工作（服务端运行在容器中时即容器内部环境），文件与 shell 工具直接操作这台主机。资料库是 ${options.remote.root}/${bot.slug}；没有浏览器和桌面工具。`
+      : options.remote
+      ? `执行环境：本轮在云端 Linux 虚机工作，文件与 shell 工具操作虚机。资料库是 ${typeof options.remote === "object" ? options.remote.root : "/home/pibot/workspaces"}/${bot.slug}；界面操作前读取当前状态，人工接管时停止界面操作。`
       : executor === "device"
       ? [
           "执行环境：你在用户的电脑上工作。",
@@ -578,7 +581,9 @@ export async function buildContext(
   const stateContext=run.lane === "task" && taskRecord ? boundedText(JSON.stringify({task_id:taskRecord.task_id,checkpoint_version:taskRecord.checkpoint_version,checkpoint:taskRecord.checkpoint}),CONTEXT_DEFAULTS.stateTokens) : "";
   const memoryContext=privateContext+(stateContext?"\n当前任务状态："+stateContext+(checkpointText.length>stateContext.length?"\n[检查点已截断，需要时用 task_status 读取完整版本]":""):"");
   const automation = await automationForRun(tx, run);
-  let system=systemPrompt(bot,summary,run.executor,{search,providerSearch,agents,depth,lane:run.lane,remote:run.lane === "task" && run.operation_target?.startsWith("remote:"),quiet:run.origin === "automation"});
+  const remoteEnv = run.lane === "task" && run.operation_target?.startsWith("remote:") ? await tx.one("SELECT backend,config,capabilities FROM remote_environments WHERE environment_id=$1",[run.operation_target.slice(7)]) : undefined;
+  const remote = remoteEnv ? { backend: remoteEnv.backend, root: remoteEnv.config?.work_root || "/home/pibot/workspaces" } : run.lane === "task" && run.operation_target?.startsWith("remote:");
+  let system=systemPrompt(bot,summary,run.executor,{search,providerSearch,agents,depth,lane:run.lane,remote,quiet:run.origin === "automation"});
   system += "\n"+await targetPrompt(tx,s,undefined,run.user_id,run.operation_target,run.source_client);
   if (run.lane === "conversation") system += "\n目标：用户在追求一件会持续一段时间的事时，你自己用 goal_manage 记下，不要等用户说「建立目标」。记录目标说明和已经允许做的范围。不要用一次性 start_task 代替。查询、修改、暂停、恢复、完成和停止也使用该工具。全部操作仅在用户明确要求全部时使用 all=true。建立前先查询，避免重复。目标检查沿用保存的调度策略，每轮开始前独立选择机器；已有文件和检查点必须保留真实来源，不自动重放未知操作。";
   if (automation) system += `\n你正在检查自己的目标，当前时间 ${new Date().toISOString()}。发现资料、记忆或未完成工作里有明确且尚未完成的事时，可以用 goal_manage 新建一个目标，本轮最多一个；没有新的授权时 authorization 写「在自己的资料库内推进」。先查询，避免重复。不要修改、暂停或停止已有目标。结束前必须调用 goal_finish，为当时每一个进行中目标提交状态，包括本轮新建的，然后结束。不要只用普通文字结束。没有新进展时 notify=false。只有可交付成果、重要变化或需要用户决定才 notify=true，并提供稳定的 notification_key；同一目标同一状态不得换 key。需要用户决定时 state=waiting_user。不要把工作交给其他智能体。只推进该目标授权范围内、且有明确下一步的事项。先核实检查点和操作结果，未知副作用不可重放。检查点版本：${automation.checkpoint_version}`;
@@ -622,6 +627,7 @@ export async function buildContext(
     run_id: run.run_id,
     executor: run.executor,
     operation_target:run.operation_target,
+    remote_capabilities: remoteEnv?.capabilities,
     bot: { id: bot.bot_id, name: bot.name, slug: bot.slug },
     model: {
       id: model.model_id,
@@ -681,7 +687,8 @@ export async function setProgress(tx: Tx, run: Row, lines: string[]) {
   const m = await tx.one("SELECT * FROM bot_messages WHERE message_id=$1 FOR UPDATE", [run.assistant_message_id]);
   if (!m || m.status !== "running") return;
   const combined = [...new Set([...(m.progress ?? []), ...progress])];
-  await tx.rows("UPDATE bot_messages SET progress=$2,content=$3,updated_at=now() WHERE message_id=$1", [m.message_id, JSON.stringify(combined), replyAnswer(m.reply_segments ?? [])]);
+  const segments: ReplySegment[] = m.reply_segments?.length ? withRemarks(m.reply_segments, combined, new Date().toISOString()) : [];
+  await tx.rows("UPDATE bot_messages SET progress=$2,content=$3,reply_segments=$4,updated_at=now() WHERE message_id=$1", [m.message_id, JSON.stringify(combined), replyAnswer(segments), JSON.stringify(segments)]);
   if (run.lane === "task" && run.task_id) {
     const task = await tx.get("agent_tasks", run.task_id);
     for (const [i, line] of progress.entries()) await taskMessage(tx, task, `progress:${run.run_id}:${i}`, "update", line);

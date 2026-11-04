@@ -176,7 +176,7 @@ async function fileSources(ctx: Context) {
   const devices = await ctx.db.tx(tx => deviceList(tx,ctx.hub,ctx.user.user_id));
   const env = await ctx.db.tx(tx => tx.one("SELECT * FROM remote_environments WHERE user_id=$1 AND status<>'retired'",[ctx.user.user_id]));
   const sources = devices.filter(d => !d.revoked_at).map(d => ({target:"device:"+d.id,label:d.label,online:d.online}));
-  if (env && env.backend === ctx.s.remoteBackend) sources.push({target:"remote:"+env.environment_id,label:"云端",online:env.status === "ready"});
+  if (env && env.backend === ctx.s.remoteBackend) sources.push({target:"remote:"+env.environment_id,label:env.backend === "local" ? "服务器" : "云端",online:env.status === "ready"});
   return {sources};
 }
 async function deviceFiles(ctx: Context, method: "list" | "read") {
