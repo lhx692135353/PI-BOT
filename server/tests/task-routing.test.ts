@@ -20,10 +20,10 @@ test('task routing uses machines as per-task resources, never Bot identity', {sk
   const user=randomUUID(), otherUser=randomUUID(), a=randomUUID(), b=randomUUID(), c=randomUUID();
   const s=settings({PI_BOT_DATABASE_URL:TEST_DB,PI_BOT_JWT_SECRET:'j'.repeat(40),PI_BOT_ADMIN_PASSWORD:'test-password',PI_BOT_RUNNER_TOKEN:'r'.repeat(40)});
   const sent: {device:string;message:any}[]=[];
-  const connect=(id:string,capabilities=['files','shell','always-on-v1','preflight-v1'],available=true):DeviceConnection=>{
+  const connect=(id:string,capabilities=['files','shell','always-on-v1','preflight-v1'],available=true,reason?:string):DeviceConnection=>{
     const connection:DeviceConnection={deviceId:id,userId:user,capabilities,close(){},send(message){
       sent.push({device:id,message});
-      if(message.type==='rpc') queueMicrotask(()=>hub.resolveRpc(id,{id:message.id,ok:true,result:{available}}));
+      if(message.type==='rpc') queueMicrotask(()=>hub.resolveRpc(id,{id:message.id,ok:true,result:{available,reason}}));
     }};
     hub.attach(connection);return connection;
   };
@@ -65,9 +65,25 @@ test('task routing uses machines as per-task resources, never Bot identity', {sk
   });
   await t.test('explicit unavailable computer fails and does not contact another machine',async()=>{
     hub.detach(ca);sent.length=0;
-    await assert.rejects(db.tx(tx=>createTask(tx,hub,user,claims,{run_id:parent.run_id,kind:'background',task:'explicit',wait:false,execution:'device',device_id:a},s)),/指定电脑离线/);
+    await assert.rejects(db.tx(tx=>createTask(tx,hub,user,claims,{run_id:parent.run_id,kind:'background',task:'explicit',wait:false,execution:'device',device_id:a},s)),/电脑已离线/);
     assert.equal(sent.filter(x=>x.message.type==='run').length,0);
     assert.equal((await db.tx(tx=>resolveTaskTarget(tx,s,hub,user,bot.slug,route()))).device_id,b);
+    ca=connect(a);
+  });
+  await t.test('an online device reports missing capabilities and inaccessible resources without claiming it is offline',async()=>{
+    ca=connect(a,['files']);
+    await assert.rejects(db.tx(tx=>resolveTaskTarget(tx,s,hub,user,bot.slug,{...route('device'),device_id:a})),error=>{
+      assert.match((error as Error).message,/电脑已连接.*shell/);assert.doesNotMatch((error as Error).message,/离线/);return true;
+    });
+    ca=connect(a,undefined,false,'outside_library');
+    const resources=[{target:'device:'+a,path:'/outside/project'}];
+    await assert.rejects(db.tx(tx=>resolveTaskTarget(tx,s,hub,user,bot.slug,{...route('device'),device_id:a,resources})),/电脑已连接.*request_outside_access/);
+    await assert.rejects(db.tx(tx=>resolveTaskTarget(tx,s,hub,user,bot.slug,{...route(),resources})),/电脑已连接.*request_outside_access/);
+    assert.equal((await db.tx(tx=>resolveTaskTarget(tx,s,hub,user,bot.slug,{...route('device'),device_id:a,resources:[{target:'device:'+a}]}))).device_id,a,'a task may request permission on the same device without pre-reading outside resources');
+    ca=connect(a,undefined,false,'missing');
+    await assert.rejects(db.tx(tx=>resolveTaskTarget(tx,s,hub,user,bot.slug,{...route('device'),device_id:a,resources})),/电脑已连接.*不存在.*不要省略/);
+    ca=connect(a,undefined,false);
+    await assert.rejects(db.tx(tx=>resolveTaskTarget(tx,s,hub,user,bot.slug,{...route('device'),device_id:a,resources})),/电脑已连接.*路径检查未通过/,'old clients without a reason remain supported');
     ca=connect(a);
   });
   await t.test('other computers use load then stable device ID; cloud text avoids machines',async()=>{
