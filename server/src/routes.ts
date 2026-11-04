@@ -448,7 +448,7 @@ export const routes: Route[] = [
   },
   {
     method: "POST", path: "/bots/:id/voice/ticket", auth: "actor", tag: "bots", summary: "签发一分钟语音通话票据，桌面端用它连接 /ws/voice",
-    body:z.object({client:z.enum(["desktop","android"]).optional()}),
+    body:z.object({client:z.enum(["desktop","android","ios"]).optional()}),
     handler: async ({ tx, s, user, device, params, body }) => {
       const bot = await ownBot(tx, user.user_id, params.id);
       return { ticket: await issueVoiceTicket(user.user_id, bot.bot_id, s,{client:device?"desktop":body.client??"legacy",deviceId:device?.device_id}), expires_in: 60 };
@@ -472,7 +472,7 @@ export const routes: Route[] = [
   },
   {
     method: "POST", path: "/bots/:id/messages", auth: "actor", tag: "bots", summary: "给 Bot 发消息；由云端统一处理对话与任务调度",
-    body: z.object({ text: z.string().trim().max(100000).default(''), images: imagesSchema.default([]), request_id: z.string().min(8).max(80), client:z.enum(['android','desktop']).optional() }).refine(body => body.text.length > 0 || body.images.length > 0, '请填写消息或选择图片'),
+    body: z.object({ text: z.string().trim().max(100000).default(''), images: imagesSchema.default([]), request_id: z.string().min(8).max(80), client:z.enum(['android','ios','desktop']).optional() }).refine(body => body.text.length > 0 || body.images.length > 0, '请填写消息或选择图片'),
     handler: async ({ db, tx, s, hub, user, device, params, body, after }) => {
       await ownBot(tx,user.user_id,params.id,true);
       const { run, created } = await postMessage(tx, user.user_id, params.id, body.text, body.request_id, null, body.images, {client:device?"desktop":body.client??"legacy",deviceId:device?.device_id});
@@ -498,7 +498,7 @@ export const routes: Route[] = [
   },
   {
     method:"POST",path:"/bots/:id/messages/:messageId/ui-actions",auth:"actor",tag:"bots",summary:"提交界面操作并启动下一次 Bot 任务",
-    body:z.object({client:z.enum(["desktop","android"]).optional(),revision:z.number().int().positive(),request_id:z.string().uuid(),states:z.array(z.object({surfaceId:z.string().min(1).max(80),data:z.record(z.string(),z.unknown())})).max(4),action:z.object({name:z.string().min(1).max(80),surfaceId:z.string().min(1).max(80),sourceComponentId:z.string().min(1).max(80),context:z.record(z.string(),z.unknown())})}),
+    body:z.object({client:z.enum(["desktop","android","ios"]).optional(),revision:z.number().int().positive(),request_id:z.string().uuid(),states:z.array(z.object({surfaceId:z.string().min(1).max(80),data:z.record(z.string(),z.unknown())})).max(4),action:z.object({name:z.string().min(1).max(80),surfaceId:z.string().min(1).max(80),sourceComponentId:z.string().min(1).max(80),context:z.record(z.string(),z.unknown())})}),
     handler:async({db,tx,s,hub,user,device,params,body,after})=>{
       await ownBot(tx,user.user_id,params.id,true);
       const {run,created}=await submitUiAction(tx,user.user_id,params.id,params.messageId,body,null,{client:device?"desktop":body.client??"legacy",deviceId:device?.device_id});

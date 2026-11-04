@@ -150,7 +150,7 @@ export class VoiceHub implements VoiceAnnouncer {
     if (!token || !botId) throw new HttpError(401, "需要认证");
     const u = await this.db.tx((tx) => user(tx, { authorization: `Bearer ${token}` }, this.s));
     await this.db.tx((tx) => ownBot(tx, u.user_id, botId));
-    return { userId: String(u.user_id), botId, callId,client:url.searchParams.get("client")==="android"?"android":"legacy" };
+    return { userId: String(u.user_id), botId, callId,client:["android","ios"].find(c=>c===url.searchParams.get("client"))??"legacy" };
   }
   private async start(ws: WebSocket, userId: string, botId: string,client="legacy",deviceId?:string) {
     const opened = await this.db.tx(async (tx) => {

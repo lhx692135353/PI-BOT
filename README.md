@@ -1,6 +1,6 @@
 # Pi Bot
 
-一个可以自托管的个人 Bot 平台：每个 Bot 有独立的人设、角色形象、长期记忆和连续时间线。Mac 或 Linux 为 Bot 提供工作电脑，Android 用于随时聊天、查看结果与处理审批。
+一个可以自托管的个人 Bot 平台：每个 Bot 有独立的人设、角色形象、长期记忆和连续时间线。Mac 或 Linux 为 Bot 提供工作电脑，Android 与 iOS（iPhone / iPad）用于随时聊天、查看结果与处理审批。
 
 项目采用 [Apache License 2.0](LICENSE)。目前由 [@lhx692135353](https://github.com/lhx692135353) 个人维护，欢迎通过 Issue 和 Pull Request 参与。
 
@@ -9,7 +9,7 @@
 - **多 Bot 与长期记忆**：为不同任务设置人设、模型和角色形象，沿同一条时间线持续协作。
 - **Mac / Linux 工作电脑**：在 `~/pi-bot/<slug>/` 中读写文件、执行命令；访问资料库外路径需要审批。
 - **手机协作**：聊天、查看任务进展、批准请求，按文件来源浏览各机器的资料库。
-- **图片聊天**：Mac、Linux 和 Android 可上传、预览和发送图片，也可只发图片；支持 JPEG、PNG、WebP、GIF，每条最多 4 张，单张 2 MB、合计 4 MB。图片理解需要配置支持视觉输入的模型。
+- **图片聊天**：Mac、Linux、Android 和 iOS 可上传、预览和发送图片，也可只发图片；支持 JPEG、PNG、WebP、GIF，每条最多 4 张，单张 2 MB、合计 4 MB。图片理解需要配置支持视觉输入的模型。
 - **后台任务与目标**：对话过程中安排后台任务；每个智能体可以有自己的目标，由云端定期调度可用机器对照现状并推进，有新进展才发到聊天里。
 - **A2UI 交互工具**：在对话里展示表单、计算器、图表和表格，提交后继续任务。
 - **服务端统一配置模型**：管理员配置支持 Responses API 的模型和 API Key；客户端经服务端代理调用。
@@ -20,10 +20,10 @@
 ## 组成
 
 ```text
-Mac / Linux / Android ── API + 管理后台 ── PostgreSQL
-                     │
-                     ├── 模型服务 / Tavily（可选）
-                     └── Worker ── Runner（云端对话、任务与统一调度）
+Mac / Linux / Android / iOS ── API + 管理后台 ── PostgreSQL
+                           │
+                           ├── 模型服务 / Tavily（可选）
+                           └── Worker ── Runner（云端对话、任务与统一调度）
 ```
 
 对话、人设、记忆和目标统一保存在云端。每个新任务默认优先发起请求的电脑，再选择同账号其他满足能力与资源要求的在线电脑，最后使用已启用的云端执行环境。手机优先最近使用的桌面电脑，目标检查记住创建时的来源电脑偏好。用户明确指定机器时严格遵守，不可用就说明原因。任务启动后保持本次节点，中断后先核实操作结果。文件保留真实来源，各机器之间不会自动同步。
@@ -34,6 +34,7 @@ Mac / Linux / Android ── API + 管理后台 ── PostgreSQL
 | [admin](admin) | React 管理后台，由 API 在 `/admin/` 提供 |
 | [desktop](desktop/README.md) | Electron + React 的 macOS / Linux 客户端与独立执行服务 |
 | [android](android/README.md) | Kotlin + Jetpack Compose 的 Android 客户端 |
+| [ios](ios/README.md) | SwiftUI 的 iPhone / iPad 客户端 |
 | [packages/agent](packages/agent/README.md) | 电脑与云端共用的 agent、记忆和私有 skills |
 | [packages/a2ui](packages/a2ui/README.md) | 共享交互工具协议与 Web 渲染器 |
 | [packages/bot-face](packages/bot-face) | 共享角色规格、动画引擎与渲染器 |
@@ -47,7 +48,7 @@ Linux 支持桌面和无界面的后台执行服务，安装与 systemd 配置�
 
 ### 1. 准备环境与配置
 
-需要 **Node.js 24 或更新版本、npm、Docker Compose**。运行 Mac 客户端还需要 macOS 和 Xcode Command Line Tools；Android 构建要求见 [Android 文档](android/README.md)。
+需要 **Node.js 24 或更新版本、npm、Docker Compose**。运行 Mac 客户端还需要 macOS 和 Xcode Command Line Tools；Android 构建要求见 [Android 文档](android/README.md)，iOS 构建要求见 [iOS 文档](ios/README.md)。
 
 ```sh
 git clone https://github.com/lhx692135353/PI-BOT.git
@@ -120,11 +121,13 @@ npm run desktop:dev
 | macOS | 默认 `http://127.0.0.1:8000` |
 | Android 官方模拟器 | 默认 `http://10.0.2.2:8000`，该地址映射到宿主电脑 |
 | Android 真机 | 在登录页改为电脑的局域网地址，例如 `http://192.168.1.100:8000`；手机和电脑须在同一网络，防火墙须允许该端口 |
+| iOS 模拟器 | 默认 `http://localhost:8000` |
+| iPhone / iPad 真机 | 同 Android 真机，在登录页改为电脑的局域网地址；首次连接时允许「本地网络」权限 |
 | 远程部署 | 使用你自己的 HTTPS 域名，例如 `https://bot.example.com` |
 
 `127.0.0.1` 在真机上指手机本身。客户端会保留已登录/已保存的服务器地址，更改默认值不会覆盖已有配置。Mac 临时连接非本机 HTTP 地址的显式配置方法见 [Mac 文档](desktop/README.md)。
 
-登录 Mac 后创建一个 Bot，发送消息即可开始使用。执行电脑休眠、退出应用或断网时不能执行本地任务；Android 当前不提供系统后台推送。
+登录 Mac 后创建一个 Bot，发送消息即可开始使用。执行电脑休眠、退出应用或断网时不能执行本地任务；Android 与 iOS 当前不提供系统后台推送。
 
 ## 目标
 
@@ -150,6 +153,13 @@ Android 的构建和单元测试单独执行：
 
 ```sh
 (cd android && ./gradlew :app:testDebugUnitTest :app:assembleDebug)
+```
+
+iOS 的单元测试与构建（需要 macOS 和 Xcode）：
+
+```sh
+(cd ios/PiBotKit && swift test)
+(cd ios && xcodebuild -project PiBot.xcodeproj -scheme PiBot -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build)
 ```
 
 ## 部署与安全边界

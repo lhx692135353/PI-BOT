@@ -1,0 +1,37 @@
+name: iOS
+
+# 只在 iOS 工程、共享角色规格或本工作流有改动时测试并编译。
+on:
+  pull_request:
+    paths:
+      - "ios/**"
+      - "packages/bot-face/spec.json"
+      - ".github/workflows/ios.yml"
+  push:
+    branches: [main]
+    paths:
+      - "ios/**"
+      - "packages/bot-face/spec.json"
+      - ".github/workflows/ios.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ios:
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: PiBotKit unit tests
+        working-directory: ios/PiBotKit
+        run: swift test
+      - name: Simulator build
+        working-directory: ios
+        run: xcodebuild -project PiBot.xcodeproj -scheme PiBot -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
