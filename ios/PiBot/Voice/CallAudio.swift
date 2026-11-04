@@ -22,7 +22,7 @@ final class CallAudio: @unchecked Sendable {
 
     func start() throws {
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP])
+        try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, bluetoothHFP])
         try session.setPreferredSampleRate(48_000)
         try session.setActive(true)
         // Voice processing gives the platform echo canceller, like Android's VOICE_COMMUNICATION source.
@@ -150,6 +150,13 @@ final class CallAudio: @unchecked Sendable {
         }
     }
 }
+
+/// `allowBluetoothHFP` only exists in the iOS 26 SDK; Xcode 16 still calls it `allowBluetooth`.
+#if compiler(>=6.2)
+private let bluetoothHFP = AVAudioSession.CategoryOptions.allowBluetoothHFP
+#else
+private let bluetoothHFP = AVAudioSession.CategoryOptions.allowBluetooth
+#endif
 
 enum CallAudioError: LocalizedError {
     case microphone
