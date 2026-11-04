@@ -2354,7 +2354,8 @@
                     "type": "string",
                     "enum": [
                       "desktop",
-                      "android"
+                      "android",
+                      "ios"
                     ]
                   }
                 }
@@ -2573,6 +2574,7 @@
                     "type": "string",
                     "enum": [
                       "android",
+                      "ios",
                       "desktop"
                     ]
                   }
@@ -2784,7 +2786,8 @@
                     "type": "string",
                     "enum": [
                       "desktop",
-                      "android"
+                      "android",
+                      "ios"
                     ]
                   },
                   "revision": {

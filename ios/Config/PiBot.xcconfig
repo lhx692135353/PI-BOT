@@ -1,0 +1,6 @@
+// 真机签名：复制下面两行到同目录的 Signing.local.xcconfig（不提交），
+// 填自己的开发团队 ID，并把 Bundle ID 改成唯一值。
+DEVELOPMENT_TEAM =
+PRODUCT_BUNDLE_IDENTIFIER = dev.pibot.ios
+
+#include? "Signing.local.xcconfig"

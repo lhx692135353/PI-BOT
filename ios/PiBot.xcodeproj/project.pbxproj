@@ -1,0 +1,320 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		E0A1B2C3D4E5F60000000001 /* PiBotKit in Frameworks */ = {isa = PBXBuildFile; productRef = E0A1B2C3D4E5F60000000020 /* PiBotKit */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		E0A1B2C3D4E5F60000000002 /* PiBot.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PiBot.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E0A1B2C3D4E5F60000000011 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		E0A1B2C3D4E5F60000000015 /* PiBot.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = PiBot.xcconfig; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		E0A1B2C3D4E5F60000000003 /* PiBot */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = PiBot;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		E0A1B2C3D4E5F60000000004 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E0A1B2C3D4E5F60000000001 /* PiBotKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		E0A1B2C3D4E5F60000000005 = {
+			isa = PBXGroup;
+			children = (
+				E0A1B2C3D4E5F60000000003 /* PiBot */,
+				E0A1B2C3D4E5F6000000000F /* Config */,
+				E0A1B2C3D4E5F60000000006 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		E0A1B2C3D4E5F60000000006 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				E0A1B2C3D4E5F60000000002 /* PiBot.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		E0A1B2C3D4E5F6000000000F /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				E0A1B2C3D4E5F60000000011 /* Info.plist */,
+				E0A1B2C3D4E5F60000000015 /* PiBot.xcconfig */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		E0A1B2C3D4E5F60000000007 /* PiBot */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E0A1B2C3D4E5F60000000012 /* Build configuration list for PBXNativeTarget "PiBot" */;
+			buildPhases = (
+				E0A1B2C3D4E5F60000000008 /* Sources */,
+				E0A1B2C3D4E5F60000000004 /* Frameworks */,
+				E0A1B2C3D4E5F60000000009 /* Resources */,
+				E0A1B2C3D4E5F6000000000A /* Copy shared assets */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				E0A1B2C3D4E5F60000000003 /* PiBot */,
+			);
+			name = PiBot;
+			packageProductDependencies = (
+				E0A1B2C3D4E5F60000000020 /* PiBotKit */,
+			);
+			productName = PiBot;
+			productReference = E0A1B2C3D4E5F60000000002 /* PiBot.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		E0A1B2C3D4E5F6000000000B /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2700;
+				LastUpgradeCheck = 2700;
+				TargetAttributes = {
+					E0A1B2C3D4E5F60000000007 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+				};
+			};
+			buildConfigurationList = E0A1B2C3D4E5F6000000000C /* Build configuration list for PBXProject "PiBot" */;
+			developmentRegion = "zh-Hans";
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				"zh-Hans",
+				Base,
+			);
+			mainGroup = E0A1B2C3D4E5F60000000005;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				E0A1B2C3D4E5F60000000021 /* XCLocalSwiftPackageReference "PiBotKit" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = E0A1B2C3D4E5F60000000006 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				E0A1B2C3D4E5F60000000007 /* PiBot */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		E0A1B2C3D4E5F60000000009 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		E0A1B2C3D4E5F6000000000A /* Copy shared assets */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Copy shared assets";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${SRCROOT}/scripts/copy-shared-assets.sh\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		E0A1B2C3D4E5F60000000008 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		E0A1B2C3D4E5F6000000000D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		E0A1B2C3D4E5F6000000000E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		E0A1B2C3D4E5F60000000013 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = E0A1B2C3D4E5F60000000015 /* PiBot.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Pi Bot";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "连接局域网里的 Pi Bot 服务器。";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "和 Bot 语音通话时需要使用麦克风。";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.3.0;
+				PI_BOT_DEFAULT_SERVER_URL = "http://localhost:8000";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		E0A1B2C3D4E5F60000000014 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = E0A1B2C3D4E5F60000000015 /* PiBot.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Pi Bot";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "连接局域网里的 Pi Bot 服务器。";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "和 Bot 语音通话时需要使用麦克风。";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.3.0;
+				PI_BOT_DEFAULT_SERVER_URL = "http://localhost:8000";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		E0A1B2C3D4E5F6000000000C /* Build configuration list for PBXProject "PiBot" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E0A1B2C3D4E5F6000000000D /* Debug */,
+				E0A1B2C3D4E5F6000000000E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		E0A1B2C3D4E5F60000000012 /* Build configuration list for PBXNativeTarget "PiBot" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E0A1B2C3D4E5F60000000013 /* Debug */,
+				E0A1B2C3D4E5F60000000014 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		E0A1B2C3D4E5F60000000021 /* XCLocalSwiftPackageReference "PiBotKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = PiBotKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		E0A1B2C3D4E5F60000000020 /* PiBotKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = PiBotKit;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = E0A1B2C3D4E5F6000000000B /* Project object */;
+}

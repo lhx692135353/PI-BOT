@@ -51,3 +51,10 @@ playwright-report/
 # Short Windows installer output and per-build NuGet scratch directories.
 /.w/
 /.t-*/
+
+# Xcode and SwiftPM build output.
+xcuserdata/
+DerivedData/
+/ios/PiBotKit/.build/
+/ios/PiBotKit/.swiftpm/
+/ios/Config/Signing.local.xcconfig
