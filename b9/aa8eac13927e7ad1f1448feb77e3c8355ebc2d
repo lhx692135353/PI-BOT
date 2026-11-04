@@ -1,0 +1,20 @@
+ios/PiBot/Voice/CallAudio.swift
+  s_cdb728f5bb9fe1::t_8488a3c3ce0743 25
+  s_cdb728f5bb9fe1::t_fdc455ff62aa25 154-160
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b9aa8eac13927e7ad1f1448feb77e3c8355ebc2d",
+  "prompts": {},
+  "sessions": {
+    "s_cdb728f5bb9fe1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "41eece4d-550b-4526-99fe-0e4df59fbdfe",
+        "model": "default"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
