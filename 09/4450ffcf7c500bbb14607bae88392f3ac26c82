@@ -1,0 +1,21 @@
+desktop/tests/multi-device.test.ts
+  s_7a61cc9cbca30d::t_570dcf89360168 53
+desktop/tests/harness-e2e.test.ts
+  s_7a61cc9cbca30d::t_570dcf89360168 124-126
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "094450ffcf7c500bbb14607bae88392f3ac26c82",
+  "prompts": {},
+  "sessions": {
+    "s_7a61cc9cbca30d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "579d0122-feae-48ac-9a1f-c32ce8a6af3a",
+        "model": "default"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
