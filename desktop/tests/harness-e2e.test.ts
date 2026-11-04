@@ -121,7 +121,9 @@ before(async () => {
   serverDb = new Database(TEST_DB!);
   runner=await createRunner({token:'r'.repeat(40),dir:join(dir,'runner')});
   await runner.listen({host:'127.0.0.1',port:0});
-  const config = settings({PI_BOT_RUNNER_TOKEN:'r'.repeat(40),PI_BOT_RUNNER_URL:`http://127.0.0.1:${(runner.server.address() as any).port}`,PI_BOT_WORKER_POLL_SECONDS:'0.02', PI_BOT_DATABASE_URL: TEST_DB, PI_BOT_ADMIN_PASSWORD: 'admin-password', PI_BOT_JWT_SECRET: 'j'.repeat(40), PI_BOT_VAULT_FILE: vaultFile(dir), PI_BOT_TAVILY_API_KEY: 'tvly-test-key' });
+  const config = settings({PI_BOT_RUNNER_TOKEN:'r'.repeat(40),PI_BOT_RUNNER_URL:`http://127.0.0.1:${(runner.server.address() as any).port}`,PI_BOT_WORKER_POLL_SECONDS:'0.02', PI_BOT_DATABASE_URL: TEST_DB, PI_BOT_ADMIN_PASSWORD: 'admin-password', PI_BOT_JWT_SECRET: 'j'.repeat(40), PI_BOT_VAULT_FILE: vaultFile(dir), PI_BOT_TAVILY_API_KEY: 'tvly-test-key',
+    // These runs exercise the computer path; cloud-computer routing is covered by the server tests.
+    PI_BOT_REMOTE_BACKEND: 'none' });
   api = await createApp(config, serverDb, new Hub(), new WebSearch(config, search.fetch));
   await api.listen({ port: 0, host: '127.0.0.1' });
   base = `http://127.0.0.1:${(api.server.address() as any).port}`;
