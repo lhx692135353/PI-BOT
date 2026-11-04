@@ -1,0 +1,92 @@
+server/src/remote/web.ts
+  s_7a61cc9cbca30d::t_c27445cb2ea3b6 14
+ios/PiBot/Settings/SettingsView.swift
+  s_7a61cc9cbca30d::t_9c8320bedbc25c 22-29,46
+android/app/src/main/java/dev/pibot/android/data/PiBotRepository.kt
+  s_7a61cc9cbca30d::t_693687df4e4c10 88-90,143,192-193,215-219
+server/tests/task-routing.test.ts
+  s_7a61cc9cbca30d::t_218ce14292a448 108-109,111-116,120-121
+  s_7a61cc9cbca30d::t_58e1bd23133dc4 110
+  s_7a61cc9cbca30d::t_55409487be3dcd 117-119
+android/app/src/main/java/dev/pibot/android/ui/SettingsScreen.kt
+  s_7a61cc9cbca30d::t_2ae13e3477de7f 58,94-96,101
+server/src/targets.ts
+  s_7a61cc9cbca30d::t_9deaaa21a6da4b 67-76
+  s_7a61cc9cbca30d::t_15cf12fdf4e3c3 130
+desktop/packages/service/src/library-sync.ts
+  s_7a61cc9cbca30d::t_387386b3e7bf44 1-73
+server/src/routes.ts
+  s_7a61cc9cbca30d::t_4aec7a0ccef217 179-188,193,206-210,363,413,418
+  s_7a61cc9cbca30d::t_3f0a3506301ed3 42-44
+desktop/apps/desktop/ui/timeline.tsx
+  s_7a61cc9cbca30d::t_ef7947744cad83 7,107
+  s_7a61cc9cbca30d::t_21ca4ecf495ef6 88,239
+packages/agent/src/routing.ts
+  s_7a61cc9cbca30d::t_15cf12fdf4e3c3 8
+server/docker-compose.yml
+  s_7a61cc9cbca30d::t_7dcd4032b5eaef 46-48
+android/app/src/main/java/dev/pibot/android/data/PiBotApi.kt
+  s_7a61cc9cbca30d::t_693687df4e4c10 43,45-53,135-140,214-217,220
+server/src/devices.ts
+  s_7a61cc9cbca30d::t_b3fedaed3bd095 1-2,5,15-30
+server/src/remote/routes.ts
+  s_7a61cc9cbca30d::t_1d6f34dc49a6c4 546-578
+  s_7a61cc9cbca30d::t_b188d9e42d5262 17-21
+  s_7a61cc9cbca30d::t_28569a50fb9264 544-545
+desktop/packages/service/src/executor.ts
+  s_7a61cc9cbca30d::t_66d19c6f0b6034 11
+  s_7a61cc9cbca30d::t_38c8211ba6333c 146-159
+  s_7a61cc9cbca30d::t_5b45b69450f506 45-46
+server/src/bots.ts
+  s_7a61cc9cbca30d::t_15cf12fdf4e3c3 515
+  s_7a61cc9cbca30d::t_5860c6339791c4 503
+server/tests/automations.test.ts
+  s_7a61cc9cbca30d::t_48606b467ae1f5 21-22
+server/Dockerfile
+  s_7a61cc9cbca30d::t_6f315cacb62dc1 30,35
+  s_7a61cc9cbca30d::t_36aa5c23f9c1ca 6-8,12-18,31
+server/deploy/ubuntu/compose.yml
+  s_7a61cc9cbca30d::t_7dcd4032b5eaef 54-56
+ios/PiBot/Files/FilesView.swift
+  s_7a61cc9cbca30d::t_8f0081cd1bc82d 72-75,112
+desktop/packages/protocol/src/index.ts
+  s_7a61cc9cbca30d::t_308b0d61960f54 83-84
+android/app/src/main/java/dev/pibot/android/ui/TimelineScreen.kt
+  s_7a61cc9cbca30d::t_392311b86a3707 347
+server/tests/cloud-computer.test.ts
+  s_7a61cc9cbca30d::t_9864b70ba78b7f 1-54
+server/README.md
+  s_7a61cc9cbca30d::t_5f528dff55405f 99-103
+desktop/apps/desktop/ui/main.tsx
+  s_7a61cc9cbca30d::t_308b0d61960f54 81,105,109-110,131,143,149-151,169,205,229,253,255-256,278,434
+  s_7a61cc9cbca30d::t_ef7947744cad83 5-6
+desktop/tests/library-sync.test.ts
+  s_7a61cc9cbca30d::t_b4306219820fab 1-48
+ios/PiBotKit/Sources/PiBotKit/AppStore.swift
+  s_7a61cc9cbca30d::t_f81ce624da7100 31-32,96,112,167
+server/scripts/docker-entrypoint.sh
+  s_7a61cc9cbca30d::t_dc5394c5abaed1 1-10
+desktop/apps/desktop/ui/unique.ts
+  s_7a61cc9cbca30d::t_ef7947744cad83 1-4
+ios/PiBotKit/Sources/PiBotKit/Models.swift
+  s_7a61cc9cbca30d::t_3bde87bdd6c433 501,558
+  s_7a61cc9cbca30d::t_9f5cea1fe5a3cb 67-99,118,120,125-126,362,364,367,369-370,568-569,575,579-580,591,594,600,608,622
+android/app/src/main/java/dev/pibot/android/ui/FilesScreen.kt
+  s_7a61cc9cbca30d::t_392311b86a3707 77-80,129,141
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5c0e41db91e6b742b82d5bb1cb28ac5a0854ef69",
+  "prompts": {},
+  "sessions": {
+    "s_7a61cc9cbca30d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "579d0122-feae-48ac-9a1f-c32ce8a6af3a",
+        "model": "default"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
