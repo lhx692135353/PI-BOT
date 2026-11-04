@@ -344,7 +344,7 @@ private fun MessageItem(message: Message, onOpenBot: (String) -> Unit, repositor
                     }
                     Spacer(Modifier.height(6.dp))
                 }
-                if (!user) for (segment in message.replySegments) {
+                if (!user) for (segment in message.replySegments.distinctBy { it.id }) {
                     CopyableMessage(text = segment.text, modifier = bubble)
                     Text(clockTime(segment.createdAt), color = Muted, fontSize = 11.sp, modifier = Modifier.padding(vertical = 3.dp))
                     Spacer(Modifier.height(3.dp))

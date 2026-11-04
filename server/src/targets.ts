@@ -64,6 +64,16 @@ export async function resolveTaskTarget(tx: Tx, s: Settings | undefined, hub: Hu
     if (resources.length || required.length) fail(422, "纯云端处理不能访问机器文件或执行机器工具");
     return { execution: "cloud", device_id: null, operation_target: "cloud" };
   }
+  const paths = resources.filter(r => r.path).map(r => r.path!);
+  const remoteUsable = async (env: Row) => env.backend === s!.remoteBackend && env.status === "ready" && permits("remote:"+env.environment_id)
+    && required.filter(c => c !== "always-on-v1").every(c => env.capabilities?.includes(c))
+    && (!paths.length || (!!env.capabilities?.includes("preflight-v1") && !!hub.remotePreflight && await hub.remotePreflight(env,slug,paths).catch(() => false)));
+  // The cloud computer is the default machine; a user's own computer is used when named or when it holds the resources.
+  if (routing.execution === "auto" && s && s.remoteBackend !== "none" && ![...targets].some(t => t.startsWith("device:"))) {
+    const env = await tx.one("SELECT * FROM remote_environments WHERE user_id=$1 AND status<>'retired'",[userId]);
+    if (!env && s.remoteBackend === "local") throw new RemotePreparationRequired();
+    if (env && await remoteUsable(env)) return { execution: "remote", device_id: null, operation_target: "remote:" + env.environment_id };
+  }
   const rows = await tx.rows(`SELECT d.device_id,d.platform,count(r.run_id)::int AS load FROM devices d
     LEFT JOIN bot_runs r ON r.device_id=d.device_id AND r.status IN ('queued','running','waiting_approval')
     WHERE d.user_id=$1 AND d.revoked_at IS NULL GROUP BY d.device_id
@@ -77,7 +87,6 @@ export async function resolveTaskTarget(tx: Tx, s: Settings | undefined, hub: Hu
     if (!conn) { rejected.set(d.device_id, "电脑已离线，本次操作未执行"); continue; }
     const missing = required.filter(c => !conn.capabilities?.includes(c));
     if (missing.length) { rejected.set(d.device_id, `电脑已连接，但未提供任务所需能力：${missing.join(", ")}；本次操作未执行`); continue; }
-    const paths = resources.filter(r => r.path).map(r => r.path!);
     if (paths.length) {
       if (!conn.capabilities?.includes("preflight-v1")) { rejected.set(d.device_id, "电脑已连接，但客户端不支持资源检查，请更新该电脑客户端"); continue; }
       try {
@@ -108,7 +117,6 @@ export async function resolveTaskTarget(tx: Tx, s: Settings | undefined, hub: Hu
   if (env && env.backend !== s!.remoteBackend) fail(409, "原云端执行后端已变化");
   if (!env || env.status !== "ready") throw new RemotePreparationRequired();
   if (!required.filter(c => c !== "always-on-v1").every(c => env.capabilities?.includes(c))) fail(422, "云端环境缺少任务所需能力");
-  const paths = resources.filter(r => r.path).map(r => r.path!);
   if (paths.length && (!env.capabilities?.includes("preflight-v1") || !hub.remotePreflight || !await hub.remotePreflight(env,slug,paths))) fail(409, "云端任务资源不存在或无法访问");
   return { execution: "remote", device_id: null, operation_target: "remote:" + env.environment_id };
 }
@@ -119,5 +127,5 @@ export async function taskTarget(tx: Tx, s: Settings | undefined, hub: Hub, user
 }
 export async function targetPrompt(tx: Tx, s: Settings, hub: Hub | undefined, userId: string, target: string, source: string) {
   const devices = await tx.rows("SELECT device_id,label,platform FROM devices WHERE user_id=$1 AND revoked_at IS NULL",[userId]);
-  return `你是由云端统一管理的智能体，没有绑定的电脑。请求来源 ${source}；本次执行节点 ${target}（仅属于本次任务）。\n可用电脑：${JSON.stringify(devices.map(d => ({...d,online:hub ? !!hub.device(userId,d.device_id) : undefined,capabilities:hub?.device(userId,d.device_id)?.capabilities})))}；云端机器启用：${s.remoteBackend !== "none"}。\n每个新任务默认 execution=auto，由服务端按来源电脑、其他可用电脑、云端的顺序选择；纯文字和搜索用 execution=cloud。只有用户明确指定机器时才填写 device_id 或 execution=remote。不要把上次任务、受委托智能体或当前执行节点作为新任务的固定机器。requirements 声明所需能力；已有文件、项目或手机必须通过 resources 携带真实来源 target；path 仅用于此智能体资料库内已存在的资源，不要把资料库外的绝对项目路径放进 path。资料库外项目用 target 定位电脑、暂不填写 path，启动任务后先调用 request_outside_access 申请具体路径权限，获批后再访问。资源检查失败不等于电脑离线。相同路径不代表同一文件。一个任务开始后在同一节点完成，中断后先核实结果，不得重放未知外部操作。文件结果注明真实来源。`;
+  return `你是由云端统一管理的智能体，没有绑定的电脑。请求来源 ${source}；本次执行节点 ${target}（仅属于本次任务）。\n可用电脑：${JSON.stringify(devices.map(d => ({...d,online:hub ? !!hub.device(userId,d.device_id) : undefined,capabilities:hub?.device(userId,d.device_id)?.capabilities})))}；云端电脑启用：${s.remoteBackend !== "none"}。\n每个新任务默认 execution=auto，服务端优先选择始终在线的云端电脑，不可用时再按来源电脑、其他可用电脑选择；纯文字和搜索用 execution=cloud。需要用户电脑上的文件、应用，或用户明确指定电脑时，填写 execution=device 和 device_id。资料库以云端电脑上的文件为准；在用户电脑资料库中生成的文件会自动同步一份到云端，资料库以外的本地文件不会同步。不要把上次任务、受委托智能体或当前执行节点作为新任务的固定机器。requirements 声明所需能力；已有文件、项目或手机必须通过 resources 携带真实来源 target；path 仅用于此智能体资料库内已存在的资源，不要把资料库外的绝对项目路径放进 path。资料库外项目用 target 定位电脑、暂不填写 path，启动任务后先调用 request_outside_access 申请具体路径权限，获批后再访问。资源检查失败不等于电脑离线。相同路径不代表同一文件。一个任务开始后在同一节点完成，中断后先核实结果，不得重放未知外部操作。文件结果注明真实来源。`;
 }

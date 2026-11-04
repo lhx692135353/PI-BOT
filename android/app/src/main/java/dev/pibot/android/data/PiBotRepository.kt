@@ -85,6 +85,9 @@ class PiBotRepository(
     val bots: StateFlow<List<Bot>?> = _bots.asStateFlow()
     private val _devices = MutableStateFlow<List<Device>>(emptyList())
     val devices: StateFlow<List<Device>> = _devices.asStateFlow()
+    private val _cloudComputer = MutableStateFlow<CloudComputer?>(null)
+    /** The always-available server-side computer shown next to the user's own; null when disabled. */
+    val cloudComputer: StateFlow<CloudComputer?> = _cloudComputer.asStateFlow()
     val computer: StateFlow<ComputerStatus> = _computer.asStateFlow()
     /** Whether the live events socket is connected. */
     val live: StateFlow<Boolean> = _live.asStateFlow()
@@ -137,6 +140,7 @@ class PiBotRepository(
         _timelines.value = emptyMap()
         _computer.value = ComputerStatus()
         _devices.value = emptyList()
+        _cloudComputer.value = null
         _liveCall.value = null
         _voiceNotice.value = null
         onSessionChanged(previous, null)
@@ -185,7 +189,8 @@ class PiBotRepository(
             incoming + previous.orEmpty().filter { old -> incoming.none { it.id == old.id } && (botRefreshVersions[old.id]?.get() ?: 0) > version }
         }
         _computer.value = list.computer
-        _devices.value = list.devices
+        _devices.value = list.devices.distinctBy { it.id }
+        _cloudComputer.value = list.cloudComputer
     }
 
     /** A background refresh must never install old account data after a login change. */
@@ -207,7 +212,11 @@ class PiBotRepository(
         }
     }
 
-    suspend fun refreshMe(): Me = authed { u, t -> api.me(u, t) }.also { _computer.value = it.computer; _devices.value = it.devices }
+    suspend fun refreshMe(): Me = authed { u, t -> api.me(u, t) }.also {
+        _computer.value = it.computer
+        _devices.value = it.devices.distinctBy { d -> d.id }
+        _cloudComputer.value = it.cloudComputer
+    }
 
     suspend fun revokeDevice(id: String) { authed { u,t -> api.revokeDevice(u,t,id) }; refreshMe() }
 

@@ -43,7 +43,9 @@ services:
       PI_BOT_AUTOMATION_MODEL_CALLS: ${PI_BOT_AUTOMATION_MODEL_CALLS:-20}
       PI_BOT_AUTOMATION_DAILY_ROUNDS: ${PI_BOT_AUTOMATION_DAILY_ROUNDS:-96}
       PI_BOT_AUTOMATION_PATROL_DAILY_ROUNDS: ${PI_BOT_AUTOMATION_PATROL_DAILY_ROUNDS:-8}
-    volumes: ["./vault.json:/run/secrets/pibot-vault.json:ro", "workspaces:/data/workspaces"]
+    # Cloud computer: tasks run inside this container; the cloud library is this host directory.
+    user: "0:0"
+    volumes: ["./vault.json:/run/secrets/pibot-vault.json:ro", "${PI_BOT_WORKSPACES_DIR:-./workspaces}:/data/workspaces"]
     ports: ["8000:8000"]
     depends_on:
       postgres: {condition: service_healthy}
@@ -97,4 +99,3 @@ services:
 volumes:
   pgdata:
   runnerdata:
-  workspaces:

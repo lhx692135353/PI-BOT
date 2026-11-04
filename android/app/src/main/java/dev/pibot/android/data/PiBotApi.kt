@@ -40,8 +40,17 @@ data class Device(
 @Serializable
 data class ComputerStatus(val online: Boolean = false, val device: Device? = null)
 
+/** The server-side computer every client uses like one of its own; it holds the cloud library. */
 @Serializable
-data class Me(val user: User, val computer: ComputerStatus = ComputerStatus(), val devices: List<Device> = emptyList())
+data class CloudComputer(val target: String? = null, val label: String = "云端电脑", val online: Boolean = false)
+
+@Serializable
+data class Me(
+    val user: User,
+    val computer: ComputerStatus = ComputerStatus(),
+    val devices: List<Device> = emptyList(),
+    @SerialName("cloud_computer") val cloudComputer: CloudComputer? = null,
+)
 
 @Serializable
 data class Model(val id: String, val name: String, @SerialName("is_default") val isDefault: Boolean = false)
@@ -123,7 +132,12 @@ data class BotActivity(
 )
 
 @Serializable
-data class BotList(val bots: List<Bot>, val computer: ComputerStatus = ComputerStatus(), val devices: List<Device> = emptyList())
+data class BotList(
+    val bots: List<Bot>,
+    val computer: ComputerStatus = ComputerStatus(),
+    val devices: List<Device> = emptyList(),
+    @SerialName("cloud_computer") val cloudComputer: CloudComputer? = null,
+)
 
 @Serializable
 data class ToolEntry(val id: String, val name: String, val state: String, val summary: String? = null)
@@ -197,10 +211,13 @@ data class MessagePage(val messages: List<Message>, @SerialName("has_more") val 
 data class SendResult(val run: Run, val messages: List<Message>)
 
 @Serializable
-data class FileEntry(val name: String, val type: String, val size: Long = 0, val modified: String? = null)
+data class FileEntry(val name: String, val type: String, val size: Long = 0, val modified: String? = null, val id: String = "") {
+    /** Older servers send no id; a file name is unique within one folder. */
+    val key: String get() = id.ifEmpty { name }
+}
 
 @Serializable
-data class FileSource(val target: String, val label: String, val online: Boolean = false)
+data class FileSource(val target: String, val label: String, val online: Boolean = false, val kind: String = if (target.startsWith("remote:")) "cloud" else "device")
 
 @Serializable
 data class FileSources(val sources: List<FileSource> = emptyList())

@@ -39,7 +39,9 @@ import {
 } from "./bots.js";
 import { cancelRun, decideApproval, dispatchDevice, failDeviceRuns } from "./runs.js";
 import { cancelTask, createTask, readTask, reportLater, TERMINAL, listTasks, messageTask, callerRun } from "./agents.js";
-import { deviceOut, deviceList } from './devices.js';
+import { deviceOut, deviceList, cloudComputer, libraryFileId } from './devices.js';
+import { ensureEnvironment } from './remote/environments.js';
+import { posix } from 'node:path';
 import { complete, findModel, proxyResponses, recordUsage } from "./llm.js";
 import { effectiveModelCapabilities, listCatalog, providerBase } from "./providers.js";
 import type { WebSearch } from "./search.js";
@@ -174,16 +176,21 @@ async function ensureDefault(tx: Tx) {
 async function fileSources(ctx: Context) {
   await ctx.db.tx(tx => ownBot(tx,ctx.user.user_id,ctx.params.id));
   const devices = await ctx.db.tx(tx => deviceList(tx,ctx.hub,ctx.user.user_id));
-  const env = await ctx.db.tx(tx => tx.one("SELECT * FROM remote_environments WHERE user_id=$1 AND status<>'retired'",[ctx.user.user_id]));
-  const sources = devices.filter(d => !d.revoked_at).map(d => ({target:"device:"+d.id,label:d.label,online:d.online}));
-  if (env && env.backend === ctx.s.remoteBackend) sources.push({target:"remote:"+env.environment_id,label:env.backend === "local" ? "服务器" : "云端",online:env.status === "ready"});
-  return {sources};
+  const cloud = await ctx.db.tx(async tx => {
+    if (ctx.s.remoteBackend === "local") await ensureEnvironment(tx,ctx.s,ctx.user.user_id);
+    return cloudComputer(tx,ctx.s,ctx.user.user_id);
+  });
+  // The cloud computer holds the library, so it is listed first and opened by default.
+  const sources = [
+    ...(cloud?.target ? [{target:cloud.target,label:cloud.label,online:cloud.online,kind:"cloud"}] : []),
+    ...devices.filter(d => !d.revoked_at).map(d => ({target:"device:"+d.id,label:d.label,online:d.online,kind:"device"})),
+  ];
+  return {sources:[...new Map(sources.map(x => [x.target,x])).values()]};
 }
 async function deviceFiles(ctx: Context, method: "list" | "read") {
   const bot = await ctx.db.tx(tx => ownBot(tx,ctx.user.user_id,ctx.params.id));
   const {sources} = await fileSources(ctx);
-  const recent = await ctx.db.tx(tx => tx.one("SELECT operation_target FROM bot_runs WHERE user_id=$1 AND bot_id=$2 AND lane='task' AND operation_target ~ '^(device|remote):' ORDER BY created_at DESC LIMIT 1",[ctx.user.user_id,bot.bot_id]));
-  const requested = ctx.query.target ?? (ctx.device ? "device:"+ctx.device.device_id : recent?.operation_target);
+  const requested = ctx.query.target ?? sources.find(x => x.kind === "cloud")?.target;
   const source = requested ? sources.find(x => x.target === requested) : sources.find(x => x.online) ?? sources[0];
   if (!source) fail(404,"请选择有效的文件来源；当前没有可浏览的机器");
   if (!source!.online) fail(409,"文件所在机器离线或尚未就绪，文件暂时无法读取");
@@ -196,6 +203,11 @@ async function deviceFiles(ctx: Context, method: "list" | "read") {
     result = await connection.call({action:method === "list" ? "list_files" : "read_file",slug:bot.slug,args:{path:ctx.query.path || "."},operation_id:randomUUID()});
     if (method === "read") result = {kind:"text",path:ctx.query.path,name:ctx.query.path.split("/").pop(),...result};
   }
+  if (method === "list") {
+    const dir = String(result.path ?? "");
+    const entries = (result.entries ?? []).map((e: Row) => ({...e,id:libraryFileId(bot.bot_id,posix.join(dir || ".",e.name))}));
+    result = {...result,entries:[...new Map(entries.map((e: Row) => [e.id,e])).values()]};
+  } else if (result.path) result = {...result,id:libraryFileId(bot.bot_id,String(result.path))};
   return {...result,target:source!.target,source_label:source!.label};
 }
 
@@ -348,7 +360,7 @@ export const routes: Route[] = [
   },
   {
     method: "GET", path: "/me", auth: "actor", tag: "auth", summary: "当前用户与电脑在线状态",
-    handler: async ({ tx, hub, user }) => ({ user: userOut(user), computer: await computerStatus(tx, hub, user.user_id), devices: await deviceList(tx, hub, user.user_id) }),
+    handler: async ({ tx, hub, s, user }) => ({ user: userOut(user), computer: await computerStatus(tx, hub, user.user_id), devices: await deviceList(tx, hub, user.user_id), cloud_computer: await cloudComputer(tx, s, user.user_id) }),
   },
   {
     method: "POST", path: "/devices/register", auth: "user", tag: "device", summary: "注册或更新当前用户的一台执行电脑",
@@ -398,12 +410,12 @@ export const routes: Route[] = [
   },
   {
     method: "GET", path: "/bots", auth: "actor", tag: "bots", summary: "我的 Bot 列表",
-    handler: async ({ tx, hub, user }) => {
+    handler: async ({ tx, hub, s, user }) => {
       await ensureMainBot(tx, user.user_id);
       const rows = await tx.rows("SELECT * FROM bots WHERE user_id=$1 AND archived_at IS NULL ORDER BY is_main DESC,last_active_at DESC", [user.user_id]);
       const bots = [];
       for (const b of rows) bots.push(await botOut(tx, b));
-      return { bots, computer: await computerStatus(tx, hub, user.user_id), devices: await deviceList(tx, hub, user.user_id) };
+      return { bots, computer: await computerStatus(tx, hub, user.user_id), devices: await deviceList(tx, hub, user.user_id), cloud_computer: await cloudComputer(tx, s, user.user_id) };
     },
   },
   {

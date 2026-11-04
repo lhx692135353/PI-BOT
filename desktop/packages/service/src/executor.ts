@@ -8,6 +8,7 @@ import type { Mood } from '@pi-bot/bot-face';
 import { PhoneAdb, isPhoneAdbCommand } from './phone.js';
 import { commandShell } from './platform.js';
 import { libraryDir, libraryTools, Sandbox } from './library.js';
+import { changedSince, LibraryMirror, syncNote } from './library-sync.js';
 
 /** What the server sends with `{type:'run'}`; mirrors server `RunContext`. */
 export interface RunContext {
@@ -41,6 +42,8 @@ export interface ExecutorDeps {
   factory?: AgentFactory;
   approvalTimeoutMs?: number;
   phoneConfigPath?: string;
+  /** Cloud library uploads; tests substitute a fake server. */
+  fetch?: typeof fetch;
 }
 interface Active {
   run: RunContext;
@@ -140,6 +143,20 @@ export class Executor {
         },
       });
       const api = this.deps.proxyUrl.replace(/\/llm\/v1\/?$/, '');
+      if (!run.automation_readonly) {
+        const mirror = new LibraryMirror({ api, token: () => token, runId: run.run_id, root: sandbox.root, fetch: this.deps.fetch });
+        tools = tools.map(tool => !['write_file', 'edit_file', 'run_command'].includes(tool.name) ? tool : {
+          ...tool, execute: async (id, args, signal, update, ctx) => {
+            const started = Date.now() - 1000;
+            const result = await tool.execute(id, args, signal, update, ctx);
+            const files = tool.name === 'run_command'
+              ? await changedSince(sandbox.root, started)
+              : [await sandbox.canonical((args as { path: string }).path)];
+            const note = syncNote(await mirror.push(files));
+            return note ? { ...result, content: [...result.content, { type: 'text' as const, text: note }] } : result;
+          },
+        });
+      }
       if (run.execution_policy === 'device_only' && !run.automation_readonly) tools = tools.map(tool => {
         if (toolDescriptor(tool.name)?.effect !== 'write') return tool;
         return { ...tool, execute: async (id, args, signal, update, ctx) => {

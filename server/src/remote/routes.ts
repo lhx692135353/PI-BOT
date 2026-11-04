@@ -14,6 +14,11 @@ import {
   remoteVault,
 } from "./environments.js";
 import { sshConfig, sshSecret } from "./transport.js";
+import { receiveFile } from "./web.js";
+import { libraryFileId } from "../devices.js";
+import { Readable } from "node:stream";
+export const LIBRARY_FILE_LIMIT = 10 * 1024 * 1024;
+const GUEST_UPLOAD_LIMIT = 4_000_000;
 const uuid = z.string().uuid(),
   path = z.string().min(1).max(2000),
   empty = z.object({});
@@ -535,6 +540,41 @@ export const remoteRoutes: Route[] = [
       args: z.record(z.string(), z.unknown()).default({}),
     }),
     handler: remoteOperation,
+  },
+  {
+    method: "POST",
+    path: "/agent/library/files",
+    auth: "llm",
+    tag: "remote",
+    summary: "电脑资料库生成的文件同步到云端资料库",
+    internal: true,
+    tx: false,
+    body: z.object({
+      run_id: uuid,
+      path,
+      content_base64: z.string().max(Math.ceil(LIBRARY_FILE_LIMIT / 3) * 4),
+    }),
+    handler: async (c) => {
+      const rel = posix.normalize(c.body.path.replace(/\\/g, "/"));
+      if (posix.isAbsolute(rel) || rel === "." || rel === ".." || rel.startsWith("../"))
+        fail(422, "只能同步资料库内的相对路径");
+      const run = await c.db.tx((tx) => callerRun(tx, c.user.user_id, c.llm!, c.body.run_id));
+      if (run.executor !== "device" || run.automation_readonly) fail(403, "只有电脑上的任务可以同步资料库文件");
+      const content = Buffer.from(c.body.content_base64, "base64");
+      if (content.length > LIBRARY_FILE_LIMIT) fail(413, "单个文件最多同步 10MiB");
+      const env = await c.db.tx((tx) => ensureEnvironment(tx, c.s, c.user.user_id));
+      const bot = await c.db.tx((tx) => tx.get("bots", run.bot_id, true));
+      const connection = await c.remote.connect(env);
+      // `upload` creates parent folders and keeps the write inside the library on every backend.
+      const small = content.length <= GUEST_UPLOAD_LIMIT;
+      await connection.call({ operation_id: randomUUID(), slug: bot.slug, action: "upload", args: { path: rel, base64: small ? c.body.content_base64 : "" } });
+      if (!small) {
+        const info = await c.remote.file(c.user.user_id, bot.bot_id, env.environment_id, rel, true);
+        try { await receiveFile(Readable.from([content]), info.sftp, info.path); }
+        finally { info.sftp.end(); }
+      }
+      return { id: libraryFileId(bot.bot_id, rel), path: rel, size: content.length, target: "remote:" + env.environment_id };
+    },
   },
   {
     method: "POST",

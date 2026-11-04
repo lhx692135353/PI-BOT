@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import { PiBot } from './bot-avatar.js';
 import type { Mood } from '@pi-bot/bot-face';
 import type { AgentTaskRef, Approval, Bot, FromBot, Message, MessagePage, TaskConversation } from '../../../packages/protocol/src/index.js';
+import { uniqueById } from './unique.js';
 import { UiView } from '@pi-bot/a2ui/react';
 import '@pi-bot/a2ui/styles';
 import { bridge, call, errorText } from './bridge.js';
@@ -84,7 +85,7 @@ function ConversationDialog({ bot, task, onClose, onOpenBot }: { bot: Bot; task:
       <div className="conversation-messages" aria-live="polite">
         {!data && busy && <p className="muted">正在加载传话…</p>}
         {data && !data.messages.length && <p className="muted">还没有传话记录</p>}
-        {data?.messages.map(m => { const sender = participants.find(b => b.id === m.from_bot_id); return <article key={m.id}><div className="conversation-sender">{sender?.avatar && <PiBot avatar={sender.avatar} mood="happy" size={22} />}<strong>{sender?.name ?? '智能体'}</strong>{m.created_at && <time>{time(m.created_at)}</time>}</div><div className="bubble markdown"><Markdown text={m.content} /></div></article>; })}
+        {uniqueById(data?.messages ?? []).map(m => { const sender = participants.find(b => b.id === m.from_bot_id); return <article key={m.id}><div className="conversation-sender">{sender?.avatar && <PiBot avatar={sender.avatar} mood="happy" size={22} />}<strong>{sender?.name ?? '智能体'}</strong>{m.created_at && <time>{time(m.created_at)}</time>}</div><div className="bubble markdown"><Markdown text={m.content} /></div></article>; })}
         {error && <p className="error" role="alert">{error} <button className="ghost" disabled={busy} onClick={() => void load()}>重试</button></p>}
         {data?.has_more && <button className="ghost" disabled={busy} onClick={() => void load(true)}>{busy ? '正在加载…' : '加载更多往来'}</button>}
       </div>
@@ -103,7 +104,7 @@ function ReportFiles({ message }: { message: Message }) {
 }
 
 function ReplyBubbles({ message }: { message: Message }) {
-  const segments = message.reply_segments ?? [];
+  const segments = uniqueById(message.reply_segments ?? []);
   const legacy = segments.length ? [] : (message.progress ?? []);
   const tail = segments.some(s=>s.phase === 'answer') ? '' : message.content;
   return <>
@@ -235,7 +236,7 @@ export function Timeline({ bot, messages, hasMore, mood, online, onLoadMore, onS
             <p className="muted">{bot.is_main ? '我是 Pi Bot，你的主智能体。查资料、写作、整理文件，或只是聊聊天，都可以直接找我。' : bot.persona ? bot.persona.slice(0, 140) : '告诉我你想做什么。我的资料都放在自己的资料库里，随时可以在文件管理器中查看。'}</p>
           </div>
         )}
-        {messages.map(m => {
+        {uniqueById(messages).map(m => {
           const d = day(m.created_at);
           const separator = d !== lastDay ? <div className="day" key={`d-${m.id}`}><span>{d}</span></div> : null;
           lastDay = d;

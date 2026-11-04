@@ -11,7 +11,7 @@ import { readDesktopTicket } from "./routes.js";
 import { ownEnvironment } from "./environments.js";
 import { user, device, isSigned } from "../security.js";
 import { fail } from "../db.js";
-async function receiveFile(body: Readable, sftp: any, target: string) {
+export async function receiveFile(body: Readable, sftp: any, target: string) {
   const temp = target + "." + randomUUID() + ".upload";
   let size = 0;
   const limit = new Transform({

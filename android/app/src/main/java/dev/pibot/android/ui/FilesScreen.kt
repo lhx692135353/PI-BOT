@@ -74,8 +74,10 @@ fun FilesScreen(repository: PiBotRepository, botId: String, onBack: () -> Unit) 
 
     LaunchedEffect(botId, devices) {
         runCatching { repository.fileSources(botId).sources }.onSuccess {
-            sources = it
-            if (source == null) source = it.firstOrNull { s -> s.online }?.target ?: it.firstOrNull()?.target
+            sources = it.distinctBy { s -> s.target }
+            // The cloud computer holds the library, so it opens by default.
+            if (source == null || sources.none { s -> s.target == source })
+                source = sources.firstOrNull { s -> s.kind == "cloud" }?.target ?: sources.firstOrNull { s -> s.online }?.target ?: sources.firstOrNull()?.target
         }.onFailure { error = errorText(it) }
     }
 
@@ -124,7 +126,7 @@ fun FilesScreen(repository: PiBotRepository, botId: String, onBack: () -> Unit) 
           }
           Box(Modifier.fillMaxSize()) {
             val b = bot
-            val entries = list?.entries
+            val entries = list?.entries?.distinctBy { it.key }
             val failure = error
             when {
                 opened != null -> FilePreview(file)
@@ -136,7 +138,7 @@ fun FilesScreen(repository: PiBotRepository, botId: String, onBack: () -> Unit) 
                 entries == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 entries.isEmpty() -> EmptyState(b?.avatar ?: ORANGE, "idle", "这里还是空的", "让 ${b?.name ?: "Bot"} 写点东西进来吧。")
                 else -> LazyColumn(Modifier.fillMaxSize()) {
-                    items(entries, key = { it.name }) { entry ->
+                    items(entries, key = { it.key }) { entry ->
                         EntryRow(entry) {
                             val child = if (path.isEmpty()) entry.name else "$path/${entry.name}"
                             if (entry.type == "dir") path = child else opened = child

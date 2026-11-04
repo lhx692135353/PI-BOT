@@ -55,6 +55,7 @@ fun SettingsScreen(repository: PiBotRepository, onBack: () -> Unit, onPhone: (St
     val computer by repository.computer.collectAsStateWithLifecycle()
     val live by repository.live.collectAsStateWithLifecycle()
     val devices by repository.devices.collectAsStateWithLifecycle()
+    val cloud by repository.cloudComputer.collectAsStateWithLifecycle()
     val call by repository.liveCall.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val push = (context.applicationContext as PiBotApp).push
@@ -90,13 +91,14 @@ fun SettingsScreen(repository: PiBotRepository, onBack: () -> Unit, onPhone: (St
                 }) { Text("系统通知设置") }
             }
             Group("执行电脑") {
-                if (devices.none { it.revokedAt == null }) Text("在 Mac 或 Linux 上安装 Pi Bot，并用同一个账号登录，即可添加执行电脑。", color = Muted, fontSize = 14.sp)
-                for (d in devices.filter { it.revokedAt == null }) {
+                cloud?.let { Item(it.label, "Linux · ${if (it.online) "在线" else "准备中"} · 资料库") }
+                if (cloud == null && devices.none { it.revokedAt == null }) Text("在 Mac 或 Linux 上安装 Pi Bot，并用同一个账号登录，即可添加执行电脑。", color = Muted, fontSize = 14.sp)
+                for (d in devices.filter { it.revokedAt == null }.distinctBy { it.id }) {
                     Item(d.label, "${when (d.platform) { "linux" -> "Linux"; "darwin" -> "macOS"; "win32" -> "Windows"; else -> "未知平台" }} · ${if (d.online) "在线" else "离线"}")
                     TextButton(onClick = { onPhone(d.id) }) { Text("手机画面与控制") }
                     TextButton(onClick = { removing = d }) { Text("解绑", color = Danger) }
                 }
-                Text("任务默认优先本机，再使用其他可用电脑，最后使用云端。文件保存在实际使用的机器上。", color = Muted, fontSize = 12.sp)
+                Text("任务默认在云端电脑上执行，需要你电脑上的文件或应用时才用那台电脑。资料库以云端电脑为准，电脑资料库里生成的文件会同步一份到云端。", color = Muted, fontSize = 12.sp)
                 error?.let { Text(it, color = Danger) }
             }
             Spacer(Modifier.height(20.dp))

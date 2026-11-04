@@ -19,8 +19,14 @@ struct SettingsView: View {
                     LabeledContent("实时连接", value: store.live ? "已连接" : "未连接")
                 }
                 Section {
-                    let active = store.devices.filter { $0.revokedAt == nil }
-                    if active.isEmpty {
+                    let active = store.devices.filter { $0.revokedAt == nil }.uniqued()
+                    if let cloud = store.cloudComputer {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(cloud.label)
+                            Text("Linux · \(cloud.online ? "在线" : "准备中") · 资料库").font(.caption).foregroundStyle(Palette.muted)
+                        }
+                    }
+                    if active.isEmpty && store.cloudComputer == nil {
                         Text("在 Mac 或 Linux 上安装 Pi Bot，并用同一个账号登录，即可添加执行电脑。").font(.subheadline).foregroundStyle(Palette.muted)
                     }
                     ForEach(active) { device in
@@ -37,7 +43,7 @@ struct SettingsView: View {
                 } header: {
                     Text("执行电脑")
                 } footer: {
-                    Text("任务默认优先本机，再使用其他可用电脑，最后使用云端。文件保存在实际使用的机器上。")
+                    Text("任务默认在云端电脑上执行，需要你电脑上的文件或应用时才用那台电脑。资料库以云端电脑为准，电脑资料库里生成的文件会同步一份到云端。")
                 }
                 Section {
                     Button("修改密码") { changing = true }
