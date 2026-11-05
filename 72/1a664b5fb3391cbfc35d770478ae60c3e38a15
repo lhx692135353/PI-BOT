@@ -1,0 +1,44 @@
+server/src/routes.ts
+  s_75db6d3a7645b0::t_ac5e719de78f49 251,255
+server/src/bots.ts
+  s_75db6d3a7645b0::t_ac5e719de78f49 17,486,530,550,581,644
+server/src/migrate.ts
+  s_75db6d3a7645b0::t_ac5e719de78f49 11
+server/tests/provider-search.test.ts
+  s_75db6d3a7645b0::t_ac5e719de78f49 4-6,9-10,12-17,20-49,51-64
+server/migrations/0022-task-budget.sql
+  s_75db6d3a7645b0::t_f206909d5473e8 1-2
+server/src/config.ts
+  s_75db6d3a7645b0::t_ac5e719de78f49 78-83
+server/src/providers.ts
+  s_75db6d3a7645b0::t_ac5e719de78f49 14
+server/src/search.ts
+  s_75db6d3a7645b0::t_50df42709785db 267,306-307
+  s_75db6d3a7645b0::t_ac5e719de78f49 3-6,8,10-22,33-34,47-48,50-56,59,116,171-175,202-266,268-305
+server/src/app.ts
+  s_75db6d3a7645b0::t_ac5e719de78f49 108
+admin/src/api.ts
+  s_75db6d3a7645b0::t_ac5e719de78f49 115-116
+packages/agent/src/web-search.ts
+  s_75db6d3a7645b0::t_ac5e719de78f49 20
+admin/src/main.tsx
+  s_75db6d3a7645b0::t_ac5e719de78f49 391,394,477,563,566,573-575
+server/src/llm.ts
+  s_75db6d3a7645b0::t_ac5e719de78f49 7,101-114,136-139,143,213-215
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "721a664b5fb3391cbfc35d770478ae60c3e38a15",
+  "prompts": {},
+  "sessions": {
+    "s_75db6d3a7645b0": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ef8f424d-d99e-46d4-9fd3-b9381216fe2d",
+        "model": "default"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
