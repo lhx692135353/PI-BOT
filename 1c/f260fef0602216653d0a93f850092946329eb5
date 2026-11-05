@@ -1,0 +1,23 @@
+server/src/worker.ts
+  s_75db6d3a7645b0::t_dc4c7c06fc2238 77-80
+server/deploy/ubuntu/compose.yml
+  s_75db6d3a7645b0::t_e853a106c567e4 52-56
+server/docker-compose.yml
+  s_75db6d3a7645b0::t_4c058e626f81f7 40-42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1cf260fef0602216653d0a93f850092946329eb5",
+  "prompts": {},
+  "sessions": {
+    "s_75db6d3a7645b0": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ef8f424d-d99e-46d4-9fd3-b9381216fe2d",
+        "model": "default"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
