@@ -37,6 +37,9 @@ services:
       PI_BOT_ADMIN_PASSWORD: ${PI_BOT_ADMIN_PASSWORD:?set PI_BOT_ADMIN_PASSWORD}
       PI_BOT_JWT_SECRET: ${PI_BOT_JWT_SECRET:?set PI_BOT_JWT_SECRET (>= 32 chars)}
       PI_BOT_VAULT_FILE: /run/secrets/pibot-vault.json
+      # The API authenticates worker claims and forwards cancels and task messages to the Runner.
+      PI_BOT_RUNNER_URL: http://runner:8001
+      PI_BOT_RUNNER_TOKEN: ${PI_BOT_RUNNER_TOKEN:?set a random runner token of at least 32 characters}
       PI_BOT_APPROVAL_TTL_SECONDS: ${PI_BOT_APPROVAL_TTL_SECONDS:-900}
       PI_BOT_TAVILY_API_KEY: ${PI_BOT_TAVILY_API_KEY:-}
       PI_BOT_AUTOMATION_ROUND_SECONDS: ${PI_BOT_AUTOMATION_ROUND_SECONDS:-300}

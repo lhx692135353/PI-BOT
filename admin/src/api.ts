@@ -112,6 +112,8 @@ export interface Usage {
   by_day: { day: string; source: string; calls: number; tokens: number }[];
 }
 export interface SearchUsage {
+  backend: "tavily" | "provider" | null;
+  model: string | null;
   configured: boolean;
   status: "not_configured" | "available" | "exhausted" | "unavailable";
   plan: string | null;

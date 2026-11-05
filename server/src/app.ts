@@ -105,7 +105,7 @@ export async function createApp(
   s: Settings = settings(),
   db = new Database(s.databaseUrl),
   hub = new Hub(),
-  webSearch = new WebSearch(s),
+  webSearch = new WebSearch(s, fetch, Date.now, db),
   remoteFactory=(db:Database,s:Settings)=>new RemoteService(db,s),
   pushFactory = firebaseTransport,
 ) {

@@ -4,7 +4,7 @@ import { fail, type Database, type Row, type Tx } from "./db.js";
 import type { Settings } from "./config.js";
 import { Vault, type LlmClaims } from "./security.js";
 import { recordGeneration, bounded } from "./observations.js";
-import { applyConversationReasoning, applyProviderSearch, reasoningTelemetry } from "./providers.js";
+import { applyConversationReasoning, reasoningTelemetry } from "./providers.js";
 import { randomUUID } from "node:crypto";
 
 export interface Usage {
@@ -98,6 +98,20 @@ export async function recordUsage(
 const openAiError = (reply: FastifyReply, status: number, message: string) =>
   reply.code(status).send({ error: { message, type: "pi_bot_proxy" } });
 
+export const TASK_WRAP_UP = "本任务已达到 token 预算或模型调用上限，不能再调用任何工具。请直接根据已经获得的信息给出最终结果，并说明哪些内容还没有核实。";
+/** Background tasks past a limit answer from what they already have; far past it they stop. */
+export function taskBudget(run: Row | undefined, s: Pick<Settings, "taskTokenBudget" | "taskModelCalls">): "ok" | "wrap_up" | "stop" {
+  if (run?.lane !== "task") return "ok";
+  const tokens = Number(run.tokens_used ?? 0), calls = Number(run.model_calls ?? 0);
+  if (tokens >= s.taskTokenBudget * 1.5 || calls >= s.taskModelCalls + 3) return "stop";
+  if (tokens >= s.taskTokenBudget || calls >= s.taskModelCalls) return "wrap_up";
+  return "ok";
+}
+export function applyWrapUp(body: Row): Row {
+  const input = Array.isArray(body.input) ? body.input : [{ role: "user", content: String(body.input ?? "") }];
+  return { ...body, tool_choice: "none", input: [...input, { role: "user", content: TASK_WRAP_UP }] };
+}
+
 export async function proxyResponses(
   db: Database,
   s: Settings,
@@ -119,12 +133,14 @@ export async function proxyResponses(
     if (!admitted) return openAiError(reply, 429, "目标检查已停止或达到本轮模型调用上限");
   }
   const key = new Vault(s.vaultFile).open(model.secret, model.model_id);
-  const reasoning = applyConversationReasoning(applyProviderSearch({
-    ...body,
+  const budget = taskBudget(correlation?.run, s);
+  if (budget === "stop") return openAiError(reply, 429, "本任务已超出 token 预算，已停止");
+  const reasoning = applyConversationReasoning({
+    ...(budget === "wrap_up" ? applyWrapUp(body) : body),
     model: model.provider_model,
     max_output_tokens: Math.min(body.max_output_tokens ?? model.max_tokens, model.max_tokens),
     store: false,
-  }, model, correlation?.run.lane), model, correlation?.run.lane);
+  }, model, correlation?.run.lane);
   const payload = reasoning.payload;
   const started=new Date(),generationId=correlation?.generationId??randomUUID();
   let captured:unknown=null,observedUsage:Usage|null=null,firstToken:Date|undefined,traceError:string|undefined;
@@ -194,6 +210,9 @@ export async function proxyResponses(
     await recordUsage(db, claims, model.model_id, sse.usage);
   }
   } finally {
+    if (correlation?.run.lane === "task")
+      await db.tx(tx => tx.rows("UPDATE bot_runs SET model_calls=model_calls+1, tokens_used=tokens_used+$2 WHERE run_id=$1",
+        [correlation!.run.run_id, Math.round((observedUsage?.input ?? 0) + (observedUsage?.output ?? 0))])).catch(() => {});
     if(correlation) await recordGeneration(db,s,correlation.run,{id:generationId,parentTool:correlation.parentTool,started,firstToken,input:body.input,output:captured,usage:observedUsage,error:traceError,model,secrets:[key],reasoning:reasoningTelemetry(payload,reasoning.source)}).catch(()=>{});
   }
 }

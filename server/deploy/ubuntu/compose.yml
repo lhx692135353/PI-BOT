@@ -49,7 +49,11 @@ services:
       retries: 12
   api:
     <<: *app
-    environment: *env
+    environment:
+      <<: *env
+      # The API authenticates worker claims and forwards cancels and task messages to the Runner.
+      PI_BOT_RUNNER_URL: http://runner:8001
+      PI_BOT_RUNNER_TOKEN: ${PI_BOT_RUNNER_TOKEN}
     ports: ["${PI_BOT_BIND_ADDRESS:-0.0.0.0}:${PI_BOT_HTTP_PORT:-8000}:8000"]
     # Cloud computer: tasks run inside this container; the cloud library is this host directory.
     user: "0:0"
