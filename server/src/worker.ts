@@ -74,7 +74,10 @@ export class Worker {
         method:"POST",headers:{Authorization:`Bearer ${this.s.runnerToken}`,"Content-Type":"application/json"},
         body:JSON.stringify({worker_id:this.id}),signal:AbortSignal.timeout(120000),
       }); } catch { break; }
-      if (!response.ok) continue;
+      if (!response.ok) {
+        console.error(`cloud task claim rejected: HTTP ${response.status}`);
+        continue;
+      }
       const result = await response.json() as {run?:RunContext};
       if (result.run) return result.run;
     }
