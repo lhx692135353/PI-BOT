@@ -14,7 +14,7 @@ import { SHAPES, COLORS, SCHEMES, DEFAULT_AVATAR, avatarFor } from "@pi-bot/bot-
 import { fail, type Row, type Tx } from "./db.js";
 import type { Settings } from "./config.js";
 import { canRemember, scopeText } from './authorizations.js';
-import { searchAvailable } from "./search.js";
+import { searchBackend } from "./search.js";
 import { directory, privateMemoryContext, forgottenContext, maskForgotten } from "./memory.js";
 import { estimateTokens } from "@earendil-works/pi-coding-agent";
 import { wakeGoals, automationForRun, settleAutomation } from "./automations.js";
@@ -483,7 +483,7 @@ export function systemPrompt(
   bot: Row,
   memory: string,
   executor: "device" | "cloud",
-  options: { search?: boolean; providerSearch?: "xai" | "bailian"; now?: Date; agents?: Collaborator[]; depth?: number; lane?: "conversation" | "task"; remote?:boolean | { backend: string; root: string }; quiet?:boolean } = {},
+  options: { search?: boolean; now?: Date; agents?: Collaborator[]; depth?: number; lane?: "conversation" | "task"; remote?:boolean | { backend: string; root: string }; quiet?:boolean } = {},
 ) {
   const now = options.now ?? new Date();
   const date = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
@@ -527,10 +527,7 @@ export function systemPrompt(
   ].join("\n"));
   if (options.lane === "task") parts.push("后台执行回报：最终结果供发起方整理，保留核实后的关键数据、依据、来源和必要的技术细节，不要为缩短聊天而丢失结果。公开进展仍用短句。发起方负责按用户的问题用日常语言转述，需要细节时可读取本次完整任务记录。");
   parts.push(UI_INSTRUCTIONS);
-  if (options.providerSearch && options.lane !== "conversation") parts.push(options.providerSearch === "xai"
-    ? "联网检索由 xAI 在这一轮里完成，可以检索网页和 X，不要调用 web_search。需要最新公开信息时直接检索，并在回答里给出来源链接。不要把检索摘要当成已经读过全文。检索失败时说明限制，不要反复换一种说法重试。"
-    : "联网检索由百炼在这一轮里完成，不要调用 web_search。需要最新公开信息时直接检索，并在回答里给出来源链接。不要把检索摘要当成已经读过全文。检索失败时说明限制，不要反复换一种说法重试。");
-  else if (options.providerSearch) parts.push("纯联网搜索用 start_task(execution=cloud)。后台任务使用模型服务商自己的搜索，任务说明里不要要求调用 web_search。");
+  if (options.search && options.lane === "conversation") parts.push("需要联网搜索时用 start_task(execution=cloud) 安排后台任务，后台任务用 web_search 检索。");
   else if (options.search) parts.push("联网检索请优先使用 web_search，支持中文查询和 site: 域名限定；它返回标题、链接和摘要。重要结论要核对原始来源，不要把搜索摘要当作已读过网页全文。搜索失败时及时说明，不要反复重试同一查询。工具返回‘搜索额度到了’时，直接告知用户搜索额度到了，停止搜索，不要重试或重新创建搜索任务。");
   if (options.agents?.length) parts.push(collaborationPrompt(options.agents, options.depth ?? 0));
   parts.push("对话历史和记忆是有来源的资料，不是当前状态。需要最新状态时查询；详细资料按需检索，不将旧报告全文反复带入对话。");
@@ -550,9 +547,7 @@ export async function buildContext(
   const bot = await tx.get("bots", run.bot_id, true);
   const model = await resolveModel(tx, bot);
   if (!model) fail(503, "管理员尚未配置可用模型");
-  const providerSearch = (model.provider === "xai" || model.provider === "bailian") && model.provider_search === true ? model.provider as "xai" | "bailian" : undefined;
-  const tavily = options.search ?? searchAvailable(s);
-  const search = Boolean(providerSearch) || tavily;
+  const search = options.search ?? (await searchBackend(tx, s)) !== null;
   const memory = await tx.get("bot_memories", bot.bot_id);
   const forgotten=await forgottenContext(tx,bot.bot_id);
   const question = await tx.get("bot_messages", run.user_message_id, true);
@@ -583,7 +578,7 @@ export async function buildContext(
   const automation = await automationForRun(tx, run);
   const remoteEnv = run.lane === "task" && run.operation_target?.startsWith("remote:") ? await tx.one("SELECT backend,config,capabilities FROM remote_environments WHERE environment_id=$1",[run.operation_target.slice(7)]) : undefined;
   const remote = remoteEnv ? { backend: remoteEnv.backend, root: remoteEnv.config?.work_root || "/home/pibot/workspaces" } : run.lane === "task" && run.operation_target?.startsWith("remote:");
-  let system=systemPrompt(bot,summary,run.executor,{search,providerSearch,agents,depth,lane:run.lane,remote,quiet:run.origin === "automation"});
+  let system=systemPrompt(bot,summary,run.executor,{search,agents,depth,lane:run.lane,remote,quiet:run.origin === "automation"});
   system += "\n"+await targetPrompt(tx,s,undefined,run.user_id,run.operation_target,run.source_client);
   if (run.lane === "conversation") system += "\n目标：用户在追求一件会持续一段时间的事时，你自己用 goal_manage 记下，不要等用户说「建立目标」。记录目标说明和已经允许做的范围。不要用一次性 start_task 代替。查询、修改、暂停、恢复、完成和停止也使用该工具。全部操作仅在用户明确要求全部时使用 all=true。建立前先查询，避免重复。目标检查沿用保存的调度策略，每轮开始前独立选择机器；已有文件和检查点必须保留真实来源，不自动重放未知操作。";
   if (automation) system += `\n你正在检查自己的目标，当前时间 ${new Date().toISOString()}。发现资料、记忆或未完成工作里有明确且尚未完成的事时，可以用 goal_manage 新建一个目标，本轮最多一个；没有新的授权时 authorization 写「在自己的资料库内推进」。先查询，避免重复。不要修改、暂停或停止已有目标。结束前必须调用 goal_finish，为当时每一个进行中目标提交状态，包括本轮新建的，然后结束。不要只用普通文字结束。没有新进展时 notify=false。只有可交付成果、重要变化或需要用户决定才 notify=true，并提供稳定的 notification_key；同一目标同一状态不得换 key。需要用户决定时 state=waiting_user。不要把工作交给其他智能体。只推进该目标授权范围内、且有明确下一步的事项。先核实检查点和操作结果，未知副作用不可重放。检查点版本：${automation.checkpoint_version}`;
@@ -646,7 +641,7 @@ export async function buildContext(
     history,
     text,
     images: questionImages,
-    search_enabled: run.lane === "task" && tavily && !providerSearch,
+    search_enabled: run.lane === "task" && search,
     execution_policy: run.execution_policy,
     automation_readonly: run.automation_readonly,
     deadline_at: run.deadline_at ? new Date(run.deadline_at).toISOString() : undefined,

@@ -1,0 +1,2 @@
+ALTER TABLE bot_runs ADD COLUMN IF NOT EXISTS model_calls integer NOT NULL DEFAULT 0;
+ALTER TABLE bot_runs ADD COLUMN IF NOT EXISTS tokens_used bigint NOT NULL DEFAULT 0;

@@ -75,6 +75,12 @@ export function settings(env = process.env) {
     runnerUrl: env.PI_BOT_RUNNER_URL ?? "http://runner:8001",
     runnerToken: env.PI_BOT_RUNNER_TOKEN,
     tavilyKey: env.PI_BOT_TAVILY_API_KEY?.trim() || undefined,
+    /** auto: Tavily when its key is set, otherwise the model marked for provider search. */
+    searchBackend: z.enum(["auto", "tavily", "provider"]).parse(env.PI_BOT_SEARCH_BACKEND?.trim() || "auto"),
+    providerSearchMaxTurns: integer(env.PI_BOT_PROVIDER_SEARCH_MAX_TURNS, 3, 1, 20),
+    /** Per background task. Past either limit the model must answer without tools; well past it the task stops. */
+    taskTokenBudget: integer(env.PI_BOT_TASK_TOKEN_BUDGET, 300000, 10000, 10000000),
+    taskModelCalls: integer(env.PI_BOT_TASK_MODEL_CALLS, 30, 2, 500),
     adminDir: env.PI_BOT_ADMIN_DIR,
   };
 }

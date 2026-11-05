@@ -17,7 +17,7 @@ export function webSearchTool(baseUrl: string, token: () => string): ToolDefinit
         headers: { Authorization: `Bearer ${token()}`, "Content-Type": "application/json" },
         body: JSON.stringify({ query: args.query, language: args.language ?? "auto" }),
         redirect: "error",
-        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(25000)]) : AbortSignal.timeout(25000),
+        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(90000)]) : AbortSignal.timeout(90000),
       });
       if (!response.ok) {
         const error = await response.json().catch(() => ({})) as { detail?: unknown };

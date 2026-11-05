@@ -1,8 +1,25 @@
 import { z } from "zod";
 import type { Settings } from "./config.js";
-import { fail, HttpError } from "./db.js";
+import { fail, HttpError, type Database, type Row, type Tx } from "./db.js";
+import { Vault, type LlmClaims } from "./security.js";
+import { endpoint, recordUsage, usageFrom } from "./llm.js";
+import { providerSearchTools } from "./providers.js";
 
+/** Tavily is configured. Whether any backend is usable is `searchBackend`. */
 export const searchAvailable = (s: Settings) => Boolean(s.tavilyKey);
+type Backend = { name: "tavily" } | { name: "provider"; model: Row };
+export function selectBackend(s: Settings, providerModel?: Row | null): Backend | null {
+  if (s.searchBackend !== "provider" && s.tavilyKey) return { name: "tavily" };
+  if (s.searchBackend !== "tavily" && providerModel) return { name: "provider", model: providerModel };
+  return null;
+}
+/** Every web_search goes through one backend; Tavily wins in auto mode because it returns snippets only. */
+export async function searchBackend(tx: Tx, s: Settings) {
+  const model = s.searchBackend === "tavily" ? null : await tx.one(
+    "SELECT * FROM models WHERE enabled AND provider_search AND provider IN ('xai','bailian') ORDER BY is_default DESC, created_at LIMIT 1",
+  );
+  return selectBackend(s, model);
+}
 export const SEARCH_QUOTA_REACHED = "搜索额度到了";
 const USAGE_TTL_MS = 60_000;
 const credits = z.number().finite().nonnegative();
@@ -13,6 +30,8 @@ const usageSchema = z.object({
 type TavilyUsage = z.infer<typeof usageSchema>;
 
 export interface SearchUsage {
+  backend: "tavily" | "provider" | null;
+  model: string | null;
   configured: boolean;
   status: "not_configured" | "available" | "exhausted" | "unavailable";
   plan: string | null;
@@ -25,11 +44,19 @@ export interface SearchUsage {
   error: string | null;
 }
 interface SearchResult { title: string; url: string; content: string }
-interface SearchPage { results: SearchResult[]; warnings: string[] }
+interface SearchPage { results: SearchResult[]; warnings: string[]; summary?: string }
+const MAX_RESULTS = 8;
 const clean = (value: unknown, limit: number) => String(value ?? "").replace(/<[^>]*>/g, "").trim().slice(0, limit);
+function safeUrl(value: unknown) {
+  if (typeof value !== "string") return null;
+  try {
+    const url = new URL(value);
+    return ["http:", "https:"].includes(url.protocol) && !url.username && !url.password ? url.href : null;
+  } catch { return null; }
+}
 
 /** Shared Tavily SaaS gateway. Only the API process holds the provider key. */
-export class WebSearch {
+export class TavilySearch {
   private cache = new Map<string, { until: number; page: SearchPage }>();
   private quota?: TavilyUsage;
   private checkedAt?: number;
@@ -86,7 +113,7 @@ export class WebSearch {
   }
 
   /** Admin-safe snapshot; provider responses and credentials never leave this gateway. */
-  async usage(): Promise<SearchUsage> {
+  async usage(): Promise<Omit<SearchUsage, "backend" | "model">> {
     const configured = searchAvailable(this.s);
     if (configured) await this.syncUsage();
     return {
@@ -141,13 +168,11 @@ export class WebSearch {
       const seen = new Set<string>();
       const results: SearchResult[] = [];
       for (const entry of data.results as any[]) {
-        if (!entry || typeof entry.url !== "string") continue;
-        let url: URL;
-        try { url = new URL(entry.url); } catch { continue; }
-        if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || seen.has(url.href)) continue;
-        seen.add(url.href);
-        results.push({ title: clean(entry.title, 300), url: url.href, content: clean(entry.content, 2000) });
-        if (results.length === 8) break;
+        const url = safeUrl(entry?.url);
+        if (!url || seen.has(url)) continue;
+        seen.add(url);
+        results.push({ title: clean(entry.title, 300), url, content: clean(entry.content, 2000) });
+        if (results.length === MAX_RESULTS) break;
       }
       const page: SearchPage = { results, warnings: [] };
       if (results.length) {
@@ -172,5 +197,111 @@ export class WebSearch {
         }
       }
     }
+  }
+}
+
+const PROVIDER_INSTRUCTIONS = [
+  "你是联网搜索后端，只负责检索，不回答检索以外的问题。",
+  `根据用户的查询联网检索，只输出一个 JSON 对象，不要 Markdown：{"results":[{"title":"","url":"","content":""}]}。`,
+  `最多 ${MAX_RESULTS} 条，按相关度排序。url 必须是检索到的原始网页地址。content 写这条来源里与查询直接相关的要点，最多 300 字，保留数字、日期和型号，不要编造；来源没有写的内容不要补。`,
+].join("\n");
+
+/** Pulls bounded results out of a Responses payload; only URLs the provider actually retrieved are kept when it reports them. */
+export function providerPage(data: Row): SearchPage {
+  const output: Row[] = Array.isArray(data.output) ? data.output : [];
+  const parts = output.filter(i => i?.type === "message").flatMap(m => Array.isArray(m.content) ? m.content : []).filter(p => p?.type === "output_text");
+  const text = parts.map(p => String(p.text ?? "")).join("");
+  const citations = parts.flatMap(p => Array.isArray(p.annotations) ? p.annotations : []).filter(a => a?.type === "url_citation");
+  const retrieved = new Set([
+    ...citations.map(a => safeUrl(a.url)),
+    ...output.filter(i => i?.type === "web_search_call").flatMap(i => Array.isArray(i.action?.sources) ? i.action.sources : []).map((src: Row) => safeUrl(src?.url)),
+  ].filter((url): url is string => !!url));
+  let parsed: Row | null = null;
+  try { parsed = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1)); } catch { /* fall back to citations */ }
+  const results: SearchResult[] = [];
+  const add = (title: unknown, link: unknown, content: unknown) => {
+    const url = safeUrl(link);
+    if (!url || results.length >= MAX_RESULTS || results.some(r => r.url === url) || (retrieved.size && !retrieved.has(url))) return;
+    results.push({ title: clean(title, 300), url, content: clean(content, 2000) });
+  };
+  for (const r of Array.isArray(parsed?.results) ? parsed!.results : []) add(r?.title, r?.url, r?.content);
+  if (!results.length) for (const c of citations) add(c.title, c.url, "");
+  const summary = !parsed && results.length ? clean(text, 2000) : "";
+  return { results, warnings: results.length ? [] : ["搜索没有返回可用结果"], ...(summary ? { summary } : {}) };
+}
+
+/** Provider-native search runs as its own bounded request, so retrieved pages never enter the caller's context. */
+export class ProviderSearch {
+  private cache = new Map<string, { until: number; page: SearchPage }>();
+  constructor(private db: Database, private s: Settings, private request: typeof fetch = fetch, private now = Date.now) {}
+  async search(model: Row, query: string, language: string, signal?: AbortSignal, who?: LlmClaims): Promise<SearchPage> {
+    const key = JSON.stringify([model.model_id, query, language]);
+    const cached = this.cache.get(key);
+    if (cached && cached.until > this.now()) return cached.page;
+    const secret = new Vault(this.s.vaultFile).open(model.secret, model.model_id);
+    const abort = signal ? AbortSignal.any([signal, AbortSignal.timeout(80000)]) : AbortSignal.timeout(80000);
+    let response: Response;
+    try {
+      response = await this.request(endpoint(model), {
+        method: "POST", signal: abort, redirect: "error",
+        headers: { "content-type": "application/json", authorization: `Bearer ${secret}` },
+        body: JSON.stringify({
+          model: model.provider_model,
+          input: [
+            { role: "system", content: PROVIDER_INSTRUCTIONS },
+            { role: "user", content: ["auto", "all"].includes(language) ? query : `${query}\n（结果语言：${language}）` },
+          ],
+          tools: providerSearchTools(model.provider),
+          ...(model.provider === "xai" ? { max_turns: this.s.providerSearchMaxTurns } : {}),
+          max_output_tokens: Math.min(4000, model.max_tokens),
+          stream: false, store: false,
+        }),
+      });
+    } catch {
+      return fail(502, "联网搜索超时或连接失败，请稍后重试");
+    }
+    if (response.status === 429) fail(503, "搜索请求过于频繁，请稍后重试");
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => {});
+      fail(502, "搜索服务暂时不可用，请稍后重试");
+    }
+    const data = await response.json().catch(() => null) as Row | null;
+    if (who) await recordUsage(this.db, who, model.model_id, usageFrom(data));
+    if (!data || data.status === "failed") fail(502, "搜索服务返回格式异常");
+    const page = providerPage(data!);
+    if (page.results.length) {
+      this.cache.delete(key);
+      this.cache.set(key, { until: this.now() + 300000, page });
+      if (this.cache.size > 100) this.cache.delete(this.cache.keys().next().value!);
+    }
+    return page;
+  }
+}
+
+/** The single web_search entry point; backends differ only in how results are produced. */
+export class WebSearch {
+  private tavily: TavilySearch;
+  private provider?: ProviderSearch;
+  constructor(private s: Settings, request: typeof fetch = fetch, now = Date.now, private db?: Database) {
+    this.tavily = new TavilySearch(s, request, now);
+    if (db) this.provider = new ProviderSearch(db, s, request, now);
+  }
+  private backend() {
+    return this.db ? this.db.tx(tx => searchBackend(tx, this.s)) : Promise.resolve(selectBackend(this.s));
+  }
+  async search(query: string, language: string, signal?: AbortSignal, who?: LlmClaims): Promise<SearchPage> {
+    const backend = await this.backend();
+    if (!backend) return fail(503, "管理员尚未配置联网搜索");
+    return backend.name === "provider"
+      ? this.provider!.search(backend.model, query, language, signal, who)
+      : this.tavily.search(query, language, signal);
+  }
+  async usage(): Promise<SearchUsage> {
+    const backend = await this.backend();
+    if (backend?.name === "provider") return {
+      backend: "provider", model: backend.model.name, configured: true, status: "available",
+      plan: null, plan_used: null, plan_limit: null, key_used: null, key_limit: null, remaining: null, checked_at: null, error: null,
+    };
+    return { backend: backend ? "tavily" : null, model: null, ...(await this.tavily.usage()) };
   }
 }

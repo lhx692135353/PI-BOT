@@ -11,25 +11,11 @@ export interface CatalogModel {
   capabilities?: Partial<ModelCapabilities>;
 }
 
-/** Server-side search tools. The provider runs them inside the Responses request. */
+/** Server-side search tools for the search backend's own request; xAI re-sends results on every server-side turn. */
 export function providerSearchTools(provider: string): { type: string }[] {
   if (provider === "xai") return [{ type: "web_search" }, { type: "x_search" }];
   if (provider === "bailian") return [{ type: "web_search" }];
   return [];
-}
-
-export function applyProviderSearch(body: Record<string, unknown>, model: { provider?: string | null; provider_search?: boolean | null }, lane?: string | null) {
-  const extra = model.provider_search === true ? providerSearchTools(model.provider ?? "") : [];
-  if (lane !== "task" || extra.length === 0) return body;
-  const tools = Array.isArray(body.tools) ? body.tools.filter((tool) => {
-    if (!tool || typeof tool !== "object") return true;
-    const record = tool as Record<string, unknown>;
-    return !(record.type === "function" && record.name === "web_search");
-  }) : [];
-  for (const tool of extra) {
-    if (!tools.some((item) => item && typeof item === "object" && (item as Record<string, unknown>).type === tool.type)) tools.push(tool);
-  }
-  return { ...body, tools };
 }
 
 type ReasoningModel = {

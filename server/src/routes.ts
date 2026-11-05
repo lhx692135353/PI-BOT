@@ -248,11 +248,11 @@ export const routes: Route[] = [
     method: "POST", path: "/web/search", auth: "llm", tag: "web", summary: "联网搜索：电脑与云端共用（短期智能体令牌）",
     tx: false,
     body: z.object({ query: z.string().trim().min(1).max(2000), language: z.string().regex(/^(auto|all|[a-z]{2,3}(-[A-Za-z]{2,4})?)$/).default("auto") }),
-    handler: async ({ webSearch, body, reply }) => {
+    handler: async ({ webSearch, body, reply, llm }) => {
       const abort = new AbortController();
       const onClose = () => { if (!reply.raw.writableEnded) abort.abort(); };
       reply.raw.once("close", onClose);
-      try { return await webSearch.search(body.query, body.language, abort.signal); }
+      try { return await webSearch.search(body.query, body.language, abort.signal, llm); }
       finally { reply.raw.off("close", onClose); }
     },
   },

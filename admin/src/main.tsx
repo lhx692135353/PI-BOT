@@ -388,10 +388,10 @@ function ModelForm({ model, onClose, onSaved }: { model?: Model; onClose: () => 
         {known && (
           <label className="check">
             <input type="checkbox" checked={form.provider_search} onChange={(e) => set({ provider_search: e.target.checked })} />
-            使用服务商搜索
+            用作联网搜索
           </label>
         )}
-        {known && <p className="muted small">{form.provider === "xai" ? "打开后，任务里的联网搜索使用 xAI，检索网页和 X。" : "打开后，任务里的联网搜索使用百炼的网页检索。模型需要支持这项能力。"}</p>}
+        {known && <p className="muted small">{form.provider === "xai" ? "打开后，未配置 Tavily 时，web_search 由这个模型调用 xAI 检索网页和 X，只把精简结果交给任务。建议选便宜的模型。" : "打开后，未配置 Tavily 时，web_search 由这个模型调用百炼网页检索，只把精简结果交给任务。模型需要支持这项能力。"}</p>}
         <label className="check"><input type="checkbox" checked={form.capabilities?.vision ?? true} onChange={e=>set({capabilities:{chat:true,voice:false,tools:true,reasoning:"unknown",...form.capabilities,vision:e.target.checked}})}/>支持图片输入</label>
         <label className="check"><input type="checkbox" checked={form.capabilities?.tools ?? true} onChange={e=>set({capabilities:{chat:true,vision:true,voice:false,reasoning:"unknown",...form.capabilities,tools:e.target.checked}})}/>支持原生工具调用</label>
         <label>推理模式
@@ -474,7 +474,7 @@ function ModelsPage() {
               <dt>语音</dt>
               <dd>{m.voice_model || "未开通"}</dd>
               {(m.provider === "xai" || m.provider === "bailian") && <><dt>搜索</dt>
-              <dd>{m.provider_search ? "服务商" : "关闭"}</dd></>}
+              <dd>{m.provider_search ? "用作联网搜索" : "关闭"}</dd></>}
               {m.provider === "custom" && <><dt>接口</dt>
               <dd className="mono">{m.base_url}</dd></>}
               <dt>上下文</dt>
@@ -560,18 +560,19 @@ function SearchUsagePanel() {
   }, [reload]);
   const number = (value: number | null) => value === null ? "—" : fmt(value);
   return (
-    <section className="search-usage" aria-label="Tavily 搜索额度">
+    <section className="search-usage" aria-label="联网搜索">
       <div className="toolbar">
         <div>
-          <h2>Tavily 搜索额度</h2>
+          <h2>{data?.backend === "provider" ? "联网搜索" : "Tavily 搜索额度"}</h2>
           <p className="muted small">账号与当前 Key 共用的可用额度，每次搜索消耗 1 credit。</p>
         </div>
         <button onClick={reload}>刷新额度</button>
       </div>
       {error && <p className="error" role="alert">无法刷新搜索额度：{error}</p>}
       {!data && !error && <p className="muted">正在获取搜索额度…</p>}
-      {data?.status === "not_configured" && <p className="muted">尚未配置 Tavily Key。请在服务端环境变量 PI_BOT_TAVILY_API_KEY 中填写后重启服务。</p>}
-      {data?.configured && <>
+      {data?.status === "not_configured" && <p className="muted">尚未配置联网搜索。请在服务端环境变量 PI_BOT_TAVILY_API_KEY 中填写 Tavily Key 后重启服务，或在模型里打开「用作联网搜索」。</p>}
+      {data?.backend === "provider" && <p className="muted">联网搜索由模型「{data.model}」通过服务商检索完成，用量计入该模型的 token。</p>}
+      {data?.backend === "tavily" && data.configured && <>
         <div className="stats">
           <div className="stat"><span className="muted">剩余可用 credits</span><strong className={data.status === "exhausted" ? "error" : ""}>{number(data.remaining)}</strong></div>
           <div className="stat"><span className="muted">本月账号已用</span><strong>{number(data.plan_used)}</strong></div>
