@@ -64,6 +64,39 @@ public struct Device: Decodable, Hashable, Identifiable, Sendable {
     }
 }
 
+/// The server-side computer every client uses like one of its own; it holds the cloud library.
+public struct CloudComputer: Decodable, Hashable, Sendable {
+    public var target: String?
+    public var label: String
+    public var online: Bool
+
+    enum CodingKeys: String, CodingKey { case target, label, online }
+    public init(target: String? = nil, label: String = "云端电脑", online: Bool = true) { self.target = target; self.label = label; self.online = online }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        target = try c.decodeIfPresent(String.self, forKey: .target)
+        label = try c.value(.label, "云端电脑")
+        online = try c.value(.online, false)
+    }
+}
+
+public extension Sequence {
+    /// One element per id: the newest copy wins, keeping first-seen order.
+    func uniqued<ID: Hashable>(by id: (Element) -> ID) -> [Element] {
+        var order: [ID] = []
+        var latest: [ID: Element] = [:]
+        for element in self {
+            let key = id(element)
+            if latest.updateValue(element, forKey: key) == nil { order.append(key) }
+        }
+        return order.compactMap { latest[$0] }
+    }
+}
+
+public extension Sequence where Element: Identifiable {
+    func uniqued() -> [Element] { uniqued(by: \.id) }
+}
+
 public struct ComputerStatus: Decodable, Hashable, Sendable {
     public var online: Bool
     public var device: Device?
@@ -82,13 +115,15 @@ public struct Me: Decodable, Sendable {
     public var user: User
     public var computer: ComputerStatus
     public var devices: [Device]
+    public var cloudComputer: CloudComputer?
 
-    enum CodingKeys: String, CodingKey { case user, computer, devices }
+    enum CodingKeys: String, CodingKey { case user, computer, devices, cloudComputer = "cloud_computer" }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         user = try c.decode(User.self, forKey: .user)
         computer = try c.value(.computer, ComputerStatus())
-        devices = try c.value(.devices, [])
+        devices = try c.value(.devices, [Device]()).uniqued()
+        cloudComputer = try c.decodeIfPresent(CloudComputer.self, forKey: .cloudComputer)
     }
 }
 
@@ -324,13 +359,15 @@ public struct BotList: Decodable, Sendable {
     public var bots: [Bot]
     public var computer: ComputerStatus
     public var devices: [Device]
+    public var cloudComputer: CloudComputer?
 
-    enum CodingKeys: String, CodingKey { case bots, computer, devices }
+    enum CodingKeys: String, CodingKey { case bots, computer, devices, cloudComputer = "cloud_computer" }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        bots = try c.decode([Bot].self, forKey: .bots)
+        bots = try c.decode([Bot].self, forKey: .bots).uniqued()
         computer = try c.value(.computer, ComputerStatus())
-        devices = try c.value(.devices, [])
+        devices = try c.value(.devices, [Device]()).uniqued()
+        cloudComputer = try c.decodeIfPresent(CloudComputer.self, forKey: .cloudComputer)
     }
 }
 
@@ -461,7 +498,7 @@ public struct Message: Decodable, Hashable, Identifiable, Sendable {
         executor = try c.decodeIfPresent(String.self, forKey: .executor)
         tools = try c.value(.tools, [])
         progress = try c.value(.progress, [])
-        replySegments = try c.value(.replySegments, [])
+        replySegments = try c.value(.replySegments, [ReplySegment]()).uniqued()
         let rawUi = try c.decodeIfPresent(JSONValue.self, forKey: .ui)
         ui = rawUi == .null ? nil : rawUi
         fromBot = try c.decodeIfPresent(FromBot.self, forKey: .fromBot)
@@ -518,7 +555,7 @@ public struct MessagePage: Decodable, Sendable {
     enum CodingKeys: String, CodingKey { case messages, hasMore = "has_more" }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        messages = try c.decode([Message].self, forKey: .messages)
+        messages = try c.decode([Message].self, forKey: .messages).uniqued()
         hasMore = try c.value(.hasMore, false)
     }
 }
@@ -528,16 +565,19 @@ public struct SendResult: Decodable, Sendable {
     public var messages: [Message]
 }
 
-public struct FileEntry: Decodable, Hashable, Sendable {
+public struct FileEntry: Decodable, Hashable, Identifiable, Sendable {
+    public var id: String
     public var name: String
     public var type: String
     public var size: Int64
     public var modified: String?
 
-    enum CodingKeys: String, CodingKey { case name, type, size, modified }
+    enum CodingKeys: String, CodingKey { case id, name, type, size, modified }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         name = try c.decode(String.self, forKey: .name)
+        // Older servers send no id; a file name is unique within one folder.
+        id = try c.decodeIfPresent(String.self, forKey: .id) ?? name
         type = try c.decode(String.self, forKey: .type)
         size = try c.value(.size, 0)
         modified = try c.decodeIfPresent(String.self, forKey: .modified)
@@ -548,14 +588,16 @@ public struct FileSource: Decodable, Hashable, Identifiable, Sendable {
     public var target: String
     public var label: String
     public var online: Bool
+    public var kind: String
     public var id: String { target }
 
-    enum CodingKeys: String, CodingKey { case target, label, online }
+    enum CodingKeys: String, CodingKey { case target, label, online, kind }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         target = try c.decode(String.self, forKey: .target)
         label = try c.decode(String.self, forKey: .label)
         online = try c.value(.online, false)
+        kind = try c.value(.kind, target.hasPrefix("remote:") ? "cloud" : "device")
     }
 }
 
@@ -563,7 +605,7 @@ public struct FileSources: Decodable, Sendable {
     public var sources: [FileSource]
     enum CodingKeys: String, CodingKey { case sources }
     public init(from decoder: Decoder) throws {
-        sources = try decoder.container(keyedBy: CodingKeys.self).value(.sources, [])
+        sources = try decoder.container(keyedBy: CodingKeys.self).value(.sources, [FileSource]()).uniqued()
     }
 }
 
@@ -577,7 +619,7 @@ public struct FileList: Decodable, Sendable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         target = try c.decodeIfPresent(String.self, forKey: .target)
         path = try c.value(.path, "")
-        entries = try c.value(.entries, [])
+        entries = try c.value(.entries, [FileEntry]()).uniqued()
     }
 }
 

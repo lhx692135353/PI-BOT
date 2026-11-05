@@ -69,7 +69,10 @@ struct FilesView: View {
             do {
                 let found = try await store.fileSources(botId: botId).sources
                 sources = found
-                if source == nil { source = found.first(where: \.online)?.target ?? found.first?.target }
+                // The cloud computer holds the library, so it opens by default.
+                if source == nil || !found.contains(where: { $0.target == source }) {
+                    source = found.first(where: { $0.kind == "cloud" })?.target ?? found.first(where: \.online)?.target ?? found.first?.target
+                }
             } catch is CancellationError {
             } catch {
                 self.error = errorText(error)
@@ -106,7 +109,7 @@ struct FilesView: View {
             if entries.isEmpty {
                 EmptyStateView(avatar: avatar, mood: "idle", title: "这里还是空的", message: "让 \(bot?.name ?? "Bot") 写点东西进来吧。")
             } else {
-                List(entries, id: \.name) { entry in
+                List(entries) { entry in
                     Button {
                         let child = path.isEmpty ? entry.name : "\(path)/\(entry.name)"
                         if entry.type == "dir" { path = child } else { opened = child }

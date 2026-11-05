@@ -25,6 +25,7 @@ import {
   vmResources,
 } from "../src/remote/kubevirt.js";
 import { ensureEnvironment } from "../src/remote/environments.js";
+import { connectLocal, LOCAL_CAPABILITIES } from "../src/remote/local.js";
 import { Hub } from "../src/hub.js";
 import { issueLlmToken, Vault } from "../src/security.js";
 import { createBot, insertRun, finishRun } from "../src/bots.js";
@@ -50,12 +51,47 @@ const envBase = {
   PI_BOT_DATABASE_URL: "postgresql://unused",
   PI_BOT_JWT_SECRET: "j".repeat(40),
 };
-test("remote backend is disabled by default and kubevirt rejects missing startup credentials", () => {
-  assert.equal(settings(envBase).remoteBackend, "none");
+test("remote backend defaults to the server host and kubevirt rejects missing startup credentials", () => {
+  assert.equal(settings(envBase).remoteBackend, "local");
+  assert.equal(settings({ ...envBase, PI_BOT_REMOTE_BACKEND: "" }).remoteBackend, "local");
+  assert.equal(settings({ ...envBase, PI_BOT_REMOTE_BACKEND: "none" }).remoteBackend, "none");
+  assert.equal(settings({ ...envBase, PI_BOT_LOCAL_WORK_ROOT: "/data/workspaces" }).localWorkRoot, "/data/workspaces");
+  assert.throws(() => settings({ ...envBase, PI_BOT_LOCAL_WORK_ROOT: "relative" }));
   assert.throws(() => settings({ ...envBase, PI_BOT_REMOTE_BACKEND: "both" }));
   assert.throws(() =>
     settings({ ...envBase, PI_BOT_REMOTE_BACKEND: "kubevirt" }),
   );
+});
+test("local backend runs files and commands on the server host inside the library", async () => {
+  const base = await mkdtemp(join(tmpdir(), "pibot-local-"));
+  const c = connectLocal(base);
+  const q = (action: string, args: Row = {}, extra: Row = {}) =>
+    c.call({ operation_id: randomUUID(), slug: "writer", action, args, ...extra });
+  try {
+    const health = await c.call({ action: "health", operation_id: randomUUID() });
+    assert.equal(health.root, base);
+    assert.deepEqual(health.capabilities, LOCAL_CAPABILITIES);
+    await q("write_file", { path: "notes/a.txt", content: "hello" });
+    assert.equal((await q("read_file", { path: "notes/a.txt" })).content, "hello");
+    assert.deepEqual((await q("list_files", { path: "notes" })).entries.map((e: Row) => e.name), ["a.txt"]);
+    assert.equal((await q("preflight", { paths: ["notes/a.txt"] })).available, true);
+    assert.equal((await q("preflight", { paths: ["missing.txt"] })).available, false);
+    process.env.PI_BOT_LOCAL_TEST_SECRET = "must-not-leak";
+    const run = await q("run_command", { command: 'pwd; echo "secret=$PI_BOT_LOCAL_TEST_SECRET"' });
+    assert.equal(run.exit_code, 0);
+    assert.match(run.output, /writer\n/);
+    assert.match(run.output, /secret=\n/);
+    await assert.rejects(q("read_file", { path: "../outside.txt" }), /路径超出资料库/);
+    await assert.rejects(q("browser", { op: "read" }), /没有浏览器和桌面/);
+    await assert.rejects(c.forward(5901), /没有云端桌面/);
+    const sftp: any = await c.sftp();
+    const real = await new Promise<string>((resolve, reject) => sftp.realpath(join(base, "writer", "notes", "a.txt"), (e: Error | null, v: string) => e ? reject(e) : resolve(v)));
+    assert.ok(real.endsWith("/writer/notes/a.txt"));
+  } finally {
+    delete process.env.PI_BOT_LOCAL_TEST_SECRET;
+    c.close();
+    await rm(base, { recursive: true, force: true });
+  }
 });
 test("vault domains isolate SSH secrets from model credentials", () => {
   const dir = tempDir();

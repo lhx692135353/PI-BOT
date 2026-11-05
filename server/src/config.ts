@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { homedir } from "node:os";
+import { join } from "node:path";
 const integer = (
   value: string | undefined,
   fallback: number,
@@ -12,13 +14,15 @@ const integer = (
     .max(max)
     .parse(value ?? fallback);
 export function settings(env = process.env) {
-  const remoteBackend = z.enum(["none", "ssh", "kubevirt"]).parse(env.PI_BOT_REMOTE_BACKEND ?? "none");
+  /** Without an SSH/KubeVirt backend, tasks run on the API host itself (inside its container when containerized). */
+  const remoteBackend = z.enum(["none", "local", "ssh", "kubevirt"]).parse(env.PI_BOT_REMOTE_BACKEND?.trim() || "local");
   const required = (name: string) => remoteBackend === "kubevirt" ? z.string().min(1).parse(env[name]) : env[name];
   return {
     fcmProjectId: env.PI_BOT_FCM_PROJECT_ID?.trim() || undefined,
     fcmCredentialsFile: env.GOOGLE_APPLICATION_CREDENTIALS?.trim() || undefined,
     fcmAndroidConfigFile: env.PI_BOT_FCM_ANDROID_CONFIG_FILE?.trim() || undefined,
     remoteBackend,
+    localWorkRoot: z.string().regex(/^\/[a-zA-Z0-9_./-]+$/).parse(env.PI_BOT_LOCAL_WORK_ROOT?.trim() || join(homedir(), ".pi-bot-server", "workspaces")),
     kubevirt: {
       server: required("PI_BOT_K8S_SERVER"), tokenFile: required("PI_BOT_K8S_TOKEN_FILE"), caFile: required("PI_BOT_K8S_CA_FILE"),
       namespace: env.PI_BOT_K8S_NAMESPACE ?? "pibot", imageUrl: required("PI_BOT_KUBEVIRT_IMAGE_URL"),

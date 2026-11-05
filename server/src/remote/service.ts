@@ -13,6 +13,7 @@ import {
   type RemoteConnection,
 } from "./transport.js";
 import { Kubevirt } from "./kubevirt.js";
+import { connectLocal } from "./local.js";
 export const GUI_ACTIONS = new Set([
   "browser",
   "desktop_input",
@@ -63,17 +64,19 @@ export class RemoteService {
                 error: null,
               }),
             );
-          const secret = JSON.parse(
+          const secret = () => JSON.parse(
             remoteVault(this.s).open(env.secret, env.environment_id),
           );
           const c = this.connector
             ? await this.connector(env)
-            : env.backend === "ssh"
-              ? await connectSsh(
-                  sshConfig.parse(env.config),
-                  sshSecret.parse(secret),
-                )
-              : await new Kubevirt(this.s.kubevirt).connect(env, secret);
+            : env.backend === "local"
+              ? connectLocal(env.config.work_root)
+              : env.backend === "ssh"
+                ? await connectSsh(
+                    sshConfig.parse(env.config),
+                    sshSecret.parse(secret()),
+                  )
+                : await new Kubevirt(this.s.kubevirt).connect(env, secret());
           try {
             const health = await c.call({
               action: "health",

@@ -22,12 +22,12 @@ export async function resolvePath(root, input = ".", approved = []) {
     throw new Error("路径超出资料库，请先申请访问：" + full);
   return real;
 }
-export function command(command, cwd, timeout, signal) {
+export function command(command, cwd, timeout, signal, env = process.env) {
   return new Promise((resolve, reject) => {
     if (signal.aborted) return reject(new Error("操作已取消"));
     const child = spawn("/bin/bash", ["-c", command], {
       cwd,
-      env: { ...process.env, PI_BOT_LIBRARY: cwd },
+      env: { ...env, PI_BOT_LIBRARY: cwd },
       detached: true,
       stdio: ["ignore", "pipe", "pipe"],
     });

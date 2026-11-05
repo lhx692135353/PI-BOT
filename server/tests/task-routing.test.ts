@@ -18,7 +18,7 @@ test('task routing uses machines as per-task resources, never Bot identity', {sk
   t.after(()=>db.close());
   await migrate(db);
   const user=randomUUID(), otherUser=randomUUID(), a=randomUUID(), b=randomUUID(), c=randomUUID();
-  const s=settings({PI_BOT_DATABASE_URL:TEST_DB,PI_BOT_JWT_SECRET:'j'.repeat(40),PI_BOT_ADMIN_PASSWORD:'test-password',PI_BOT_RUNNER_TOKEN:'r'.repeat(40)});
+  const s=settings({PI_BOT_DATABASE_URL:TEST_DB,PI_BOT_JWT_SECRET:'j'.repeat(40),PI_BOT_ADMIN_PASSWORD:'test-password',PI_BOT_RUNNER_TOKEN:'r'.repeat(40),PI_BOT_REMOTE_BACKEND:'none'});
   const sent: {device:string;message:any}[]=[];
   const connect=(id:string,capabilities=['files','shell','always-on-v1','preflight-v1'],available=true,reason?:string):DeviceConnection=>{
     const connection:DeviceConnection={deviceId:id,userId:user,capabilities,close(){},send(message){
@@ -104,6 +104,20 @@ test('task routing uses machines as per-task resources, never Bot identity', {sk
     await assert.rejects(db.tx(tx=>resolveTaskTarget(tx,remoteSettings,hub,user,bot.slug,{...route(),requirements:['browser']})),/缺少任务所需能力/);
     await assert.rejects(db.tx(tx=>resolveTaskTarget(tx,remoteSettings,hub,user,bot.slug,{...route(),resources:[{target:'device:'+a}]})),/文件所在电脑/);
     ca=connect(a);cb=connect(b);
+  });
+  await t.test('the cloud computer is the default machine; a named computer or its files still win',async()=>{
+    const local={...s,remoteBackend:'local' as const};
+    await db.tx(tx=>tx.rows("UPDATE remote_environments SET status='retired' WHERE user_id=$1",[user]));
+    await assert.rejects(db.tx(tx=>resolveTaskTarget(tx,local,hub,user,bot.slug,route())),RemotePreparationRequired,'first use prepares the server host');
+    const env=await db.tx(async tx=>(await tx.one("SELECT * FROM remote_environments WHERE user_id=$1 AND status<>'retired'",[user])) ?? tx.insert('remote_environments',{environment_id:randomUUID(),user_id:user,backend:'local',config:{work_root:'/tmp/w'},secret:{},status:'ready',capabilities:['files','shell','preflight-v1']}));
+    assert.equal(env.backend,'local');
+    assert.equal((await db.tx(tx=>resolveTaskTarget(tx,local,hub,user,bot.slug,route()))).operation_target,'remote:'+env.environment_id);
+    assert.equal((await db.tx(tx=>resolveTaskTarget(tx,local,hub,user,bot.slug,{...route('device'),device_id:b}))).device_id,b);
+    assert.equal((await db.tx(tx=>resolveTaskTarget(tx,local,hub,user,bot.slug,{...route(),resources:[{target:'device:'+a}]}))).device_id,a);
+    const cc=connect(c,['files','shell','browser']);
+    assert.equal((await db.tx(tx=>resolveTaskTarget(tx,local,hub,user,bot.slug,{...route(),requirements:['browser']}))).device_id,c,'a capability the cloud lacks falls back to a computer');
+    hub.detach(cc);
+    await db.tx(tx=>tx.rows("DELETE FROM remote_environments WHERE environment_id=$1",[env.environment_id]));
   });
   await t.test('queued automatic work reselects immediately before claim; concurrent claims execute once',async()=>{
     const result=await db.tx(tx=>createTask(tx,hub,user,claims,{run_id:parent.run_id,kind:'background',task:'automatic',wait:false,request_id:'automatic'},s));
@@ -214,7 +228,7 @@ test('cloud worker finalizes queued routing through authenticated API; file read
   const {createApp}=await import('../src/app.js');
   const {tempDir,vaultFile}=await import('./helpers.js');
   await resetDatabase(TEST_DB!);const dir=tempDir(),db=new Database(TEST_DB!),hub=new Hub();
-  const s=settings({PI_BOT_DATABASE_URL:TEST_DB,PI_BOT_JWT_SECRET:'j'.repeat(40),PI_BOT_ADMIN_PASSWORD:'test-password',PI_BOT_RUNNER_TOKEN:'r'.repeat(40),PI_BOT_VAULT_FILE:vaultFile(dir.path)});
+  const s=settings({PI_BOT_DATABASE_URL:TEST_DB,PI_BOT_JWT_SECRET:'j'.repeat(40),PI_BOT_ADMIN_PASSWORD:'test-password',PI_BOT_RUNNER_TOKEN:'r'.repeat(40),PI_BOT_VAULT_FILE:vaultFile(dir.path),PI_BOT_REMOTE_BACKEND:'none'});
   const app=await createApp(s,db,hub);t.after(async()=>{await app.close();dir.cleanup();});
   const login=(await app.inject({method:'POST',url:'/auth/login',payload:{username:'admin',password:'test-password'}})).json(),user=login.user.id;
   const api=async(method:'GET'|'POST'|'PATCH',url:string,payload?:any)=>app.inject({method,url,payload,headers:{authorization:'Bearer '+login.access_token}});

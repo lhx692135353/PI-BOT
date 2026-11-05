@@ -2,7 +2,8 @@ import { StrictMode, useCallback, useEffect, useRef, useState, type FormEvent, t
 import { createRoot } from 'react-dom/client';
 import { PiBot } from './bot-avatar.js';
 import { DEFAULT_AVATAR, moodFor, sleepLabel, type Mood } from '@pi-bot/bot-face';
-import type { AccountState, AppEvent, Bot, Device, LocalActivity, Message, MessagePage, ModelOption } from '../../../packages/protocol/src/index.js';
+import type { AccountState, AppEvent, Bot, CloudComputer, Device, LocalActivity, Message, MessagePage, ModelOption } from '../../../packages/protocol/src/index.js';
+import { uniqueById } from './unique.js';
 import { bridge, call, errorText } from './bridge.js';
 import { BotEditor } from './editor.js';
 import { Timeline } from './timeline.js';
@@ -77,7 +78,7 @@ function statusLine(bot: Bot, mood: Mood, now: number) {
   return bot.last_message?.preview || '还没有对话';
 }
 
-function Settings({ state, onClose, onOpenPhone }: { state: AccountState; onClose(): void; onOpenPhone(device: Device): void }) {
+function Settings({ state, cloud, onClose, onOpenPhone }: { state: AccountState; cloud: CloudComputer | null; onClose(): void; onOpenPhone(device: Device): void }) {
   const [devices,setDevices] = useState<Device[]>([]);
   const [error,setError] = useState('');
   const refresh = () => call<Device[]>('devices').then(setDevices).catch(e => setError(errorText(e)));
@@ -101,11 +102,12 @@ function Settings({ state, onClose, onOpenPhone }: { state: AccountState; onClos
             <dt>服务器</dt><dd className="mono">{state.serverUrl}</dd>
             <dt>资料库</dt><dd className="mono">{state.libraryRoot}</dd>
           </dl>
-          <p className="muted small">对话由云端统一处理；每个任务优先本机，再选择其他可用电脑，最后使用云端。文件保存在实际使用的机器上，访问资料库以外的路径仍需授权。</p>
+          <p className="muted small">对话由云端统一处理；任务默认在云端电脑上执行，需要这台电脑上的文件或应用时才用本机。资料库以云端电脑为准，本机资料库里生成的文件会同步一份到云端；资料库以外的本地文件只在本机处理，访问前仍需授权。</p>
           <ClientUpdates />
           <SavedAuthorizations />
           <h3>执行电脑</h3>
-          {devices.filter(d=>!d.revoked_at).map(d=>(
+          {cloud && <div className="device-row"><span>{cloud.label} · Linux · {cloud.online ? '在线' : '准备中'} · 资料库</span></div>}
+          {uniqueById(devices.filter(d=>!d.revoked_at)).map(d=>(
             <div key={d.id} className="device-row">
               <span>{d.label} · {d.platform === 'linux' ? 'Linux' : d.platform === 'darwin' ? 'macOS' : d.platform === 'win32' ? 'Windows' : '未知平台'} · {d.online ? '在线' : '离线'}{d.id === state.deviceId ? ' · 本机' : ''}</span>
               <span className="device-actions">
@@ -126,7 +128,7 @@ function Settings({ state, onClose, onOpenPhone }: { state: AccountState; onClos
 
 const GOAL_STATUS: Record<string, string> = { active: '进行中', paused: '已暂停', waiting_user: '等你决定', done: '已完成' };
 interface GoalItem { operation_target?:string; id: string; title: string; goal: string; status: string; progress: string | null }
-interface LibraryEntry { name: string; type: 'dir' | 'file'; size: number }
+interface LibraryEntry { id?: string; name: string; type: 'dir' | 'file'; size: number }
 interface LibraryFile { kind: 'text' | 'binary' | 'image'; name: string; content?: string; truncated?: boolean }
 
 function Inspector({ bot, currentDeviceId, onClose, onOpenLibrary }: { bot: Bot; currentDeviceId: string | null; onClose(): void; onOpenLibrary(): void }) {
@@ -138,14 +140,15 @@ function Inspector({ bot, currentDeviceId, onClose, onOpenLibrary }: { bot: Bot;
   const [libraryError, setLibraryError] = useState('');
   const [file, setFile] = useState<LibraryFile | null>(null);
   const libraryTicket = useRef(0);
-  const [sources,setSources] = useState<{target:string;label:string;online:boolean}[]>([]);
+  const [sources,setSources] = useState<{target:string;label:string;online:boolean;kind?:'cloud'|'device'}[]>([]);
   const [source,setSource] = useState("");
   useEffect(() => {
     let live = true;
     void call<{sources:typeof sources}>("librarySources",{id:bot.id}).then(result => {
       if (!live) return;
-      setSources(result.sources);
-      setSource(result.sources.find(x => x.target === "device:"+currentDeviceId)?.target ?? result.sources.find(x => x.online)?.target ?? result.sources[0]?.target ?? "");
+      const found = uniqueById(result.sources, x => x.target);
+      setSources(found);
+      setSource(found.find(x => x.kind === "cloud")?.target ?? found.find(x => x.target === "device:"+currentDeviceId)?.target ?? found.find(x => x.online)?.target ?? found[0]?.target ?? "");
     }).catch(e => {if (live) setLibraryError(errorText(e));});
     return () => {live=false; ++libraryTicket.current;};
   },[bot.id,currentDeviceId]);
@@ -163,7 +166,7 @@ function Inspector({ bot, currentDeviceId, onClose, onOpenLibrary }: { bot: Bot;
     const ticket = ++libraryTicket.current;
     setPath(next); setFile(null); setEntries(null); setLibraryError('');
     void call<{ path: string; entries: LibraryEntry[] }>('library', { id: bot.id, path: next, target:source })
-      .then(r => { if (ticket !== libraryTicket.current) return; setPath(r.path || ''); setEntries(r.entries); })
+      .then(r => { if (ticket !== libraryTicket.current) return; setPath(r.path || ''); setEntries(uniqueById(r.entries, e => e.id ?? e.name)); })
       .catch(e => { if (ticket === libraryTicket.current) setLibraryError(/离线/.test(errorText(e)) ? '文件所在机器离线，资料库暂时无法读取' : errorText(e)); });
   }, [bot.id,source]);
   useEffect(() => { if (tab === 'library') loadLibrary(''); }, [tab, loadLibrary]);
@@ -199,7 +202,7 @@ function Inspector({ bot, currentDeviceId, onClose, onOpenLibrary }: { bot: Bot;
           {libraryError && <p className="error small">{libraryError}</p>}
           {path && <button type="button" className="link" onClick={() => loadLibrary(parent)}>返回上一级</button>}
           {entries?.map(entry => (
-            <button type="button" key={entry.name} className="library-entry" onClick={() => {
+            <button type="button" key={entry.id ?? entry.name} className="library-entry" onClick={() => {
               const next = path ? `${path}/${entry.name}` : entry.name;
               if (entry.type === 'dir') loadLibrary(next);
               else { const ticket=++libraryTicket.current; void call<LibraryFile>('libraryRead', { id: bot.id, path: next, target:source }).then(r => {if(ticket===libraryTicket.current)setFile(r);}).catch(e => {if(ticket===libraryTicket.current)setLibraryError(errorText(e));}); }
@@ -223,6 +226,7 @@ function App() {
   const [bots, setBots] = useState<Bot[]>([]);
   const [models, setModels] = useState<ModelOption[]>([]);
   const [devices,setDevices] = useState<Device[]>([]);
+  const [cloud,setCloud] = useState<CloudComputer | null>(null);
   const [selected, setSelected] = useState<string | null>(() => localStorage.getItem('pi-bot.selected'));
   const [pages, setPages] = useState<Record<string, { messages: Message[]; hasMore: boolean }>>({});
   const [activities, setActivities] = useState<Record<string, LocalActivity>>({});
@@ -246,9 +250,10 @@ function App() {
     const request = ++botsRequest.current;
     botsInFlight.current++;
     try {
-      const r = await call<{ bots: Bot[]; devices: Device[] }>('bots');
+      const r = await call<{ bots: Bot[]; devices: Device[]; cloud_computer?: CloudComputer | null }>('bots');
       if (request !== botsRequest.current) return;
-      setDevices(r.devices ?? []);
+      setDevices(uniqueById(r.devices ?? []));
+      setCloud(r.cloud_computer ?? null);
       setBots(r.bots); setLoadError('');
       setSelected(s => (s && r.bots.some(b => b.id === s) ? s : r.bots[0]?.id ?? null));
     } catch (e) { if (request === botsRequest.current) setLoadError(errorText(e)); }
@@ -270,7 +275,7 @@ function App() {
     const current = pages[botId];
     if (!current?.messages.length) return;
     const page = await call<MessagePage>('messages', { botId, before: current.messages[0].seq });
-    setPages(p => ({ ...p, [botId]: { messages: [...page.messages, ...p[botId].messages], hasMore: page.has_more } }));
+    setPages(p => ({ ...p, [botId]: { messages: uniqueById([...page.messages, ...p[botId].messages]).sort((a, b) => a.seq - b.seq), hasMore: page.has_more } }));
   };
 
   useEffect(() => {
@@ -426,7 +431,7 @@ function App() {
       </>}
       {phoneTarget && <PhoneDock key={phoneAssociationKey(account.serverUrl, account.user?.id ?? null)} associationKey={phoneAssociationKey(account.serverUrl, account.user?.id ?? null)} botId={phoneTarget.botId ? bot?.id ?? phoneTarget.botId : null} pinnedDeviceId={phoneTarget.deviceId} devices={devices} executionDeviceId={null} onClose={() => setPhoneTarget(null)} />}
       {editor && <BotEditor bot={editor === 'new' ? undefined : editor} models={models} onClose={() => setEditor(null)} onSaved={b => { setEditor(null); setSelected(b.id); void loadBots(); }} />}
-      {settings && <Settings state={account} onClose={() => setSettings(false)} onOpenPhone={device => { setSettings(false); setPhoneTarget({ botId: null, deviceId: device.id }); }} />}
+      {settings && <Settings state={account} cloud={cloud} onClose={() => setSettings(false)} onOpenPhone={device => { setSettings(false); setPhoneTarget({ botId: null, deviceId: device.id }); }} />}
     </div>
   );
 }

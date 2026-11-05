@@ -20,7 +20,8 @@ services:
       dockerfile: server/Dockerfile
     environment: &server-env
       PI_BOT_FCM_PROJECT_ID: ${PI_BOT_FCM_PROJECT_ID:-}
-      PI_BOT_REMOTE_BACKEND: ${PI_BOT_REMOTE_BACKEND:-none}
+      PI_BOT_REMOTE_BACKEND: ${PI_BOT_REMOTE_BACKEND:-local}
+      PI_BOT_LOCAL_WORK_ROOT: ${PI_BOT_LOCAL_WORK_ROOT:-/data/workspaces}
       PI_BOT_K8S_SERVER: ${PI_BOT_K8S_SERVER:-}
       PI_BOT_K8S_TOKEN_FILE: ${PI_BOT_K8S_TOKEN_FILE:-}
       PI_BOT_K8S_CA_FILE: ${PI_BOT_K8S_CA_FILE:-}
@@ -42,7 +43,9 @@ services:
       PI_BOT_AUTOMATION_MODEL_CALLS: ${PI_BOT_AUTOMATION_MODEL_CALLS:-20}
       PI_BOT_AUTOMATION_DAILY_ROUNDS: ${PI_BOT_AUTOMATION_DAILY_ROUNDS:-96}
       PI_BOT_AUTOMATION_PATROL_DAILY_ROUNDS: ${PI_BOT_AUTOMATION_PATROL_DAILY_ROUNDS:-8}
-    volumes: ["./vault.json:/run/secrets/pibot-vault.json:ro"]
+    # Cloud computer: tasks run inside this container; the cloud library is this host directory.
+    user: "0:0"
+    volumes: ["./vault.json:/run/secrets/pibot-vault.json:ro", "${PI_BOT_WORKSPACES_DIR:-./workspaces}:/data/workspaces"]
     ports: ["8000:8000"]
     depends_on:
       postgres: {condition: service_healthy}

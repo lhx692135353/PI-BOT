@@ -5,7 +5,7 @@ import { createApp } from "../src/app.js";
 import { Database } from "../src/db.js";
 import { settings } from "../src/config.js";
 import { Hub } from "../src/hub.js";
-import { insertRun, finishRun, buildContext, botOut, messagesPage } from "../src/bots.js";
+import { insertRun, finishRun, buildContext, botOut, messagesPage, setProgress } from "../src/bots.js";
 import { AgentDispatcher, createTask, messageTask, cancelTask } from "../src/agents.js";
 import { recordReply } from "../src/replies.js";
 import { claimExecution } from "../src/scheduling.js";
@@ -61,6 +61,29 @@ test("opening persists while running, retries do not duplicate, answers replay o
     assert.equal(context.history.filter(h => h.content === "服务正常。").length, 1);
     assert.ok(!context.history.some(h => h.content.includes("不能公开")));
     await finishRun(tx, followup.run_id, "completed", null, "好。");
+  });
+});
+
+test("earlier plain remarks stay visible once later replies become segments", { skip }, async () => {
+  const run = await parent();
+  await db.tx(async tx => {
+    const active = await tx.get("bot_runs", run.run_id);
+    await setProgress(tx, active, ["已经停了，对比任务还没开始查。"]);
+    await finishRun(tx, run.run_id, "completed", null, "对比任务已经停掉了，没有产出结果。");
+    const done = await tx.get("bot_messages", run.assistant_message_id);
+    assert.deepEqual(done.reply_segments.map((r: any) => [r.phase, r.text]), [["update", "已经停了，对比任务还没开始查。"], ["answer", "对比任务已经停掉了，没有产出结果。"]]);
+    assert.equal(done.content, "对比任务已经停掉了，没有产出结果。");
+  });
+  const live = await parent();
+  await db.tx(async tx => {
+    const active = await tx.get("bot_runs", live.run_id);
+    await recordReply(tx, active, { id: "open", text: "先看一下。", phase: "opening", generated_at: new Date().toISOString() });
+    await setProgress(tx, active, ["第一批结果出来了。"]);
+    await setProgress(tx, active, ["第一批结果出来了。"]);
+    await recordReply(tx, active, { id: "answer", text: "全部完成。", phase: "answer", generated_at: new Date().toISOString() });
+    const m = await tx.get("bot_messages", live.assistant_message_id);
+    assert.deepEqual(m.reply_segments.map((r: any) => r.text), ["先看一下。", "第一批结果出来了。", "全部完成。"]);
+    await finishRun(tx, live.run_id, "completed", null, "全部完成。");
   });
 });
 

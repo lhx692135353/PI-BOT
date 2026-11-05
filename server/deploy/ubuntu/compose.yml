@@ -9,7 +9,8 @@ x-app: &app
 
 x-env: &env
   PI_BOT_FCM_PROJECT_ID: ${PI_BOT_FCM_PROJECT_ID:-}
-  PI_BOT_REMOTE_BACKEND: ${PI_BOT_REMOTE_BACKEND:-none}
+  PI_BOT_REMOTE_BACKEND: ${PI_BOT_REMOTE_BACKEND:-local}
+  PI_BOT_LOCAL_WORK_ROOT: ${PI_BOT_LOCAL_WORK_ROOT:-/data/workspaces}
   PI_BOT_K8S_SERVER: ${PI_BOT_K8S_SERVER:-}
   PI_BOT_K8S_TOKEN_FILE: ${PI_BOT_K8S_TOKEN_FILE:-}
   PI_BOT_K8S_CA_FILE: ${PI_BOT_K8S_CA_FILE:-}
@@ -50,7 +51,9 @@ services:
     <<: *app
     environment: *env
     ports: ["${PI_BOT_BIND_ADDRESS:-0.0.0.0}:${PI_BOT_HTTP_PORT:-8000}:8000"]
-    volumes: [./vault.json:/run/secrets/vault.json:ro]
+    # Cloud computer: tasks run inside this container; the cloud library is this host directory.
+    user: "0:0"
+    volumes: [./vault.json:/run/secrets/vault.json:ro, "${PI_BOT_WORKSPACES_DIR:-/opt/pi-bot/workspaces}:/data/workspaces"]
     mem_limit: 320m
     depends_on:
       postgres: {condition: service_healthy}

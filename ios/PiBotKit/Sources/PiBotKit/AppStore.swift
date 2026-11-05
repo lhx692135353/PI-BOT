@@ -28,6 +28,8 @@ public final class AppStore {
     public private(set) var bots: [Bot]?
     public private(set) var computer = ComputerStatus()
     public private(set) var devices: [Device] = []
+    /// The always-available server-side computer shown next to the user's own; nil when disabled.
+    public private(set) var cloudComputer: CloudComputer?
     /// Whether the live events socket is connected.
     public private(set) var live = false
     /// The user's current voice call, on this device or another one.
@@ -91,6 +93,7 @@ public final class AppStore {
         timelines = [:]
         computer = ComputerStatus()
         devices = []
+        cloudComputer = nil
         liveCall = nil
         voiceNotice = nil
         drafts = [:]
@@ -106,6 +109,7 @@ public final class AppStore {
         let me = try await authed { try await self.api.me($0, token: $1) }
         computer = me.computer
         devices = me.devices
+        cloudComputer = me.cloudComputer
         return me
     }
 
@@ -160,6 +164,7 @@ public final class AppStore {
         bots = incoming + previous.filter { !ids.contains($0.id) && (botRefreshVersions[$0.id] ?? 0) > version }
         computer = list.computer
         devices = list.devices
+        cloudComputer = list.cloudComputer
     }
 
     public func refreshBot(_ id: String) async throws {

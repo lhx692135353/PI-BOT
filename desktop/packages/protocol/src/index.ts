@@ -80,6 +80,8 @@ export interface AuthorizationLog { id: number; action: string; resource: string
 export interface Bot { execution_device_id?: string | null; active_tasks?: AgentTaskRef[]; activity?: { status: RunStatus | null; tool: string | null; summary: string | null; running_count: number; queued_count: number }; id: string; name: string; slug: string; persona: string; model_id: string | null; avatar: Avatar; is_main?: boolean; created_at: string; last_active_at: string; latest_run: Run | null; last_message: { role: string; preview: string; status: string; created_at: string } | null; pending_approvals: Approval[] }
 export interface ModelOption { id: string; name: string; is_default: boolean }
 export interface Device { id: string; label: string; platform: 'linux' | 'darwin' | 'win32'; online: boolean; revoked_at: string | null; last_seen_at: string | null }
+/** The server-side computer every client uses like one of its own; it holds the cloud library. */
+export interface CloudComputer { id: string | null; target: string | null; label: string; platform: 'linux'; backend: string; online: boolean; status: string }
 export interface MessagePage { messages: Message[]; has_more: boolean }
 
 export type Connection = 'signed_out' | 'connecting' | 'online' | 'offline' | 'revoked';

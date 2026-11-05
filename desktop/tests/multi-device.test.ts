@@ -50,7 +50,7 @@ test('one Agent independently selects source computers, preserves resource prove
   });
   const secret='r'.repeat(40), runner=await createRunner({token:secret,dir:join(dir.path,'runner'),factory:factory('cloud')});
   await runner.listen({host:'127.0.0.1',port:0});
-  const env={PI_BOT_DATABASE_URL:TEST_DB,PI_BOT_ADMIN_PASSWORD:'test-password',PI_BOT_JWT_SECRET:'j'.repeat(40),PI_BOT_VAULT_FILE:vaultFile(dir.path),PI_BOT_RUNNER_TOKEN:secret,PI_BOT_RUNNER_URL:`http://127.0.0.1:${(runner.server.address() as any).port}`,PI_BOT_WORKER_POLL_SECONDS:'0.02'};
+  const env={PI_BOT_DATABASE_URL:TEST_DB,PI_BOT_ADMIN_PASSWORD:'test-password',PI_BOT_JWT_SECRET:'j'.repeat(40),PI_BOT_VAULT_FILE:vaultFile(dir.path),PI_BOT_RUNNER_TOKEN:secret,PI_BOT_RUNNER_URL:`http://127.0.0.1:${(runner.server.address() as any).port}`,PI_BOT_WORKER_POLL_SECONDS:'0.02',PI_BOT_REMOTE_BACKEND:'none'};
   const db=new Database(TEST_DB!),app=await createApp(settings(env),db,hub);
   await app.listen({host:'127.0.0.1',port:0});
   const base=`http://127.0.0.1:${(app.server.address() as any).port}`;

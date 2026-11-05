@@ -19,14 +19,19 @@ final class CallAudio: @unchecked Sendable {
     private var loudSince: TimeInterval = 0
     private var lastBarge: TimeInterval = 0
     private var configObserver: NSObjectProtocol?
+    private var routeObserver: NSObjectProtocol?
 
     func start() throws {
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, bluetoothHFP])
+        // Media-style output: the loudspeaker or external speakers (AirPlay, Bluetooth A2DP), never the earpiece.
+        // `.voiceChat` uses the phone-call route and volume, which is silent on some iPads.
+        try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothA2DP, .allowAirPlay])
         try session.setPreferredSampleRate(48_000)
         try session.setActive(true)
+        Self.avoidReceiver(session)
         // Voice processing gives the platform echo canceller, like Android's VOICE_COMMUNICATION source.
         try engine.inputNode.setVoiceProcessingEnabled(true)
+        engine.inputNode.voiceProcessingOtherAudioDuckingConfiguration = .init(enableAdvancedDucking: false, duckingLevel: .min)
         engine.attach(player)
         engine.connect(player, to: engine.mainMixerNode, format: playback)
         try installTap()
@@ -36,11 +41,21 @@ final class CallAudio: @unchecked Sendable {
         configObserver = NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: nil) { [weak self] _ in
             self?.restart()
         }
+        routeObserver = NotificationCenter.default.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: nil) { _ in
+            Self.avoidReceiver(AVAudioSession.sharedInstance())
+        }
+    }
+
+    private static func avoidReceiver(_ session: AVAudioSession) {
+        guard session.currentRoute.outputs.contains(where: { $0.portType == .builtInReceiver }) else { return }
+        try? session.overrideOutputAudioPort(.speaker)
     }
 
     func stop() {
         if let configObserver { NotificationCenter.default.removeObserver(configObserver) }
+        if let routeObserver { NotificationCenter.default.removeObserver(routeObserver) }
         configObserver = nil
+        routeObserver = nil
         engine.inputNode.removeTap(onBus: 0)
         player.stop()
         engine.stop()
@@ -52,10 +67,11 @@ final class CallAudio: @unchecked Sendable {
 
     func setMuted(_ value: Bool) { lock.withLock { muted = value } }
 
-    /// Route changes (headphones, Bluetooth) stop the engine and may change the input format.
+    /// Route changes (headphones, Bluetooth) stop the engine and may change the input and output formats.
     private func restart() {
         engine.inputNode.removeTap(onBus: 0)
         do {
+            engine.connect(player, to: engine.mainMixerNode, format: playback)
             try installTap()
             if !engine.isRunning { try engine.start() }
             player.play()
@@ -150,14 +166,6 @@ final class CallAudio: @unchecked Sendable {
         }
     }
 }
-
-/// `allowBluetoothHFP` only exists in the iOS 26 SDK; Xcode 16 still calls it `allowBluetooth`.
-#if compiler(>=6.2)
-private let bluetoothHFP = AVAudioSession.CategoryOptions.allowBluetoothHFP
-#else
-private let bluetoothHFP = AVAudioSession.CategoryOptions.allowBluetooth
-#endif
-
 enum CallAudioError: LocalizedError {
     case microphone
     var errorDescription: String? { "无法打开麦克风" }

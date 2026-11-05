@@ -18,7 +18,8 @@ import { TEST_DB, resetDatabase } from "./helpers.js";
 const skip = !TEST_DB && "需要独立 PI_BOT_TEST_DATABASE_URL";
 let db: Database, hub: Hub, user: string, bot: string, device: string, review: string, goalId: string, now: Date;
 let sent: Row[], conn: DeviceConnection;
-const config = () => settings({ PI_BOT_DATABASE_URL: TEST_DB ?? "test", PI_BOT_JWT_SECRET: "j".repeat(40) });
+// Reviews on the user's own computer; cloud-computer reviews are covered in remote.test.ts.
+const config = () => settings({ PI_BOT_DATABASE_URL: TEST_DB ?? "test", PI_BOT_JWT_SECRET: "j".repeat(40), PI_BOT_REMOTE_BACKEND: "none" });
 const scheduler = (options = config()) => new AutomationScheduler(db, options, hub, () => now);
 const claims = (): LlmClaims => ({ sub: user, src: "device", bot, did: device });
 before(() => { if (!skip) db = new Database(TEST_DB!); });

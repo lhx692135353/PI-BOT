@@ -96,6 +96,10 @@ PI_BOT_TEST_DATABASE_URL=postgresql://pibot:pibot@127.0.0.1:5432/pibot npm test
 
 ## 云端机器操作
 
-默认关闭。`PI_BOT_REMOTE_BACKEND=ssh` 时，在用户后台配置每用户唯一的 SSH 虚机；`kubevirt` 时按照启动配置自动创建并复用每用户一台 VM。首版支持 Ubuntu 24.04 LTS amd64，包含文件／命令、浏览器、截图、桌面控制及人工接管。凭据保存在 API，Runner 通过当前任务授权调用。
+默认 `PI_BOT_REMOTE_BACKEND=local`：服务端自己就是各端看到的「云端电脑」，始终在线，和用户自己的电脑并列显示。任务没有指定电脑时默认在它上面执行；需要用户电脑上的文件、应用，或用户明确指定电脑时才用那台电脑。云端电脑就是 API 所在主机（Docker／Kubernetes 部署时为 API 容器内部，镜像以 `debian:bookworm-slim` 为底，带 bash、coreutils、curl、zip、jq 等基础工具），只提供文件与命令工具，没有浏览器和桌面。
+
+资料库以云端电脑上的文件为准，位于 `PI_BOT_LOCAL_WORK_ROOT`（默认 `~/.pi-bot-server/workspaces`；容器内为 `/data/workspaces`，compose 用 `PI_BOT_WORKSPACES_DIR` 指定挂载出来的宿主机目录，默认 `./workspaces`，Ubuntu 部署默认 `/opt/pi-bot/workspaces`）。API 容器以 root 启动，只用于接管新建挂载目录的归属，随后降为 `node` 用户运行。任务在用户电脑上执行时，在电脑资料库（`~/pi-bot/<slug>`）里新建或修改的文件会同步一份到云端资料库（单个最多 10MiB）；经授权访问、修改的资料库以外的本地文件只留在本机。各端按文件 id（Bot + 资料库内路径）去重，同一个文件只显示一次。
+
+命令以 API 进程的系统用户运行，不继承 API 的环境变量；多用户部署请按需隔离或改用下面的虚机后端，设为 `none` 可关闭。`PI_BOT_REMOTE_BACKEND=ssh` 时，在用户后台配置每用户唯一的 SSH 虚机；`kubevirt` 时按照启动配置自动创建并复用每用户一台 VM。首版支持 Ubuntu 24.04 LTS amd64，包含文件／命令、浏览器、截图、桌面控制及人工接管。凭据保存在 API，Runner 通过当前任务授权调用。
 
 部署前请阅读 [云端环境部署与验收](deploy/remote/README.md)，包含 SSH 安装示例、KubeVirt 标准镜像构建、RBAC／VM 模板、启动配置及测试清单。API、Worker、Runner 和两端客户端需同步升级；文件不在电脑和云端之间自动同步。
