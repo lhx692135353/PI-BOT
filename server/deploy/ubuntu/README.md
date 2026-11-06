@@ -42,7 +42,7 @@ sudo sed -n 's/^PI_BOT_ADMIN_PASSWORD=//p' /opt/pi-bot/.env
 
 GitHub Actions 测试通过后构建并推送 `latest` 和 commit SHA 标签。目标机的 systemd timer 每两分钟向阿里云检查 `latest`；只有镜像 ID 变化才更新。无需向 GitHub 上传服务器 SSH 私钥或应用密钥。可从 [Actions 部署文档](https://docs.github.com/en/actions/get-started/continuous-deployment)了解构建与发布流程。
 
-更新时使用文件锁避免并发，保存旧 digest，停止旧 Worker / Runner，然后用不可变 digest 更新并等待健康检查。按当前部署约定，不自动备份数据库。更新失败会写入 `.deployment-failed` 并暂停自动更新，避免持续重启；检查日志后手动运行 `deploy.sh` 恢复。数据库迁移可能使旧镜像不兼容，镜像回退不等于数据库回退。首次服务尚未启动时 timer 不会替代人工完成初次部署。
+更新时使用文件锁避免并发，保存旧 digest，停止旧 Worker / Runner，然后用不可变 digest 更新并等待健康检查。按当前部署约定，不自动备份数据库。更新失败会写入 `.deployment-failed` 并暂停自动更新，避免持续重启；检查日志后手动运行 `deploy.sh` 恢复。部署成功后删除本仓库的旧镜像和悬空镜像，只保留当前与上一版本，避免旧镜像占满磁盘；正在被容器使用的镜像不会删除。数据库迁移可能使旧镜像不兼容，镜像回退不等于数据库回退。首次服务尚未启动时 timer 不会替代人工完成初次部署。
 
 ```sh
 sudo systemctl list-timers pi-bot-update.timer
