@@ -1,0 +1,64 @@
+server/tests/context-budget.test.ts
+  s_8c8e51d45a1c2b::t_3a692c27c55a1e 1-38
+server/src/agents.ts
+  s_8c8e51d45a1c2b::t_60beeb82651ce3 247-257
+packages/agent/src/context-budget.ts
+  s_8c8e51d45a1c2b::t_7aefef388fb773 28
+  s_8c8e51d45a1c2b::t_48515e9f2ef2ef 1-27,29-81
+server/tests/memory.test.ts
+  s_8c8e51d45a1c2b::t_699fc5b142e3ed 305-327
+  s_8c8e51d45a1c2b::t_b838d37e1b233c 304
+packages/agent/tests/responses.ts
+  s_8c8e51d45a1c2b::t_8e8b796a1ece69 69-77,83-86,88
+  s_8c8e51d45a1c2b::t_6ae1c4c020aa04 87
+packages/agent/src/index.ts
+  s_8c8e51d45a1c2b::t_8da03d647814c8 335
+  s_8c8e51d45a1c2b::t_df88474a164eb7 103
+  s_8c8e51d45a1c2b::t_e171b457016eaf 236-242
+  s_8c8e51d45a1c2b::t_4abe278c7d6563 219
+  s_8c8e51d45a1c2b::t_50069fae9708b8 157-158
+  s_8c8e51d45a1c2b::t_959772bf02203c 28,30
+packages/runtime-contracts/src/index.ts
+  s_8c8e51d45a1c2b::t_881e63a33a25d2 177-179,181
+  s_8c8e51d45a1c2b::t_285274af4beae0 180
+server/src/observations.ts
+  s_8c8e51d45a1c2b::t_d53227cfa90b75 303-317
+  s_8c8e51d45a1c2b::t_df6e5be9ed0166 375
+packages/agent/src/tasks.ts
+  s_8c8e51d45a1c2b::t_2c20149cd74344 29
+server/MEMORY-OBSERVABILITY.md
+  s_8c8e51d45a1c2b::t_dc6afa1346193d 9
+  s_8c8e51d45a1c2b::t_b7e07a70f95c1c 11
+  s_8c8e51d45a1c2b::t_7d1241458f3168 17-26
+  s_8c8e51d45a1c2b::t_4d064f8872904b 10
+server/src/memory-maintenance.ts
+  s_8c8e51d45a1c2b::t_b3ea6fde2e0f50 15
+  s_8c8e51d45a1c2b::t_03be031a3bda56 73-74,77,87
+  s_8c8e51d45a1c2b::t_02913e072d466a 86
+  s_8c8e51d45a1c2b::t_24d5f544b75ed4 94
+  s_8c8e51d45a1c2b::t_37a9f7a9f5ef61 175-177
+  s_8c8e51d45a1c2b::t_194c53eed41f75 83-85
+  s_8c8e51d45a1c2b::t_b0ada4586b037d 14
+packages/agent/tests/agent.test.ts
+  s_8c8e51d45a1c2b::t_5c3ca46aef0901 10-11
+  s_8c8e51d45a1c2b::t_d508ab19dbb031 63-76
+  s_8c8e51d45a1c2b::t_d7ed46f5d765d7 230-268
+server/src/memory.ts
+  s_8c8e51d45a1c2b::t_e95599eb331175 205,209-212
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c970d565bb5071dab1c1a26b006b2bc5df11cdfa",
+  "prompts": {},
+  "sessions": {
+    "s_8c8e51d45a1c2b": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "caf9905d-31c6-43db-b61e-02c5b29f74d7",
+        "model": "default"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
