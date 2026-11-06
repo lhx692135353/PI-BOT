@@ -302,6 +302,30 @@ test(
 );
 
 test(
+  "a message larger than one maintenance batch is clipped so the cursor still advances",
+  { skip },
+  async () => {
+    const bot = (await api("/bots", { name: "超长消息" })).data.id;
+    const ids: string[] = [];
+    for (let i = 0; i < 6; i++) {
+      ids.push(await send(bot, `第${i}条`));
+      await db.tx((tx) => finishRun(tx, ids[i], "completed", null, "已记录"));
+    }
+    await db.tx(async (tx) => {
+      await tx.rows("UPDATE bots SET archived_at=now() WHERE bot_id<>$1 AND archived_at IS NULL", [bot]);
+      const first = await tx.get("bot_runs", ids[0]);
+      await tx.rows("UPDATE bot_messages SET content=$2 WHERE message_id=$1", [first.user_message_id, "鲸".repeat(30000)]);
+    });
+    assert.equal(await maintainMemory(db, s, randomUUID()), true);
+    const stored = await db.tx((tx) => tx.get("bot_memories", bot));
+    assert.ok(stored.through_seq > 0, "the oversized message no longer blocks compaction");
+    const input = provider.requests.at(-1)!.body.input.at(-1).content as string;
+    assert.match(input, /中间省略/);
+    assert.ok(input.length < 30000);
+  },
+);
+
+test(
   "failed compaction never advances the cursor and concurrent workers cannot consume the same prefix",
   { skip },
   async () => {

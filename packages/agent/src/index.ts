@@ -25,7 +25,9 @@ import { TASK_TOOL_NAMES } from "./tasks.js";
 import { isInternalTool, SKILL_TOOLS, skillsExtension, type SkillOptions } from "./skills.js";
 import { memoryExtension, MEMORY_TOOLS, type MemoryOptions } from "./hermes-memory/extension.js";
 import { observationExtension, type Observation } from "./observations.js";
+import { contextBudgetExtension } from "./context-budget.js";
 export type { Observation } from "./observations.js";
+export { textTokens, clipText } from "./context-budget.js";
 
 /**
  * A model reachable through the Pi Bot model proxy. `modelId` is the Pi Bot
@@ -98,6 +100,7 @@ export { askAgentTool, type AskAgentOptions } from "./ask-agent.js";
 export { isInternalTool, type SkillSummary } from "./skills.js";
 
 export const CANCELLED = "CANCELLED";
+export const THINKING_EXHAUSTED = "上一轮思考用完了输出额度，还没有给出回答。不要重新分析，直接根据已有思路简洁地给出回答；需要工具就直接调用。";
 /** Safety ceiling for agent-authored progress. The agent chooses the words and how many segments. */
 export const PROGRESS_SEGMENTS = 8;
 export const PROGRESS_CHARS = 2000;
@@ -151,7 +154,8 @@ export class PiAgent implements AgentHandle {
       failed = false,
       aborted = false,
       settled = false,
-      renderedUi = false;
+      renderedUi = false,
+      exhausted = false;
     const progress: string[] = [];
     let idleTimer: NodeJS.Timeout | undefined, timedOut = false;
     const runningTools = new Set<string>();
@@ -212,6 +216,7 @@ export class PiAgent implements AgentHandle {
         }
         failed = msg.stopReason === "error";
         aborted = msg.stopReason === "aborted";
+        exhausted = msg.stopReason === "length" && !msg.content.some((c) => (c.type === "text" && c.text.trim()) || c.type === "toolCall");
         if (!failed && !aborted && msg.content.some((c) => c.type === "toolCall")) {
           const remark = this.redact(content).trim().slice(0, PROGRESS_CHARS);
           if (!privateRemark && remark && !progress.includes(remark) && progress.length < PROGRESS_SEGMENTS) {
@@ -228,6 +233,13 @@ export class PiAgent implements AgentHandle {
     try {
       await this.session.prompt(text, { expandPromptTemplates: false, images: modelImages(images) });
       if (!settled) await this.session.waitForIdle();
+      // Reasoning can consume the whole output budget before any answer; give it one more turn to conclude.
+      if (exhausted && !this.cancelled && !timedOut && !renderedUi && !this.replies.length && reportSummary === undefined) {
+        exhausted = false;
+        settled = false;
+        await this.session.prompt(THINKING_EXHAUSTED, { expandPromptTemplates: false });
+        if (!settled) await this.session.waitForIdle();
+      }
       if (this.cancelled) throw new Error(CANCELLED);
       if (timedOut) throw new RuntimeError({code:"timeout",scope:"model",retryable:true,outcome:"unknown",message:"模型长时间没有响应，已停止本次任务，请稍后重试"});
       if (aborted || this.cancelled) throw new Error(CANCELLED);
@@ -320,7 +332,7 @@ export const createBotAgent: AgentFactory = async (o) => {
     cwd: o.cwd, agentDir: o.agentDir, settingsManager, systemPrompt: o.systemPrompt,
     noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true,
     appendSystemPromptOverride: () => [],
-    extensionFactories: [{name:"report-context",factory:reportContextExtension},...(o.skills ? [{ name: "bot-skills", factory: skillsExtension(o.skills) }] : []),...(o.memory?[{name:"bot-memory",factory:memoryExtension(o.memory)}]:[]),...(o.runId?[{name:"bot-observation",factory:observationExtension(o.runId,o.onObservation)}]:[])],
+    extensionFactories: [{name:"report-context",factory:reportContextExtension},{name:"context-budget",factory:contextBudgetExtension()},...(o.skills ? [{ name: "bot-skills", factory: skillsExtension(o.skills) }] : []),...(o.memory?[{name:"bot-memory",factory:memoryExtension(o.memory)}]:[]),...(o.runId?[{name:"bot-observation",factory:observationExtension(o.runId,o.onObservation)}]:[])],
   });
   await resourceLoader.reload();
   if (resourceLoader.getExtensions().errors.length) throw new Error("内部能力插件加载失败");

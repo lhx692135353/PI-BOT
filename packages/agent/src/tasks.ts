@@ -26,7 +26,7 @@ export function taskTools(baseUrl: string, token: () => string, runId: string): 
     },
     {
       name: "task_status", label: "查看任务状态",
-      description: "不等待任务完成，查询本 Bot 的任务状态、最近活动及更新时间。可传 task_id 查详情，不传列出最近任务。这不是对外部系统的实时核查。",
+      description: "不等待任务完成，查询本 Bot 的任务状态、最近活动及更新时间。不传 task_id 只列出最近任务的摘要和结果开头；需要完整结果、检查点或工具记录时传 task_id。这不是对外部系统的实时核查。",
       parameters: Type.Object({ task_id: Type.Optional(Type.String({ format: "uuid" })) }),
       execute: async (_id, args: any) => result(await call("GET", args.task_id ? `/${args.task_id}?run_id=${runId}` : `?run_id=${runId}`)),
     },

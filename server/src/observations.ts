@@ -300,6 +300,21 @@ export async function recordObservation(
     body,
   });
 }
+/** Character counts per Responses input kind; the bounded trace input cannot show what a large request held. */
+export function inputComposition(input: unknown): Record<string, number> | null {
+  if (!Array.isArray(input)) return null;
+  const out: Record<string, number> = {};
+  for (const item of input as Row[]) {
+    const kind = item?.type === "function_call_output" ? "tool_results"
+      : item?.type === "function_call" ? "tool_calls"
+        : item?.type === "reasoning" ? "reasoning"
+          : typeof item?.role === "string" ? item.role : "other";
+    let size = 0;
+    try { size = JSON.stringify(item)?.length ?? 0; } catch { /* unserializable items count as zero */ }
+    out[kind] = (out[kind] ?? 0) + size;
+  }
+  return out;
+}
 export async function recordGeneration(
   db: Database,
   s: Settings,
@@ -357,6 +372,7 @@ export async function recordGeneration(
         cache_read_tokens: data.usage?.cached ?? null,
         reasoning_tokens: data.usage?.reasoning ?? null,
         reasoning_source: data.reasoning?.source ?? null,
+        input_chars: inputComposition(data.input),
       },
     },
   );

@@ -202,14 +202,14 @@ export async function searchHistory(
     LEFT JOIN bot_runs r USING(run_id) WHERE m.bot_id=$1 AND m.status IN ('completed','cancelled') AND m.content<>''
     AND (m.visibility='public' OR (m.visibility='task' AND r.lane='task'))
     AND NOT EXISTS(SELECT 1 FROM memory_entries e WHERE e.bot_id=m.bot_id AND e.deleted AND (e.source_message_id=m.message_id OR e.source_task_id=r.task_id))
-    AND ($2::text[]='{}' OR m.content ILIKE ANY($2)) ORDER BY m.seq DESC LIMIT 30`,
+    AND ($2::text[]='{}' OR m.content ILIKE ANY($2)) ORDER BY m.seq DESC LIMIT 12`,
     [run.bot_id, searchTerms(query).map((x) => `%${escapeLike(x)}%`)],
   );
   return {
-    matches: rows.map((r) => ({
-      ...r,
-      content: maskForgotten(r.content, forgotten).slice(0, 4000),
-    })),
+    matches: rows.map((r) => {
+      const content = maskForgotten(r.content, forgotten);
+      return { ...r, content: content.length > 1200 ? `${content.slice(0, 1200)}…（共 ${content.length} 字，换更具体的关键词缩小范围）` : content };
+    }),
   };
 }
 export function maskForgotten(content: string, forgotten: string[]) {
