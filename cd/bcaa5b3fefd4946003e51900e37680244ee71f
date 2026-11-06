@@ -1,0 +1,22 @@
+server/deploy/ubuntu/deploy.sh
+  s_8c8e51d45a1c2b::t_44ddb581c24e41 50-54
+  s_8c8e51d45a1c2b::t_45edb8817a4dae 35-36
+server/deploy/ubuntu/README.md
+  s_8c8e51d45a1c2b::t_c1901e0265cf56 45
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "cdbcaa5b3fefd4946003e51900e37680244ee71f",
+  "prompts": {},
+  "sessions": {
+    "s_8c8e51d45a1c2b": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "caf9905d-31c6-43db-b61e-02c5b29f74d7",
+        "model": "default"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
