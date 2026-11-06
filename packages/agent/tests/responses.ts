@@ -66,9 +66,24 @@ export class ResponseStream {
     }
     this.event("response.output_item.done", { output_index, item });
   }
+  reasoning(text: string) {
+    this.endText();
+    const item = { type: "reasoning", id: `rs_${randomUUID()}`, summary: [], content: [{ type: "reasoning_text", text }] };
+    const output_index = this.output.length;
+    this.output.push(item);
+    this.event("response.output_item.added", { output_index, item: { ...item, content: [] } });
+    this.event("response.reasoning_text.delta", { output_index, item_id: item.id, content_index: 0, delta: text });
+    this.event("response.output_item.done", { output_index, item });
+  }
   end(inputTokens = 42, outputTokens = 3) {
     this.endText();
     this.event("response.completed", { response: { id: this.id, object: "response", model: this.model, status: "completed", output: this.output, usage: { input_tokens: inputTokens, output_tokens: outputTokens, total_tokens: inputTokens + outputTokens } } });
+    this.res.end();
+  }
+  /** The provider stopped at max_output_tokens. */
+  truncate(inputTokens = 42, outputTokens = 1000) {
+    this.endText();
+    this.event("response.incomplete", { response: { id: this.id, object: "response", model: this.model, status: "incomplete", incomplete_details: { reason: "max_output_tokens" }, output: this.output, usage: { input_tokens: inputTokens, output_tokens: outputTokens, total_tokens: inputTokens + outputTokens } } });
     this.res.end();
   }
 }

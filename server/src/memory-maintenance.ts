@@ -11,7 +11,8 @@ import {
   privateMemoryContext,
 } from "./memory.js";
 import { scanContent } from "../../packages/agent/src/hermes-memory/content-scanner.js";
-import { estimateTokens } from "@earendil-works/pi-coding-agent";
+import { clipText, textTokens } from "@pi-bot/agent";
+import { CONTEXT_DEFAULTS } from "@pi-bot/runtime-contracts";
 import { recordMaintenance, sanitize, type MaintenancePhase } from "./observations.js";
 
 /** Each lease freezes a prefix. Cursors commit with results, never before the LLM succeeds. */
@@ -69,28 +70,28 @@ export async function maintainMemory(
       );
     const forgotten = await forgottenContext(tx, b.bot_id);
     const facts = learn ? await privateMemoryContext(tx, b.bot_id) : "";
-    const overhead = estimateTokens({
-      role: "user",
-      content: b.summary + facts + JSON.stringify(forgotten),
-      timestamp: 0,
-    });
+    const overhead = textTokens(b.summary + facts + JSON.stringify(forgotten));
+    // Batches stay small: later batches advance the same cursor instead of one oversized request.
     const budget = Math.max(
       0,
-      model.context_window - model.max_tokens - overhead - 2000,
+      Math.min(CONTEXT_DEFAULTS.maintenanceTokens, model.context_window - model.max_tokens - 2000) - overhead,
     );
     const texts: string[] = [];
     const messages: Row[] = [];
     let tokens = 0;
     for (const m of rows) {
-      const text = `[${m.message_id}] ${m.role}: ${maskForgotten(modelMessageContent(m), forgotten)}`;
-      const n = estimateTokens({ role: "user", content: text, timestamp: 0 });
+      let text = `[${m.message_id}] ${m.role}: ${maskForgotten(modelMessageContent(m), forgotten)}`;
+      // A lone message larger than a batch would otherwise hold the cursor forever; its full text stays searchable.
+      if (!messages.length && budget >= 1000 && textTokens(text) > budget)
+        text = clipText(text, budget - 200, "原文过长，完整内容可用 history_search 检索");
+      const n = textTokens(text);
       if (tokens + n > budget) break;
       tokens += n;
       texts.push(text);
       messages.push(m);
     }
     if (!messages.length && !(learn && b.knowledge_dirty && !rows.length)) {
-      // Oversize messages remain raw and searchable; do not pretend they were summarized.
+      // Existing summary and facts left no room for new messages; do not pretend they were summarized.
       await tx.rows(
         `INSERT INTO bot_memories(bot_id,${retry}) VALUES($1,now()+interval '5 minutes') ON CONFLICT(bot_id) DO UPDATE SET ${retry}=EXCLUDED.${retry}`,
         [b.bot_id],
@@ -171,8 +172,9 @@ export async function maintainMemory(
           { role: "system", content: system },
           { role: "user", content: input },
         ],
-        2000,
-        120000,
+        // Reasoning shares this budget; 2000 tokens left thinking models no room for the answer.
+        job.model.max_tokens,
+        180000,
       );
     });
     usage = r.usage;

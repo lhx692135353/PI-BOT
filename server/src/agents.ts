@@ -244,7 +244,17 @@ export async function listTasks(tx: Tx, userId: string, claims: LlmClaims, runId
     LEFT JOIN bot_runs r ON r.run_id=t.child_run_id
     LEFT JOIN bot_messages m ON m.message_id=r.assistant_message_id
     WHERE t.user_id=$1 AND (t.parent_bot_id=$2 OR t.target_bot_id=$2) ORDER BY (coalesce(r.status,t.status) IN ('running','waiting_approval')) DESC, (coalesce(r.status,t.status)='queued') DESC, t.created_at DESC LIMIT 30`, [userId, claims.bot]);
-  return { tasks: rows.map(agentTaskOut) };
+  return { tasks: rows.map(agentTaskBrief) };
+}
+/** Listing every recent task in full resent tens of thousands of characters per call; details stay on task_id. */
+export function agentTaskBrief(t: Row) {
+  const { tools, checkpoint, routing, result, ...rest } = agentTaskOut(t);
+  const text = typeof result === "string" ? result : "";
+  return {
+    ...rest,
+    tool_count: tools.length,
+    ...(text ? { result_preview: text.length > 300 ? `${text.slice(0, 300)}…` : text, result_chars: text.length } : {}),
+  };
 }
 
 export async function messageTask(tx: Tx, userId: string, claims: LlmClaims, taskId: string, body: { run_id: string; text: string; request_id: string }) {

@@ -7,7 +7,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Type } from "typebox";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
-import { createBotAgent, redactor, summarize, automationTools, type ToolActivity } from "../src/index.js";
+import { createBotAgent, redactor, summarize, automationTools, THINKING_EXHAUSTED, type ToolActivity } from "../src/index.js";
+import { CONTEXT_DEFAULTS } from "@pi-bot/runtime-contracts";
 
 const SECRET = "proxy-token-123456";
 const picture = { name: 'pixel.png', mime_type: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC' };
@@ -59,6 +60,20 @@ before(async () => {
     const user = latestUserText(json.input);
     const rounds = realToolOutputs(json.input).length;
     const stream = new ResponseStream(res, json.model);
+    if (user === "思考耗尽") {
+      stream.reasoning("先分析需求，再比较方案……");
+      return void stream.truncate();
+    }
+    if (user === THINKING_EXHAUSTED) {
+      stream.text("结论是 42。");
+      return void stream.end();
+    }
+    if (user === "大量工具结果") {
+      stream.reasoning(`第 ${rounds} 轮思考`);
+      if (rounds < 6) stream.tool("bulk", { round: rounds }, `bulk_${rounds}`);
+      else stream.text("汇总完成。");
+      return void stream.end();
+    }
     if (user === "保存检查点后继续") {
       if (!rounds) stream.tool("task_checkpoint", { goal: user, completed: ["已核实"], findings: [], artifacts: [], blockers: [], next_steps: ["继续回答"] }, "checkpoint_1");
       else stream.text("已保存检查点并继续完成。");
@@ -209,6 +224,45 @@ test("a goal query keeps its opening reply before the tool and its verified answ
     assert.equal(await agent.prompt("查询目标", () => {}), "已核对目标记录，当前没有进行中的目标。");
     assert.deepEqual(progressAtToolStart, [["我先核对当前目标记录，再说明检查的触发方式。"]]);
     assert.deepEqual(progress, [["我先核对当前目标记录，再说明检查的触发方式。"]]);
+  } finally { agent.dispose(); }
+});
+
+test("reasoning that exhausts the output budget gets one more turn instead of failing", async () => {
+  const agent = await createBotAgent({
+    model: { id: "exhausted", name: "测试", baseUrl: url, modelId: "exhausted-test", contextWindow: 32000, maxTokens: 1000 },
+    apiKey: SECRET, cwd: dir, agentDir: join(dir, "exhausted"), systemPrompt: "测试", history: [], tools: [],
+  });
+  try {
+    assert.equal(await agent.prompt("思考耗尽", () => {}), "结论是 42。");
+    const turns = requests.filter(r => r.body.model === "exhausted-test").map(r => r.body);
+    assert.equal(turns.length, 2);
+    assert.ok(turns[1].input.some((m: any) => m.type === "reasoning"), "the unfinished reasoning is kept for the follow-up turn");
+  } finally { agent.dispose(); }
+});
+
+test("a long tool loop clips large results, keeps only the latest reasoning and omits stale results", async () => {
+  const filler = "数据".repeat(4500);
+  const agent = await createBotAgent({
+    model: { id: "bulk", name: "测试", baseUrl: url, modelId: "bulk-test", contextWindow: 256000, maxTokens: 1000 },
+    apiKey: SECRET, cwd: dir, agentDir: join(dir, "bulk"), systemPrompt: "测试", history: [],
+    tools: [{ name: "bulk", label: "批量", description: "批量", parameters: Type.Object({ round: Type.Number() }),
+      execute: async (_id, args: any) => ({ content: [{ type: "text", text: args.round === 0 ? "长".repeat(50000) : filler }], details: {} }) } as ToolDefinition],
+  });
+  try {
+    assert.equal(await agent.prompt("大量工具结果", () => {}), "汇总完成。");
+    const turns = requests.filter(r => r.body.model === "bulk-test").map(r => r.body);
+    assert.equal(turns.length, 7);
+    const second = turns[1].input.find((m: any) => m.type === "function_call_output");
+    assert.ok(second.output.length < CONTEXT_DEFAULTS.toolResultChars + 200, "an oversized result is clipped before the model sees it");
+    assert.match(second.output, /中间省略 40000 字/);
+    for (const turn of turns.slice(1)) assert.equal(turn.input.filter((m: any) => m.type === "reasoning").length, 1);
+    const last = turns.at(-1).input.filter((m: any) => m.type === "function_call_output");
+    assert.equal(last.length, 6, "every tool call keeps its paired result");
+    assert.ok(last.slice(-CONTEXT_DEFAULTS.keepToolResults).every((m: any) => m.output === filler));
+    assert.match(last[0].output, /已省略这条较早的工具结果/);
+    const omitted = turns.map(t => t.input.filter((m: any) => m.type === "function_call_output" && /已省略/.test(m.output)).map((m: any) => m.call_id));
+    for (let i = 1; i < omitted.length; i++)
+      assert.ok(omitted[i - 1].every((id: string) => omitted[i].includes(id)), "once omitted, a result stays omitted so the cached prefix is stable");
   } finally { agent.dispose(); }
 });
 

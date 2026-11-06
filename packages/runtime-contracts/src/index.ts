@@ -174,5 +174,10 @@ export const CONTEXT_DEFAULTS = {
   historyTurns: 6,
   memoryTokens: 1500,
   stateTokens: 1000,
+  /** Conversation tokens a single run may resend per model call before older tool results are omitted. */
+  runTokens: 32000,
+  toolResultChars: 10000,
+  keepToolResults: 3,
+  maintenanceTokens: 24000,
 } as const;
 export const MAX_REPORT_BYTES = 10 * 1024 * 1024;
