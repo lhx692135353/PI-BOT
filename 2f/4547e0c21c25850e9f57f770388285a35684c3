@@ -1,0 +1,74 @@
+android/app/src/main/java/dev/pibot/android/data/PiBotRepository.kt
+  s_cb903812ecde7f::t_eba8e3feed7fea 9,17,56,63,86-99,159-160,229,301-310,312-315,320-324
+android/app/src/main/java/dev/pibot/android/domain/Timeline.kt
+  s_cb903812ecde7f::t_eba8e3feed7fea 21-34
+desktop/packages/service/src/application.ts
+  s_cb903812ecde7f::t_eba8e3feed7fea 231
+desktop/tests/timeline-paging.harness.tsx
+  s_cb903812ecde7f::t_eba8e3feed7fea 1-34
+desktop/tests/timeline-paging.test.ts
+  s_cb903812ecde7f::t_eba8e3feed7fea 1-27
+ios/PiBotKit/Sources/PiBotKit/API.swift
+  s_cb903812ecde7f::t_eba8e3feed7fea 31-33,110
+ios/PiBotKit/Sources/PiBotKit/AppStore.swift
+  s_cb903812ecde7f::t_eba8e3feed7fea 39-41,62-64,66,69,97,100,102-103,233-241,245-269
+android/app/src/main/java/dev/pibot/android/data/PiBotApi.kt
+  s_cb903812ecde7f::t_eba8e3feed7fea 207-208,317
+android/app/src/main/java/dev/pibot/android/PiBotApp.kt
+  s_cb903812ecde7f::t_eba8e3feed7fea 7,15,41
+android/app/src/main/java/dev/pibot/android/ui/TimelineScreen.kt
+  s_cb903812ecde7f::t_eba8e3feed7fea 33,36,64,104-106,127,154,237-251,253-259,263-277,279-285,288-300,302-309
+desktop/tests/timeline-cache.test.ts
+  s_cb903812ecde7f::t_eba8e3feed7fea 1-47
+desktop/apps/desktop/ui/main.tsx
+  s_cb903812ecde7f::t_eba8e3feed7fea 10,232-233,247-248,271,274-280,282-301,333-343
+desktop/tests/timeline-paging-runner.mjs
+  s_cb903812ecde7f::t_eba8e3feed7fea 1-53
+android/app/src/test/java/dev/pibot/android/RepositoryTest.kt
+  s_cb903812ecde7f::t_eba8e3feed7fea 12-13,93-120,311
+ios/PiBotKit/Sources/PiBotKit/TimelineCache.swift
+  s_cb903812ecde7f::t_eba8e3feed7fea 1-49
+ios/PiBotKit/Tests/PiBotKitTests/DomainTests.swift
+  s_cb903812ecde7f::t_eba8e3feed7fea 22-61
+ios/PiBotKit/Tests/PiBotKitTests/StoreTests.swift
+  s_cb903812ecde7f::t_eba8e3feed7fea 119,136
+android/app/src/main/java/dev/pibot/android/data/TimelineCache.kt
+  s_cb903812ecde7f::t_eba8e3feed7fea 1-45
+android/app/src/test/java/dev/pibot/android/DomainTest.kt
+  s_cb903812ecde7f::t_eba8e3feed7fea 48-88
+desktop/apps/desktop/ui/timeline.tsx
+  s_cb903812ecde7f::t_eba8e3feed7fea 121,158-161,164-168,191-219,222-233,235,278-284,299,304,323
+  s_cb903812ecde7f::t_e2aac42a7e1f6c 324
+desktop/apps/desktop/ui/style.css
+  s_cb903812ecde7f::t_eba8e3feed7fea 156,160-161
+desktop/tests/chat.harness.tsx
+  s_cb903812ecde7f::t_eba8e3feed7fea 34
+ios/PiBot/Conversation/ConversationView.swift
+  s_cb903812ecde7f::t_eba8e3feed7fea 14-22,43-47,89,144,147,149,152,155-157,160-162,167-253,256-285
+desktop/apps/desktop/ui/timeline-cache.ts
+  s_cb903812ecde7f::t_eba8e3feed7fea 1-61
+ios/PiBot/PiBotApp.swift
+  s_cb903812ecde7f::t_eba8e3feed7fea 10
+ios/PiBotKit/Sources/PiBotKit/Models.swift
+  s_cb903812ecde7f::t_eba8e3feed7fea 272,374,395,402,425,445,453
+ios/PiBotKit/Sources/PiBotKit/Timeline.swift
+  s_cb903812ecde7f::t_eba8e3feed7fea 27-41
+desktop/tests/timeline-drafts.harness.tsx
+  s_cb903812ecde7f::t_eba8e3feed7fea 43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2f4547e0c21c25850e9f57f770388285a35684c3",
+  "prompts": {},
+  "sessions": {
+    "s_cb903812ecde7f": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "65671f9c-47fd-4e1c-a68e-e7647c3b93b9",
+        "model": "default"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
