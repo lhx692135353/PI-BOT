@@ -116,7 +116,7 @@ final class StoreTests: XCTestCase {
 
         StubProtocol.respond(200, #"{"messages":[\#(msg("m0", 1, "user", "早", "completed"))],"has_more":true}"#)
         try await store.loadTail("b1")
-        XCTAssertEqual(StubProtocol.take().request.url?.query, "limit=50")
+        XCTAssertEqual(StubProtocol.take().request.url?.query, "limit=30")
         XCTAssertTrue(store.timeline("b1").hasMore)
 
         StubProtocol.respond(200, #"{"run":\#(runJSON),"messages":[\#(msg("m1", 2, "user", "写周报", "completed")),\#(msg("m2", 3, "assistant", "", "running"))]}"#)
@@ -133,7 +133,7 @@ final class StoreTests: XCTestCase {
 
         StubProtocol.respond(200, #"{"messages":[\#(msg("m9", 0, "user", "更早", "completed"))],"has_more":false}"#)
         try await store.loadMore("b1")
-        XCTAssertEqual(StubProtocol.take().request.url?.query, "limit=50&before=1")
+        XCTAssertEqual(StubProtocol.take().request.url?.query, "limit=30&before=1")
         XCTAssertFalse(store.timeline("b1").hasMore)
         XCTAssertEqual(store.timeline("b1").messages.first?.id, "m9")
     }

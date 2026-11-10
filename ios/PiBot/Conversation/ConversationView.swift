@@ -11,6 +11,15 @@ struct ConversationView: View {
     let onOpenBot: (String) -> Void
     @State private var error: String?
     @State private var loadingMore = false
+    @State private var olderError: String?
+    /// Distances from the viewport edges to the oldest loaded and the newest message.
+    @State private var topGap: CGFloat = 0
+    @State private var bottomGap: CGFloat = 0
+    /// Older pages wait until the newest message has been on screen once, so opening never pages through history.
+    @State private var reachedBottom = false
+    @State private var settling = false
+    @State private var firstRow: (id: String, frame: CGRect)?
+    @State private var followTail = false
 
     var body: some View {
         Group {
@@ -31,7 +40,11 @@ struct ConversationView: View {
         .background(Palette.paper)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Palette.paper, for: .navigationBar)
-        .task(id: botId) { await load() }
+        .task(id: botId) {
+            reachedBottom = false; settling = false; firstRow = nil; olderError = nil
+            store.hydrate(botId)
+            await load()
+        }
         .onChange(of: store.voiceNotice, initial: true) {
             if let notice = store.voiceNotice, !notice.trimmingCharacters(in: .whitespaces).isEmpty {
                 error = notice
@@ -73,6 +86,7 @@ struct ConversationView: View {
                     onCall: startCall,
                     onSend: { text, requestId, images in
                         error = nil
+                        followTail = true
                         do {
                             try await store.send(botId: botId, text: text, requestId: requestId, images: images)
                             return true
@@ -127,60 +141,148 @@ struct ConversationView: View {
         let tailKey = "\(timeline.messages.last?.id ?? "")|\(timeline.messages.last?.content.count ?? 0)|\(timeline.messages.last?.status ?? "")|\(bot.pendingApprovals.count)|\(bot.activity?.summary ?? "")"
         return GeometryReader { geometry in
             let bubbleWidth = min((geometry.size.width - 40) * 0.92, 600)
+            let viewport = geometry.size.height
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(spacing: 10) {
-                        if timeline.hasMore {
-                            ProgressView()
-                                .frame(maxWidth: .infinity)
-                                .onAppear { loadMore(timeline, proxy: proxy) }
-                        }
-                        if timeline.loaded && timeline.messages.isEmpty {
-                            Intro(bot: bot)
-                        }
-                        ForEach(timeline.messages) { message in
-                            MessageRow(message: message, bubbleWidth: bubbleWidth, onOpenBot: onOpenBot)
-                                .id(message.id)
-                        }
-                        if let summary = bot.activity?.summary {
-                            NowReader { now in
-                                HStack(spacing: 8) {
-                                    BotFace(avatar: bot.avatar, mood: bot.mood(now: now, tool: timeline.runningTool), size: 26, seed: seedOf(bot.id))
-                                    Text(summary).font(.footnote).foregroundStyle(Palette.muted)
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.vertical, 6)
-                            }
-                        }
-                        ForEach(bot.pendingApprovals) { approval in
-                            ApprovalCard(approval: approval)
-                        }
-                        Color.clear.frame(height: 1).id("bottom")
-                    }
-                    .frame(maxWidth: 900)
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 16)
+                    stack(bot, timeline: timeline, bubbleWidth: bubbleWidth, viewport: viewport, proxy: proxy)
                 }
+                .coordinateSpace(name: Self.scrollSpace)
                 .defaultScrollAnchor(.bottom)
                 .scrollDismissesKeyboard(.interactively)
+                .onChange(of: reachedBottom) { loadMore(proxy: proxy, viewport: viewport) }
                 .onChange(of: tailKey) {
                     guard !loadingMore else { return }
+                    // Reading older history is not interrupted by a streaming reply; sending always returns to it.
+                    guard followTail || bottomGap < viewport / 2 else { return }
+                    followTail = false
                     withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) }
+                }
+                .overlay(alignment: .bottom) {
+                    if bottomGap > viewport { jumpToBottom(proxy) }
                 }
             }
         }
     }
 
-    /// Older pages are prepended; keep the previously first message where it was.
-    private func loadMore(_ timeline: Timeline, proxy: ScrollViewProxy) {
-        guard !loadingMore, timeline.hasMore else { return }
-        let anchor = timeline.messages.first?.id
+    private func stack(_ bot: Bot, timeline: Timeline, bubbleWidth: CGFloat, viewport: CGFloat, proxy: ScrollViewProxy) -> some View {
+        LazyVStack(spacing: 10) {
+            if timeline.hasMore, !timeline.messages.isEmpty {
+                Group {
+                    if let olderError {
+                        Button("\(olderError) · 点按重试") { self.olderError = nil; loadMore(proxy: proxy, viewport: viewport) }
+                            .font(.footnote).foregroundStyle(Palette.muted)
+                    } else {
+                        ProgressView()
+                    }
+                }
+                .frame(maxWidth: .infinity)
+            }
+            if timeline.loaded && timeline.messages.isEmpty {
+                Intro(bot: bot)
+            }
+            ForEach(timeline.messages) { message in
+                MessageRow(message: message, bubbleWidth: bubbleWidth, onOpenBot: onOpenBot)
+                    .id(message.id)
+                    .background {
+                        if message.id == timeline.messages.first?.id {
+                            FrameReader(space: Self.scrollSpace) { firstRow = (message.id, $0) }
+                        }
+                    }
+            }
+            if let summary = bot.activity?.summary {
+                NowReader { now in
+                    HStack(spacing: 8) {
+                        BotFace(avatar: bot.avatar, mood: bot.mood(now: now, tool: timeline.runningTool), size: 26, seed: seedOf(bot.id))
+                        Text(summary).font(.footnote).foregroundStyle(Palette.muted)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 6)
+                }
+            }
+            ForEach(bot.pendingApprovals) { approval in
+                ApprovalCard(approval: approval)
+            }
+            Color.clear.frame(height: 1).id("bottom")
+        }
+        // Lazy children appear and disappear unreliably; the stack's own frame is the scroll position.
+        .background(FrameReader(space: Self.scrollSpace) { trackScroll($0, viewport: viewport, proxy: proxy) })
+        .frame(maxWidth: 900)
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
+    }
+
+    private func jumpToBottom(_ proxy: ScrollViewProxy) -> some View {
+        Button {
+            withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo("bottom", anchor: .bottom) }
+        } label: {
+            Image(systemName: "chevron.down")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Palette.ink)
+                .frame(width: 38, height: 38)
+                .background(Palette.card, in: Circle())
+                .overlay(Circle().stroke(Palette.line, lineWidth: 1))
+                .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
+        }
+        .accessibilityLabel("回到最新消息")
+        .padding(.bottom, 12)
+        .transition(.opacity)
+    }
+
+    private static let scrollSpace = "conversation-scroll"
+
+    /// Older history starts loading this far before the top is reached.
+    private static let loadAhead: CGFloat = 600
+
+    private func trackScroll(_ frame: CGRect, viewport: CGFloat, proxy: ScrollViewProxy) {
+        topGap = -frame.minY
+        bottomGap = frame.maxY - viewport
+        if bottomGap < 40, !reachedBottom, !settling {
+            // A lazy stack's first layouts use estimated heights that can look like a short history.
+            settling = true
+            Task { try? await Task.sleep(nanoseconds: 400_000_000); reachedBottom = true }
+        }
+        loadMore(proxy: proxy, viewport: viewport)
+    }
+
+    /// Older pages are prepended; keep the previously first message where it was on screen.
+    private func loadMore(proxy: ScrollViewProxy, viewport: CGFloat) {
+        let timeline = store.timeline(botId)
+        guard reachedBottom, !loadingMore, olderError == nil, timeline.hasMore, topGap < Self.loadAhead,
+              let anchor = timeline.messages.first?.id else { return }
+        let before = firstRow?.id == anchor ? firstRow?.frame : nil
         loadingMore = true
         Task {
-            defer { loadingMore = false }
-            do { try await store.loadMore(botId) } catch is CancellationError {} catch { self.error = errorText(error) }
-            if let anchor { proxy.scrollTo(anchor, anchor: .top) }
+            do {
+                try await store.loadMore(botId)
+                // Scrolling to the row needs the layout that already contains the older page.
+                await Task.yield()
+                // Aligning point y of the row with point y of the viewport puts its top at y * (viewport - height).
+                if let before, abs(viewport - before.height) > 1 {
+                    proxy.scrollTo(anchor, anchor: UnitPoint(x: 0.5, y: before.minY / (viewport - before.height)))
+                } else {
+                    proxy.scrollTo(anchor, anchor: .top)
+                }
+                // The restored offset lands a layout later; until then the old offset still looks like the top.
+                try? await Task.sleep(nanoseconds: 150_000_000)
+            } catch is CancellationError {
+            } catch {
+                olderError = errorText(error)
+            }
+            loadingMore = false
+        }
+    }
+}
+
+/// Reports the view's frame in a named scroll space whenever it moves.
+private struct FrameReader: View {
+    let space: String
+    let report: (CGRect) -> Void
+
+    var body: some View {
+        GeometryReader { g in
+            let frame = g.frame(in: .named(space))
+            Color.clear.onChange(of: frame, initial: true) { report(frame) }
         }
     }
 }

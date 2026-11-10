@@ -6,6 +6,7 @@ import dev.pibot.android.domain.parseServerUrl
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
@@ -13,6 +14,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
@@ -51,12 +53,14 @@ data class LiveCall(
  * Single source of truth for the signed-in user's bots. REST for reads and actions;
  * `/ws/events` while the app is in the foreground for live updates.
  */
+@OptIn(FlowPreview::class)
 class PiBotRepository(
     private val api: PiBotApi,
     http: OkHttpClient,
     private val storage: SessionStorage,
     private val scope: CoroutineScope,
     private val io: CoroutineDispatcher = Dispatchers.IO,
+    private val timelineStore: TimelineStore? = null,
 ) {
     var onSessionChanged: (Session?, Session?) -> Unit = { _, _ -> }
     @Volatile var visibleBotId: String? = null
@@ -79,6 +83,20 @@ class PiBotRepository(
     private val botRefreshVersions = ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicLong>()
     private val tailVersions = ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicLong>()
     private var attempts = 0
+    private val savedTimelines = ConcurrentHashMap<String, Timeline>()
+
+    init {
+        if (timelineStore != null) scope.launch {
+            _timelines.debounce(1000).collect { all ->
+                val userId = _session.value?.user?.id ?: return@collect
+                for ((botId, timeline) in all) {
+                    if (savedTimelines[botId] === timeline || timeline.messages.isEmpty()) continue
+                    withContext(io) { timelineStore.write(userId, botId, timeline) }
+                    savedTimelines[botId] = timeline
+                }
+            }
+        }
+    }
 
     val session: StateFlow<Session?> = _session.asStateFlow()
     /** null until the first load finishes. */
@@ -138,6 +156,8 @@ class PiBotRepository(
         _session.value = null
         _bots.value = null
         _timelines.value = emptyMap()
+        savedTimelines.clear()
+        previous?.user?.id?.let { userId -> timelineStore?.let { store -> scope.launch(io) { store.clear(userId) } } }
         _computer.value = ComputerStatus()
         _devices.value = emptyList()
         _cloudComputer.value = null
@@ -206,8 +226,7 @@ class PiBotRepository(
         val page = withContext(io) { api.messages(ServerUrl(session.serverUrl), session.token, botId) }
         _timelines.update { all ->
             if (_session.value?.pushBindingId != bindingId) all else {
-                val current = all[botId] ?: Timeline()
-                all + (botId to current.merge(page.messages, if (current.loaded) current.hasMore else page.hasMore))
+                all + (botId to (all[botId] ?: Timeline()).mergeTail(page.messages, page.hasMore))
             }
         }
     }
@@ -279,16 +298,30 @@ class PiBotRepository(
         val originalSession = _session.value
         val page = authed { u, t -> api.messages(u, t, botId) }
         if (counter.get() != version || _session.value != originalSession) return
+        _timelines.update { all -> all + (botId to (all[botId] ?: Timeline()).mergeTail(page.messages, page.hasMore)) }
+    }
+
+    /** Shows the cached history of a bot that has not been loaded in this session yet. */
+    suspend fun hydrate(botId: String) {
+        val store = timelineStore ?: return
+        val session = _session.value ?: return
+        if (_timelines.value.containsKey(botId)) return
+        val cached = withContext(io) { store.read(session.user.id, botId) } ?: return
+        if (_session.value != session) return
         _timelines.update { all ->
-            val current = all[botId] ?: Timeline()
-            all + (botId to current.merge(page.messages, if (current.loaded) current.hasMore else page.hasMore))
+            if (all.containsKey(botId)) all else {
+                savedTimelines[botId] = cached
+                all + (botId to cached)
+            }
         }
     }
 
     suspend fun loadMore(botId: String) {
-        val oldest = _timelines.value[botId]?.oldestSeq ?: return loadTail(botId)
-        val page = authed { u, t -> api.messages(u, t, botId, before = oldest) }
-        _timelines.update { all -> all + (botId to (all[botId] ?: Timeline()).merge(page.messages, page.hasMore)) }
+        val oldest = _timelines.value[botId]?.messages?.firstOrNull() ?: return loadTail(botId)
+        val originalSession = _session.value
+        val page = authed { u, t -> api.messages(u, t, botId, before = oldest.seq) }
+        if (_session.value != originalSession) return
+        _timelines.update { all -> all[botId]?.let { all + (botId to it.mergeOlder(oldest.id, page.messages, page.hasMore)) } ?: all }
     }
 
     suspend fun taskConversation(botId: String, taskId: String, after: Long = 0): TaskConversation =

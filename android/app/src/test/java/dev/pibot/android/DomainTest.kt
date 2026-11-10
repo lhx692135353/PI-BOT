@@ -46,6 +46,47 @@ class DomainTest {
     }
 
     @Test
+    fun tailPagesKeepCachedHistoryButNeverLeaveAGap() {
+        val cached = Timeline(listOf(message("a", 1), message("b", 2), message("c", 3)), hasMore = true)
+        val overlapping = cached.mergeTail(listOf(message("c", 3, content = "新"), message("d", 4)), pageHasMore = true)
+        assertEquals(listOf("a", "b", "c", "d"), overlapping.messages.map { it.id })
+        assertEquals("新", overlapping.messages[2].content)
+        assertTrue(overlapping.hasMore && overlapping.loaded)
+
+        val reachesFurther = Timeline(listOf(message("c", 3)), hasMore = true).mergeTail(listOf(message("b", 2), message("c", 3)), pageHasMore = false)
+        assertFalse(reachesFurther.hasMore)
+
+        val detached = cached.mergeTail(listOf(message("y", 40), message("z", 41)), pageHasMore = true)
+        assertEquals(listOf("y", "z"), detached.messages.map { it.id })
+        assertTrue(detached.hasMore)
+    }
+
+    @Test
+    fun olderPagesOnlyPrependOntoTheTimelineTheyWereRequestedFor() {
+        val t = Timeline(listOf(message("c", 3), message("d", 4)), hasMore = true, loaded = true)
+        val older = t.mergeOlder("c", listOf(message("a", 1), message("b", 2)), pageHasMore = false)
+        assertEquals(listOf("a", "b", "c", "d"), older.messages.map { it.id })
+        assertFalse(older.hasMore)
+        assertEquals(t, t.mergeOlder("x", listOf(message("a", 1)), pageHasMore = false))
+    }
+
+    @Test
+    fun timelineCacheKeepsTheNewestMessagesPerAccount() {
+        val root = kotlin.io.path.createTempDirectory("timelines").toFile()
+        try {
+            val cache = dev.pibot.android.data.TimelineCache(root, limit = 2)
+            cache.write("u1", "b1", Timeline((1..5).map { message("m$it", it) }, hasMore = false, loaded = true))
+            val read = cache.read("u1", "b1")!!
+            assertEquals(listOf("m4", "m5"), read.messages.map { it.id })
+            assertTrue(read.hasMore)
+            assertFalse(read.loaded)
+            assertEquals(null, cache.read("u2", "b1"))
+            cache.clear("u1")
+            assertEquals(null, cache.read("u1", "b1"))
+        } finally { root.deleteRecursively() }
+    }
+
+    @Test
     fun deltasReplaceOnlyRunningMessagesAcrossToolRounds() {
         val t = Timeline().merge(listOf(message("u", 1), message("a", 2, status = "running", content = "你")))
         val grown = t.applyDelta("a", "你好")

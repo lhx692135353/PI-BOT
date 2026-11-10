@@ -40,6 +40,6 @@ if (!localStorage.getItem('pi-bot.message-drafts.v1')) stageDrafts({
 function Harness() {
   const [bot,setBot] = useState(botA);
   harness.select = id=>setBot(id === botA.id ? botA : botB);
-  return <Timeline bot={bot} messages={[]} hasMore={false} mood="idle" online={true} onLoadMore={()=>{}} onSent={()=>{}} onOpenBot={()=>{}} />;
+  return <Timeline bot={bot} messages={[]} hasMore={false} mood="idle" online={true} onLoadMore={async()=>{}} onSent={()=>{}} onOpenBot={()=>{}} />;
 }
 createRoot(document.getElementById('root')!).render(<Harness />);

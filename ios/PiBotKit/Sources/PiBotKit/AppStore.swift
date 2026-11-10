@@ -36,7 +36,9 @@ public final class AppStore {
     public private(set) var liveCall: LiveCall?
     /// A call failure to show once, after the call itself has gone.
     public private(set) var voiceNotice: String?
-    public private(set) var timelines: [String: Timeline] = [:]
+    public private(set) var timelines: [String: Timeline] = [:] {
+        didSet { schedulePersist() }
+    }
     /// Drafts belong to bots, so resizing, rotating and switching conversations keep them.
     public var drafts: [String: String] = [:]
 
@@ -57,10 +59,14 @@ public final class AppStore {
     @ObservationIgnored private var botListRequest: Int64 = 0
     @ObservationIgnored private var botRefreshVersions: [String: Int64] = [:]
     @ObservationIgnored private var tailVersions: [String: Int64] = [:]
+    @ObservationIgnored private let timelineStore: TimelineStore?
+    @ObservationIgnored private var savedTimelines: [String: Timeline] = [:]
+    @ObservationIgnored private var persistTask: Task<Void, Never>?
 
-    public init(api: PiBotAPI = PiBotAPI(), storage: SessionStorage = KeychainSessionStore(), socketSession: URLSession? = nil) {
+    public init(api: PiBotAPI = PiBotAPI(), storage: SessionStorage = KeychainSessionStore(), socketSession: URLSession? = nil, timelineStore: TimelineStore? = nil) {
         self.api = api
         self.storage = storage
+        self.timelineStore = timelineStore
         if let socketSession { self.socketSession = socketSession } else {
             let config = URLSessionConfiguration.default
             config.timeoutIntervalForRequest = 3600
@@ -88,9 +94,13 @@ public final class AppStore {
     public func logout() {
         stopEvents()
         storage.clear()
+        let userId = session?.user.id
         session = nil
         bots = nil
+        persistTask?.cancel(); persistTask = nil
         timelines = [:]
+        savedTimelines = [:]
+        if let userId, let store = timelineStore { Task.detached(priority: .utility) { store.clear(userId: userId) } }
         computer = ComputerStatus()
         devices = []
         cloudComputer = nil
@@ -220,14 +230,43 @@ public final class AppStore {
         let original = session
         let page = try await authed { try await self.api.messages($0, token: $1, botId: botId) }
         guard tailVersions[botId] == version, session == original else { return }
-        let current = timeline(botId)
-        timelines[botId] = current.merge(page.messages, hasMore: current.loaded ? current.hasMore : page.hasMore)
+        timelines[botId] = timeline(botId).mergeTail(page.messages, hasMore: page.hasMore)
+    }
+
+    /// Shows the cached history of a bot that has not been loaded in this session yet.
+    public func hydrate(_ botId: String) {
+        guard timelines[botId] == nil, let store = timelineStore, let userId = session?.user.id,
+              let cached = store.read(userId: userId, botId: botId) else { return }
+        savedTimelines[botId] = cached
+        timelines[botId] = cached
     }
 
     public func loadMore(_ botId: String) async throws {
-        guard let oldest = timelines[botId]?.oldestSeq else { return try await loadTail(botId) }
-        let page = try await authed { try await self.api.messages($0, token: $1, botId: botId, before: oldest) }
-        timelines[botId] = timeline(botId).merge(page.messages, hasMore: page.hasMore)
+        guard let oldest = timelines[botId]?.messages.first else { return try await loadTail(botId) }
+        let original = session
+        let page = try await authed { try await self.api.messages($0, token: $1, botId: botId, before: oldest.seq) }
+        guard session == original, let current = timelines[botId] else { return }
+        timelines[botId] = current.mergeOlder(before: oldest.id, page.messages, hasMore: page.hasMore)
+    }
+
+    private func schedulePersist() {
+        guard timelineStore != nil else { return }
+        persistTask?.cancel()
+        persistTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            guard !Task.isCancelled else { return }
+            self?.persistTimelines()
+        }
+    }
+
+    private func persistTimelines() {
+        guard let store = timelineStore, let userId = session?.user.id else { return }
+        let changed = timelines.filter { savedTimelines[$0.key] != $0.value && !$0.value.messages.isEmpty }
+        guard !changed.isEmpty else { return }
+        for (botId, timeline) in changed { savedTimelines[botId] = timeline }
+        Task.detached(priority: .utility) {
+            for (botId, timeline) in changed { store.write(userId: userId, botId: botId, timeline: timeline) }
+        }
     }
 
     public func taskConversation(botId: String, taskId: String, after: Int64 = 0) async throws -> TaskConversation {
