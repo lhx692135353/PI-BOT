@@ -204,6 +204,8 @@ data class TaskConversation(@SerialName("execution_label") val executionLabel: S
     val bots: List<ConversationBot>, val messages: List<ConversationMessage>, val total: Int,
     @SerialName("has_more") val hasMore: Boolean, @SerialName("next_after") val nextAfter: Long)
 
+const val MESSAGE_PAGE = 30
+
 @Serializable
 data class MessagePage(val messages: List<Message>, @SerialName("has_more") val hasMore: Boolean = false)
 
@@ -312,7 +314,7 @@ class PiBotApi(private val http: OkHttpClient, private val json: Json = API_JSON
     fun archiveBot(url: ServerUrl, token: String, id: String): JsonObject = call(url, "DELETE", "/bots/$id", token)
 
     fun messages(url: ServerUrl, token: String, botId: String, before: Int? = null): MessagePage =
-        call(url, "GET", "/bots/$botId/messages", token, query = listOfNotNull("limit" to "50", before?.let { "before" to it.toString() }))
+        call(url, "GET", "/bots/$botId/messages", token, query = listOfNotNull("limit" to MESSAGE_PAGE.toString(), before?.let { "before" to it.toString() }))
 
     fun taskConversation(url: ServerUrl, token: String, botId: String, taskId: String, after: Long = 0): TaskConversation =
         call(url, "GET", "/bots/$botId/tasks/$taskId/conversation", token, query = listOf("after" to after.toString()))

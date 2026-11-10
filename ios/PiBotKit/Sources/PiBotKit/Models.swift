@@ -269,7 +269,7 @@ public struct BotActivity: Decodable, Hashable, Sendable {
     }
 }
 
-public struct AgentTaskRef: Decodable, Hashable, Identifiable, Sendable {
+public struct AgentTaskRef: Codable, Hashable, Identifiable, Sendable {
     public var id: String
     public var botId: String
     public var botName: String
@@ -371,7 +371,7 @@ public struct BotList: Decodable, Sendable {
     }
 }
 
-public struct ToolEntry: Decodable, Hashable, Sendable {
+public struct ToolEntry: Codable, Hashable, Sendable {
     public var id: String
     public var name: String
     public var state: String
@@ -392,14 +392,14 @@ public struct ChatImage: Codable, Hashable, Sendable {
     public init(name: String, mimeType: String, data: String) { self.name = name; self.mimeType = mimeType; self.data = data }
 }
 
-public struct MessageImage: Decodable, Hashable, Identifiable, Sendable {
+public struct MessageImage: Codable, Hashable, Identifiable, Sendable {
     public var id: String
     public var name: String
     public var mimeType: String
     enum CodingKeys: String, CodingKey { case id, name, mimeType = "mime_type" }
 }
 
-public struct ReportAttachment: Decodable, Hashable, Identifiable, Sendable {
+public struct ReportAttachment: Codable, Hashable, Identifiable, Sendable {
     public var id: String
     public var title: String
     public var name: String
@@ -422,7 +422,7 @@ public struct ReportAttachment: Decodable, Hashable, Identifiable, Sendable {
 }
 
 /// Another bot wrote this `user` message: a delegated task (`task`) or the report of a hand-off (`report`).
-public struct FromBot: Decodable, Hashable, Sendable {
+public struct FromBot: Codable, Hashable, Sendable {
     public var id: String
     public var name: String
     public var avatar: Avatar?
@@ -442,7 +442,7 @@ public struct FromBot: Decodable, Hashable, Sendable {
     }
 }
 
-public struct ReplySegment: Decodable, Hashable, Identifiable, Sendable {
+public struct ReplySegment: Codable, Hashable, Identifiable, Sendable {
     public var id: String
     public var text: String
     public var phase: String
@@ -450,7 +450,7 @@ public struct ReplySegment: Decodable, Hashable, Identifiable, Sendable {
     enum CodingKeys: String, CodingKey { case id, text, phase, createdAt = "created_at" }
 }
 
-public struct Message: Decodable, Hashable, Identifiable, Sendable {
+public struct Message: Codable, Hashable, Identifiable, Sendable {
     public var id: String
     public var botId: String
     public var runId: String?

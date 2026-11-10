@@ -4,6 +4,7 @@ import android.app.Application
 import dev.pibot.android.data.PiBotApi
 import dev.pibot.android.data.PiBotRepository
 import dev.pibot.android.data.SessionStore
+import dev.pibot.android.data.TimelineCache
 import dev.pibot.android.push.PushController
 import dev.pibot.android.push.PushRestartActivity
 import kotlinx.coroutines.CoroutineScope
@@ -11,6 +12,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import okhttp3.OkHttpClient
+import java.io.File
 import java.util.concurrent.TimeUnit
 
 class PiBotApp : Application() {
@@ -36,6 +38,7 @@ class PiBotApp : Application() {
             http = http,
             storage = SessionStore(this),
             scope = scope,
+            timelineStore = TimelineCache(File(cacheDir, "timelines")),
         )
         push = PushController(this, repository, api, scope)
         repository.onSessionChanged = push::sessionChanged

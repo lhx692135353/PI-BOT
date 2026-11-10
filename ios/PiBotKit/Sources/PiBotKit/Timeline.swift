@@ -24,6 +24,21 @@ public struct Timeline: Hashable, Sendable {
         return Timeline(messages: merged, hasMore: hasMore ?? self.hasMore, loaded: true)
     }
 
+    /// The newest page. One that cannot reach what is shown replaces it, so no gap is ever displayed.
+    public func mergeTail(_ page: [Message], hasMore pageHasMore: Bool) -> Timeline {
+        if let first = page.first, let newest = messages.last, pageHasMore, first.seq > newest.seq {
+            return Timeline(messages: page.sorted { $0.seq < $1.seq }, hasMore: true, loaded: true)
+        }
+        guard let oldest = messages.first else { return Timeline().merge(page, hasMore: pageHasMore) }
+        if let first = page.first, first.seq <= oldest.seq { return merge(page, hasMore: pageHasMore) }
+        return merge(page)
+    }
+
+    /// An older page requested before `beforeId`; ignored when the timeline was replaced while it loaded.
+    public func mergeOlder(before beforeId: String, _ page: [Message], hasMore pageHasMore: Bool) -> Timeline {
+        messages.first?.id == beforeId ? merge(page, hasMore: pageHasMore) : self
+    }
+
     /// Streaming text for a running reply; ignored once the message has finished.
     public func applyDelta(messageId: String, content: String) -> Timeline {
         guard let i = messages.firstIndex(where: { $0.id == messageId }), messages[i].status == "running" else { return self }

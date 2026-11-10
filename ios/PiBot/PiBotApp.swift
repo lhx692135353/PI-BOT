@@ -7,7 +7,7 @@ struct PiBotApp: App {
     @State private var voice: VoiceCallController
 
     init() {
-        let store = AppStore()
+        let store = AppStore(timelineStore: FileTimelineCache())
         let voice = VoiceCallController(store: store)
         store.onSignedOut = { [weak voice] in voice?.hangup() }
         _store = State(initialValue: store)

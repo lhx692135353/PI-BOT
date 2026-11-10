@@ -9,6 +9,8 @@ import dev.pibot.android.data.PiBotApi
 import dev.pibot.android.data.PiBotRepository
 import dev.pibot.android.data.Session
 import dev.pibot.android.data.SessionStorage
+import dev.pibot.android.data.TimelineStore
+import dev.pibot.android.domain.Timeline
 import dev.pibot.android.data.errorMessage
 import dev.pibot.android.face.Avatar
 import kotlinx.coroutines.CoroutineScope
@@ -86,6 +88,34 @@ class RepositoryTest {
         respond(200, """{"access_token":"tok","expires_in":3600,"user":$USER}""")
         repo.login(base(), " bob ", "secret")
         server.takeRequest()
+    }
+
+    @Test
+    fun cachedHistoryShowsFirstThenMergesTheNewestPageAndIsClearedOnLogout() = runBlocking {
+        val store = object : TimelineStore {
+            val saved = mutableMapOf<Pair<String, String>, Timeline>()
+            override fun read(userId: String, botId: String) = saved[userId to botId]
+            override fun write(userId: String, botId: String, timeline: Timeline) { saved[userId to botId] = timeline }
+            override fun clear(userId: String) { saved.keys.removeAll { it.first == userId } }
+        }
+        store.saved["u1" to "b1"] = Timeline(listOf(message("m1", 1), message("m2", 2)), hasMore = true)
+        repo = PiBotRepository(PiBotApi(http), http, storage, CoroutineScope(SupervisorJob() + Dispatchers.Unconfined), io = Dispatchers.Unconfined, timelineStore = store)
+        login()
+
+        repo.hydrate("b1")
+        val cached = repo.timeline("b1").first()
+        assertEquals(listOf("m1", "m2"), cached.messages.map { it.id })
+        assertFalse(cached.loaded)
+
+        respond(200, """{"messages":[${msg("m2", 2, "assistant", "好", "completed")},${msg("m3", 3, "user", "新", "completed")}],"has_more":true}""")
+        repo.loadTail("b1")
+        server.takeRequest()
+        val merged = repo.timeline("b1").first()
+        assertEquals(listOf("m1", "m2", "m3"), merged.messages.map { it.id })
+        assertTrue(merged.loaded && merged.hasMore)
+
+        repo.logout()
+        assertTrue(store.saved.isEmpty())
     }
 
     @Test
@@ -278,7 +308,7 @@ class RepositoryTest {
 
         respond(200, """{"messages":[${msg("m0", 1, "user", "早", "completed")}],"has_more":true}""")
         repo.loadTail("b1")
-        assertEquals("limit=50", server.takeRequest().requestUrl!!.encodedQuery)
+        assertEquals("limit=30", server.takeRequest().requestUrl!!.encodedQuery)
         assertTrue(repo.timeline("b1").first().hasMore)
 
         respond(200, """{"run":$RUN,"messages":[${msg("m1", 2, "user", "写周报", "completed")},${msg("m2", 3, "assistant", "", "running")}]}""")

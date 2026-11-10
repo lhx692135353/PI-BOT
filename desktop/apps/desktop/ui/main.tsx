@@ -7,6 +7,7 @@ import { uniqueById } from './unique.js';
 import { bridge, call, errorText } from './bridge.js';
 import { BotEditor } from './editor.js';
 import { Timeline } from './timeline.js';
+import { clearTimelines, mergeOlder, mergeTail, readTimeline, writeTimeline, type TimelinePage } from './timeline-cache.js';
 import { BotListItem } from './bot-list-item.js';
 import { ClientUpdates } from './client-updates.js';
 import { SavedAuthorizations } from './saved-authorizations.js';
@@ -228,7 +229,8 @@ function App() {
   const [devices,setDevices] = useState<Device[]>([]);
   const [cloud,setCloud] = useState<CloudComputer | null>(null);
   const [selected, setSelected] = useState<string | null>(() => localStorage.getItem('pi-bot.selected'));
-  const [pages, setPages] = useState<Record<string, { messages: Message[]; hasMore: boolean }>>({});
+  const [pages, setPages] = useState<Record<string, TimelinePage>>({});
+  const savedPages = useRef<Record<string, TimelinePage>>({});
   const [activities, setActivities] = useState<Record<string, LocalActivity>>({});
   const [editor, setEditor] = useState<Bot | 'new' | null>(null);
   const [menu, setMenu] = useState<{ bot: Bot; x: number; y: number } | null>(null);
@@ -242,6 +244,8 @@ function App() {
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
   const online = account?.connection === 'online';
+  const userId = account?.user?.id ?? null;
+  const shownUser = useRef<string | null>(null);
 
   const botsRequest = useRef(0);
   const botsInFlight = useRef(0);
@@ -264,19 +268,37 @@ function App() {
     tailRequest.current[botId] = request;
     const page = await call<MessagePage>('messages', { botId }).catch(() => null);
     if (!page || tailRequest.current[botId] !== request) return;
-    setPages(p => {
-      const old = p[botId];
-      const byId = new Map((old?.messages ?? []).map(m => [m.id, m]));
-      for (const m of page.messages) byId.set(m.id, m);
-      return { ...p, [botId]: { messages: [...byId.values()].sort((a, b) => a.seq - b.seq), hasMore: old ? old.hasMore : page.has_more } };
-    });
+    setPages(p => ({ ...p, [botId]: mergeTail(p[botId], page) }));
   }, []);
   const loadMore = async (botId: string) => {
-    const current = pages[botId];
-    if (!current?.messages.length) return;
-    const page = await call<MessagePage>('messages', { botId, before: current.messages[0].seq });
-    setPages(p => ({ ...p, [botId]: { messages: uniqueById([...page.messages, ...p[botId].messages]).sort((a, b) => a.seq - b.seq), hasMore: page.has_more } }));
+    const oldest = pages[botId]?.messages[0];
+    if (!oldest) return;
+    const page = await call<MessagePage>('messages', { botId, before: oldest.seq });
+    setPages(p => {
+      const next = mergeOlder(p[botId], oldest.id, page);
+      return next ? { ...p, [botId]: next } : p;
+    });
   };
+  useEffect(() => {
+    if (shownUser.current === userId) return;
+    if (shownUser.current) {
+      clearTimelines(shownUser.current);
+      setPages({});
+      savedPages.current = {};
+    }
+    shownUser.current = userId;
+  }, [userId]);
+  useEffect(() => {
+    if (!userId) return;
+    const timer = setTimeout(() => {
+      for (const [id, page] of Object.entries(pages)) {
+        if (savedPages.current[id] === page) continue;
+        writeTimeline(userId, id, page);
+        savedPages.current[id] = page;
+      }
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [pages, userId]);
 
   useEffect(() => {
     let disposed = false;
@@ -308,7 +330,17 @@ function App() {
     void loadBots();
     void call<ModelOption[]>('models').then(setModels).catch(() => {});
   }, [online, loadBots]);
-  useEffect(() => { if (selected) { localStorage.setItem('pi-bot.selected', selected); if (online) void loadTail(selected); } }, [selected, online, loadTail]);
+  useEffect(() => {
+    if (!selected) return;
+    localStorage.setItem('pi-bot.selected', selected);
+    const cached = userId ? readTimeline(userId, selected) : null;
+    if (cached) setPages(p => {
+      if (p[selected]) return p;
+      savedPages.current[selected] = cached;
+      return { ...p, [selected]: cached };
+    });
+    if (online) void loadTail(selected);
+  }, [selected, online, userId, loadTail]);
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 3000); return () => clearInterval(t); }, []);
   useEffect(() => {
     if (!online) return;

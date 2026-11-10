@@ -19,6 +19,46 @@ final class DomainTests: XCTestCase {
         XCTAssertEqual(updated.oldestSeq, 1)
     }
 
+    func testTailPagesKeepCachedHistoryButNeverLeaveAGap() {
+        let cached = Timeline(messages: [message("a", 1), message("b", 2), message("c", 3)], hasMore: true)
+        let overlapping = cached.mergeTail([message("c", 3, content: "新"), message("d", 4)], hasMore: true)
+        XCTAssertEqual(overlapping.messages.map(\.id), ["a", "b", "c", "d"])
+        XCTAssertEqual(overlapping.messages[2].content, "新")
+        XCTAssertTrue(overlapping.hasMore && overlapping.loaded)
+
+        let reachesFurther = Timeline(messages: [message("c", 3)], hasMore: true).mergeTail([message("b", 2), message("c", 3)], hasMore: false)
+        XCTAssertFalse(reachesFurther.hasMore)
+
+        let detached = cached.mergeTail([message("y", 40), message("z", 41)], hasMore: true)
+        XCTAssertEqual(detached.messages.map(\.id), ["y", "z"])
+        XCTAssertTrue(detached.hasMore)
+    }
+
+    func testOlderPagesOnlyPrependOntoTheTimelineTheyWereRequestedFor() {
+        let t = Timeline(messages: [message("c", 3), message("d", 4)], hasMore: true, loaded: true)
+        let older = t.mergeOlder(before: "c", [message("a", 1), message("b", 2)], hasMore: false)
+        XCTAssertEqual(older.messages.map(\.id), ["a", "b", "c", "d"])
+        XCTAssertFalse(older.hasMore)
+        XCTAssertEqual(t.mergeOlder(before: "x", [message("a", 1)], hasMore: false), t)
+    }
+
+    func testTimelineCacheKeepsTheNewestMessagesPerAccount() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let cache = FileTimelineCache(root: root, limit: 2)
+        var reply = message("m4", 4)
+        reply.replySegments = [ReplySegment(id: "s", text: "段落", phase: "answer", createdAt: "2026-10-11T08:00:00Z")]
+        cache.write(userId: "u1", botId: "b1", timeline: Timeline(messages: [message("m1", 1), message("m2", 2), message("m3", 3), reply, message("m5", 5)], hasMore: false, loaded: true))
+        let read = try XCTUnwrap(cache.read(userId: "u1", botId: "b1"))
+        XCTAssertEqual(read.messages.map(\.id), ["m4", "m5"])
+        XCTAssertEqual(read.messages.first, reply)
+        XCTAssertTrue(read.hasMore)
+        XCTAssertFalse(read.loaded)
+        XCTAssertNil(cache.read(userId: "u2", botId: "b1"))
+        cache.clear(userId: "u1")
+        XCTAssertNil(cache.read(userId: "u1", botId: "b1"))
+    }
+
     func testDeltasReplaceOnlyRunningMessagesAcrossToolRounds() {
         let t = Timeline().merge([message("u", 1), message("a", 2, status: "running", content: "你")])
         let grown = t.applyDelta(messageId: "a", content: "你好")

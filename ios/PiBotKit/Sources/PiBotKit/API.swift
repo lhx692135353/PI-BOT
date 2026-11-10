@@ -28,6 +28,9 @@ public func errorMessage(status: Int, body: Data) -> String {
 
 let clientRejectedCode = "client_rejected"
 
+/// Messages per history request, for the newest page and each older one.
+public let messagePageSize = 30
+
 private func rejectsClient(_ body: Data) -> Bool {
     guard case .array(let issues)? = (try? JSONDecoder().decode(JSONValue.self, from: body))?["detail"] else { return false }
     return issues.contains { issue in
@@ -104,7 +107,7 @@ public final class PiBotAPI: @unchecked Sendable {
     }
 
     public func messages(_ url: ServerURL, token: String, botId: String, before: Int? = nil) async throws -> MessagePage {
-        var query = [("limit", "50")]
+        var query = [("limit", String(messagePageSize))]
         if let before { query.append(("before", String(before))) }
         return try await call(url, "GET", "/bots/\(botId)/messages", token: token, query: query)
     }

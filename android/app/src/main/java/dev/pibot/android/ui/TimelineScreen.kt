@@ -30,8 +30,10 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Edit
@@ -59,6 +61,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
@@ -98,6 +101,9 @@ import dev.pibot.android.face.PiBotFace
 import dev.pibot.android.face.seedOf
 import kotlinx.coroutines.launch
 
+/** Older history starts loading this many messages before the top is reached. */
+private const val LOAD_AHEAD_ITEMS = 5
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TimelineScreen(
@@ -118,6 +124,7 @@ fun TimelineScreen(
     val scope = rememberCoroutineScope()
     var error by remember(botId) { mutableStateOf<String?>(null) }
     var loadingMore by remember(botId) { mutableStateOf(false) }
+    var olderError by remember(botId) { mutableStateOf<String?>(null) }
     var menuOpen by remember(botId) { mutableStateOf(false) }
     val call by repository.liveCall.collectAsStateWithLifecycle()
     val notice by repository.voiceNotice.collectAsStateWithLifecycle()
@@ -144,6 +151,7 @@ fun TimelineScreen(
     val now = rememberNow()
 
     LaunchedEffect(botId) {
+        repository.hydrate(botId)
         runCatching { repository.refreshBot(botId); repository.loadTail(botId) }.onFailure { error = errorText(it) }
     }
     val current = bot
@@ -226,42 +234,79 @@ fun TimelineScreen(
                 val delta = selectionScrollDelta(top, bottom, viewport.top, viewport.bottom, margin)
                 if (delta != 0f) scope.launch { list.scrollBy(delta) }
             }
-            val atTop by remember(list) { derivedStateOf { list.layoutInfo.visibleItemsInfo.lastOrNull()?.index == list.layoutInfo.totalItemsCount - 1 } }
-            LaunchedEffect(botId, atTop, timeline.hasMore, selection.active) {
-                if (selection.active == null && atTop && timeline.hasMore && !loadingMore) {
+            val nearTop by remember(list) {
+                derivedStateOf {
+                    val info = list.layoutInfo
+                    val last = info.visibleItemsInfo.lastOrNull()?.index ?: return@derivedStateOf false
+                    last >= info.totalItemsCount - 1 - LOAD_AHEAD_ITEMS
+                }
+            }
+            val farFromBottom by remember(list) {
+                derivedStateOf {
+                    list.firstVisibleItemIndex > 2 ||
+                        (list.firstVisibleItemIndex > 0 && list.firstVisibleItemScrollOffset > list.layoutInfo.viewportSize.height / 2)
+                }
+            }
+            LaunchedEffect(botId, nearTop, timeline.hasMore, loadingMore, olderError, selection.active) {
+                if (selection.active == null && nearTop && timeline.hasMore && !loadingMore && olderError == null) {
                     loadingMore = true
-                    runCatching { repository.loadMore(botId) }.onFailure { error = errorText(it) }
-                    loadingMore = false
+                    // Owned by the screen scope: a layout change must not cancel a page that is already loading.
+                    scope.launch {
+                        try { repository.loadMore(botId) }
+                        catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                        catch (e: Exception) { olderError = errorText(e) }
+                        finally { loadingMore = false }
+                    }
                 }
             }
             CompositionLocalProvider(LocalMessageSelection provides selection) {
-                LazyColumn(
-                    state = list,
-                    reverseLayout = true,
-                    modifier = Modifier.weight(1f).fillMaxWidth().onGloballyPositioned {
-                        val bounds = it.boundsInWindow()
-                        viewport = Rect(bounds.left.toInt(), bounds.top.toInt(), bounds.right.toInt(), bounds.bottom.toInt())
-                    },
-                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    items(displayBot.pendingApprovals, key = { "approval-${it.id}" }) { approval ->
-                        ApprovalCard(approval) { decision ->
-                            repository.decide(approval, decision)
-                        }
-                    }
-                    displayBot.activity?.summary?.let { summary ->
-                        item(key = "task-activity") {
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 6.dp)) {
-                                PiBotFace(current.avatar, mood, 26.dp, seed = seedOf(current.id))
-                                Spacer(Modifier.size(8.dp))
-                                Text(summary, color = Muted, fontSize = 13.sp)
+                Box(Modifier.weight(1f).fillMaxWidth()) {
+                    LazyColumn(
+                        state = list,
+                        reverseLayout = true,
+                        modifier = Modifier.fillMaxSize().onGloballyPositioned {
+                            val bounds = it.boundsInWindow()
+                            viewport = Rect(bounds.left.toInt(), bounds.top.toInt(), bounds.right.toInt(), bounds.bottom.toInt())
+                        },
+                        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        items(displayBot.pendingApprovals, key = { "approval-${it.id}" }) { approval ->
+                            ApprovalCard(approval) { decision ->
+                                repository.decide(approval, decision)
                             }
                         }
+                        displayBot.activity?.summary?.let { summary ->
+                            item(key = "task-activity") {
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 6.dp)) {
+                                    PiBotFace(current.avatar, mood, 26.dp, seed = seedOf(current.id))
+                                    Spacer(Modifier.size(8.dp))
+                                    Text(summary, color = Muted, fontSize = 13.sp)
+                                }
+                            }
+                        }
+                        items(reversed, key = { it.id }) { message -> MessageItem(message, onOpenBot, repository) }
+                        if (displayTimeline.hasMore && displayTimeline.messages.isNotEmpty()) {
+                            item(key = "older") {
+                                Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+                                    val failure = olderError
+                                    if (failure == null) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = Muted)
+                                    else TextButton(onClick = { olderError = null }) { Text("$failure · 点按重试", color = Muted, fontSize = 13.sp) }
+                                }
+                            }
+                        }
+                        if (displayTimeline.loaded && displayTimeline.messages.isEmpty()) {
+                            item { Intro(current) }
+                        }
                     }
-                    items(reversed, key = { it.id }) { message -> MessageItem(message, onOpenBot, repository) }
-                    if (displayTimeline.loaded && displayTimeline.messages.isEmpty()) {
-                        item { Intro(current) }
+                    if (farFromBottom) {
+                        SmallFloatingActionButton(
+                            onClick = { scope.launch { if (list.firstVisibleItemIndex > 20) list.scrollToItem(0) else list.animateScrollToItem(0) } },
+                            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp),
+                            shape = CircleShape,
+                            containerColor = Card,
+                            contentColor = Ink,
+                        ) { Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "回到最新消息") }
                     }
                 }
             }

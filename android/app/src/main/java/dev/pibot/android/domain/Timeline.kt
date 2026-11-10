@@ -18,6 +18,20 @@ data class Timeline(val messages: List<Message> = emptyList(), val hasMore: Bool
         return copy(messages = byId.values.sortedBy { it.seq }, hasMore = hasMore, loaded = true)
     }
 
+    /** The newest page. One that cannot reach what is shown replaces it, so no gap is ever displayed. */
+    fun mergeTail(page: List<Message>, pageHasMore: Boolean): Timeline {
+        val first = page.firstOrNull()
+        val newest = messages.lastOrNull()
+        if (messages.isEmpty() || (pageHasMore && first != null && newest != null && first.seq > newest.seq)) {
+            return Timeline(page.sortedBy { it.seq }, pageHasMore, loaded = true)
+        }
+        return merge(page, if (first != null && first.seq <= messages.first().seq) pageHasMore else hasMore)
+    }
+
+    /** An older page requested before [beforeId]; ignored when the timeline was replaced while it loaded. */
+    fun mergeOlder(beforeId: String, page: List<Message>, pageHasMore: Boolean): Timeline =
+        if (messages.firstOrNull()?.id != beforeId) this else merge(page, pageHasMore)
+
     /** Streaming text for a running reply; ignored once the message has finished. */
     fun applyDelta(messageId: String, content: String): Timeline {
         val i = messages.indexOfFirst { it.id == messageId }

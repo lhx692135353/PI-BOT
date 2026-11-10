@@ -118,7 +118,7 @@ function ReplyBubbles({ message }: { message: Message }) {
 function RelayMessage({ m, onOpenBot }: { m: Message & { from_bot: FromBot }; onOpenBot(id: string): void }) {
   const from = m.from_bot;
   return (
-    <div className="msg relay">
+    <div className="msg relay" data-message={m.id}>
       <button className="relay-head" onClick={() => onOpenBot(from.id)} title={`打开 ${from.name} 的时间线`}>
         {from.avatar && <PiBot avatar={from.avatar} mood="happy" size={22} />}
         <span>{from.kind === 'report' ? `${from.name} 的回报` : `来自 ${from.name} 的委托`}</span>
@@ -155,9 +155,17 @@ export function ApprovalCard({ approval }: { approval: Approval }) {
   );
 }
 
-export function Timeline({ bot, messages, hasMore, mood, online, onLoadMore, onSent, onOpenBot }: { bot: Bot; messages: Message[]; hasMore: boolean; mood: Mood; online: boolean; onLoadMore(): void; onSent(page: MessagePage): void; onOpenBot(id: string): void }) {
+/** Older history starts loading this far before the top is reached. */
+const LOAD_AHEAD = 600;
+
+export function Timeline({ bot, messages, hasMore, mood, online, onLoadMore, onSent, onOpenBot }: { bot: Bot; messages: Message[]; hasMore: boolean; mood: Mood; online: boolean; onLoadMore(): Promise<void>; onSent(page: MessagePage): void; onOpenBot(id: string): void }) {
   const scroller = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
+  const anchor = useRef<{ bot: string; id?: string; offset: number }>({ bot: '', offset: 0 });
+  const [farFromBottom, setFarFromBottom] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const loadingOlderRef = useRef(false);
+  const [olderError, setOlderError] = useState('');
   const [drafts, setDrafts] = useState(readDrafts);
   const text = drafts[bot.id]?.text ?? '';
   const setText = (update: string | ((current: string) => string)) => setDrafts(current => ({...current,[bot.id]:{images:current[bot.id]?.images ?? [],text:typeof update === 'function' ? update(current[bot.id]?.text ?? '') : update}}));
@@ -180,11 +188,51 @@ export function Timeline({ bot, messages, hasMore, mood, online, onLoadMore, onS
   },[]);
   activeBot.current = bot.id;
   const run = bot.latest_run;
+  const firstOffset = (el: HTMLDivElement, id: string | undefined) => {
+    const node = id ? el.querySelector<HTMLElement>(`[data-message="${CSS.escape(id)}"]`) : null;
+    return node ? node.getBoundingClientRect().top - el.getBoundingClientRect().top : null;
+  };
+  const loadOlder = () => {
+    if (!hasMore || loadingOlderRef.current || !messages.length) return;
+    loadingOlderRef.current = true;
+    setLoadingOlder(true);
+    setOlderError('');
+    const botId = bot.id;
+    onLoadMore()
+      .catch(e => { if (activeBot.current === botId) setOlderError(errorText(e)); })
+      .finally(() => { loadingOlderRef.current = false; setLoadingOlder(false); });
+  };
+  const onScroll = () => {
+    const el = scroller.current;
+    if (!el) return;
+    const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
+    stick.current = gap < 80;
+    setFarFromBottom(gap > el.clientHeight);
+    anchor.current = { bot: bot.id, id: messages[0]?.id, offset: firstOffset(el, messages[0]?.id) ?? 0 };
+    if (el.scrollTop < LOAD_AHEAD && !olderError) loadOlder();
+  };
+  const toBottom = () => {
+    const el = scroller.current;
+    if (!el) return;
+    stick.current = true;
+    el.scrollTo({ top: el.scrollHeight, behavior: el.scrollHeight - el.scrollTop > el.clientHeight * 6 ? 'auto' : 'smooth' });
+  };
   useLayoutEffect(() => {
     const el = scroller.current;
-    if (el && stick.current) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    const previous = anchor.current;
+    const first = messages[0]?.id;
+    if (previous.bot !== bot.id) { stick.current = true; setFarFromBottom(false); }
+    if (stick.current) el.scrollTop = el.scrollHeight;
+    else if (previous.id && previous.id !== first) {
+      // Older messages were added above: keep the message the reader was looking at in place.
+      const offset = firstOffset(el, previous.id);
+      if (offset !== null) el.scrollTop += offset - previous.offset;
+    }
+    anchor.current = { bot: bot.id, id: first, offset: firstOffset(el, first) ?? 0 };
+    if (hasMore && el.scrollTop < LOAD_AHEAD && !loadingOlderRef.current && !olderError) loadOlder();
   }, [messages, bot.pending_approvals.length]);
-  useEffect(() => { stick.current = true; setError(''); setConversationTask(null); }, [bot.id]);
+  useEffect(() => { setError(''); setOlderError(''); setConversationTask(null); }, [bot.id]);
   const addImages = async (files: File[]) => {
     if (!files.length || readingRef.current || submitting.current || !online) return;
     const botId = bot.id;
@@ -227,8 +275,13 @@ export function Timeline({ bot, messages, hasMore, mood, online, onLoadMore, onS
   return (
     <>
       {conversationTask && <ConversationDialog key={`${bot.id}:${conversationTask.id}`} bot={bot} task={conversationTask} onClose={() => setConversationTask(null)} onOpenBot={onOpenBot} />}
-      <div className="timeline" ref={scroller} onScroll={e => { const el = e.currentTarget; stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }}>
-        {hasMore && <button className="ghost load-more" onClick={onLoadMore}>加载更早的消息</button>}
+      <div className="timeline-frame">
+      <div className="timeline" ref={scroller} onScroll={onScroll}>
+        {(loadingOlder || olderError) && (
+          <div className="load-more muted" role="status">
+            {olderError ? <>{olderError} <button className="ghost" onClick={loadOlder}>重试</button></> : '正在加载更早的消息…'}
+          </div>
+        )}
         {!messages.length && (
           <div className="intro">
             <PiBot avatar={bot.avatar} mood={mood === 'idle' ? 'happy' : mood} size={150} followPointer />
@@ -243,12 +296,12 @@ export function Timeline({ bot, messages, hasMore, mood, online, onLoadMore, onS
           return [separator, m.role === 'user' && m.from_bot ? (
             <RelayMessage key={m.id} m={m as Message & { from_bot: FromBot }} onOpenBot={onOpenBot} />
           ) : m.role === 'user' ? (
-            <div className="msg user" key={m.id}>
+            <div className="msg user" key={m.id} data-message={m.id}>
               {!!m.images?.length && <div className="message-pictures">{m.images.map(image => <MessagePicture key={image.id} botId={bot.id} messageId={m.id} image={image} onLoad={() => { const el = scroller.current; if (el && stick.current) el.scrollTop = el.scrollHeight; }} />)}</div>}
               {m.content && <div className="bubble">{m.content}</div>}<span className="meta">{time(m.created_at)}</span>
             </div>
           ) : (
-            <div className="msg bot" key={m.id}>
+            <div className="msg bot" key={m.id} data-message={m.id}>
               <div className="body">
                 <ReplyBubbles message={m} />
                 <Delegations tasks={m.agent_tasks ?? []} onSelect={setConversationTask} />
@@ -266,6 +319,8 @@ export function Timeline({ bot, messages, hasMore, mood, online, onLoadMore, onS
         })}
         {bot.activity?.summary && <div className="task-activity" role="status" aria-live="polite"><PiBot avatar={bot.avatar} mood={mood} size={26} /><span>{bot.activity.summary}</span></div>}
         {bot.pending_approvals.map(a => <ApprovalCard key={a.id} approval={a} />)}
+      </div>
+      {farFromBottom && <button type="button" className="jump-bottom" onClick={toBottom} title="回到最新消息" aria-label="回到最新消息"><Icon name="arrow" size={18} style={{ transform: 'rotate(180deg)' }} /></button>}
       </div>
       <div className="composer" onDragOver={e => { if (e.dataTransfer.types.includes('Files')) e.preventDefault(); }} onDrop={e => { e.preventDefault(); void addImages(Array.from(e.dataTransfer.files)); }}>
         {error && <p className="error small">{error}</p>}
