@@ -63,7 +63,18 @@ const staged = resolve(stage, 'Pi Bot.app');
 cpSync(app, staged, { recursive: true, verbatimSymlinks: true });
 assertPortableSymlinks(staged);
 run('ln', ['-s', '/Applications', resolve(stage, 'Applications')], root);
-rmSync(dmg, { force: true });
-run('hdiutil', ['create', '-volname', 'Pi Bot', '-srcfolder', stage, '-ov', '-format', 'ULFO', dmg], root);
+// GitHub 的 macOS 构建机上，hdiutil 偶发 Resource busy。卸掉同名卷后重试。
+for (let attempt = 1; ; attempt++) {
+  rmSync(dmg, { force: true });
+  const created = spawnSync('hdiutil', ['create', '-volname', 'Pi Bot', '-srcfolder', stage, '-ov', '-format', 'ULFO', dmg], { cwd: root, stdio: 'inherit' });
+  if (!created.error && created.status === 0) break;
+  if (attempt >= 4) {
+    if (created.error) throw created.error;
+    process.exit(created.status ?? 1);
+  }
+  console.error(`hdiutil 创建磁盘映像失败，第 ${attempt} 次，稍后重试`);
+  spawnSync('hdiutil', ['detach', '/Volumes/Pi Bot', '-force'], { stdio: 'ignore' });
+  spawnSync('sleep', [String(attempt * 5)]);
+}
 rmSync(stage, { recursive: true, force: true });
 console.log(dmg);
