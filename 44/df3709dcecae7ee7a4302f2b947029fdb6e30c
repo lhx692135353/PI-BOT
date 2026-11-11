@@ -1,0 +1,21 @@
+desktop/apps/desktop/ui/style.css
+  s_bb3948ee1d9478::t_27fe61048f17c6 157
+desktop/apps/desktop/ui/timeline.tsx
+  s_bb3948ee1d9478::t_22481863e0f19d 227-229,235
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "44df3709dcecae7ee7a4302f2b947029fdb6e30c",
+  "prompts": {},
+  "sessions": {
+    "s_bb3948ee1d9478": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "1f1ebcc6-9cd3-4a42-88d8-ba353301a643",
+        "model": "grok-4.7"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
