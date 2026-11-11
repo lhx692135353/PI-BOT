@@ -224,14 +224,15 @@ export function Timeline({ bot, messages, hasMore, mood, online, onLoadMore, onS
     const first = messages[0]?.id;
     if (previous.bot !== bot.id) { stick.current = true; setFarFromBottom(false); }
     if (stick.current) el.scrollTop = el.scrollHeight;
-    else if (previous.id && previous.id !== first) {
-      // Older messages were added above: keep the message the reader was looking at in place.
+    else if (previous.id) {
+      // Older messages and the loading row both sit above the reader. Keep the
+      // anchored message still when either of those rows appears or disappears.
       const offset = firstOffset(el, previous.id);
       if (offset !== null) el.scrollTop += offset - previous.offset;
     }
     anchor.current = { bot: bot.id, id: first, offset: firstOffset(el, first) ?? 0 };
     if (hasMore && el.scrollTop < LOAD_AHEAD && !loadingOlderRef.current && !olderError) loadOlder();
-  }, [messages, bot.pending_approvals.length]);
+  }, [messages, bot.pending_approvals.length, loadingOlder, olderError]);
   useEffect(() => { setError(''); setOlderError(''); setConversationTask(null); }, [bot.id]);
   const addImages = async (files: File[]) => {
     if (!files.length || readingRef.current || submitting.current || !online) return;
