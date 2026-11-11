@@ -194,6 +194,8 @@ Pi Bot 是多用户的个人 Bot 平台。每个用户有若干个 Bot，每个 
 
 联网搜索：电脑 与云端共享 `packages/agent/src/web-search.ts` 的 `web_search` 工具。API `/web/search` 校验已有短期智能体令牌，再以环境变量 `PI_BOT_TAVILY_API_KEY` 调用 Tavily SaaS，固定 `fast` 模式（1 credit）；未配置 Key 时不注册工具。API 对成功查询缓存 5 分钟，最多返回 8 条去重结果。`GET /admin/api/search/usage` 仅管理员可调用，后台「用量」页展示剩余 credits；Tavily 用量最多每分钟同步一次，本进程预留并扣减搜索额度。额度取套餐与 Key 剩余额度的较小值，不使用按量付费额度；耗尽返回 402「搜索额度到了」，用量未知时暂停搜索。
 
+第三方应用：后台「连接器」保存自建 Composio 的地址和加密密钥。未启用、没有地址或没有密钥时，会话不注册 `composio_search`、`composio_connect`、`composio_execute`。启用后电脑和云端都通过短期智能体令牌调用 API，API 再以当前用户编号访问 Composio，并关闭远端代码沙箱。Runner 和电脑拿不到连接器密钥。目标检查轮次不开放这些工具。
+
 ## A2UI 交互工具
 
 Agent 可以通过 `get_ui_catalog` 查询组件 / 函数，并用 `show_ui` 在回复中创建、更新或删除 A2UI surface。电脑 执行器用 `run_event(kind=ui)` 回传消息；云端 Runner 用 NDJSON `type=ui` 回传，Worker 执行相同验证和保存。`packages/a2ui` 是两端共享的目录和实现，采用 v0.9 协议与官方 React 渲染器。
@@ -263,7 +265,7 @@ Bot 的执行统计只包含目标为自己的有效任务，排除等待子任�
 
 ## 本机 CLI 智能体
 
-`0023-cli-agents` 给 `bots` 增加 `runtime`（`pi` | `cursor` | `codex`）、`cli_profile`、`cli_directory`、`cli_device_id`。`runtime=pi` 的对话仍由云端 Runner 执行。Cursor 与 Codex 的对话和委托都只下发到创建它的电脑：`executor=device`，`operation_target=device:<cli_device_id>`。这台电脑不在线时运行失败，文案是「这台电脑不在线，CLI 智能体无法在云端运行」，不改派到云端，领取时也不按任务路由重选节点。
+`0024-cli-agents` 给 `bots` 增加 `runtime`（`pi` | `cursor` | `codex`）、`cli_profile`、`cli_directory`、`cli_device_id`。`runtime=pi` 的对话仍由云端 Runner 执行。Cursor 与 Codex 的对话和委托都只下发到创建它的电脑：`executor=device`，`operation_target=device:<cli_device_id>`。这台电脑不在线时运行失败，文案是「这台电脑不在线，CLI 智能体无法在云端运行」，不改派到云端，领取时也不按任务路由重选节点。
 
 对外仍是一条时间线。`cli_sessions` 只给路由用：最近约 6 条公开消息和最多 20 个未关闭会话卡片。桌面优先问本机 vLLM d3 的 `POST /v1/systemone`，否则用服务端 `POST /llm/v1/systemone`（密钥留在服务端），再否则用该 Bot 的当前模型按同一决策要一份 JSON。把握不够就在时间线里追问，不启动 CLI。委托一律新开 CLI session。
 

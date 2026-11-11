@@ -101,6 +101,7 @@ export type AgentFactory = (options: BotAgentOptions) => Promise<AgentHandle>;
 
 export { a2uiTools, UI_INSTRUCTIONS } from "./a2ui.js";
 export { webSearchTool } from "./web-search.js";
+export { composioTools } from "./composio.js";
 export { automationTools } from "./automations.js";
 export { taskTools, TASK_TOOL_NAMES } from "./tasks.js";
 export { askAgentTool, type AskAgentOptions } from "./ask-agent.js";

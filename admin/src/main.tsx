@@ -2,16 +2,17 @@ import { StrictMode, useCallback, useEffect, useState, type FormEvent, type Reac
 import { createRoot } from "react-dom/client";
 import { PiBot } from "@pi-bot/bot-face/react";
 import type { Mood } from "@pi-bot/bot-face";
-import { api, ApiError, session, type CatalogModel, type Device, type Model, type ModelInput, type Overview, type ProviderName, type Usage, type User } from "./api.js";
+import { api, ApiError, session, type CatalogModel, type ComposioSettings, type Device, type Model, type ModelInput, type Overview, type ProviderName, type Usage, type User } from "./api.js";
 import "./style.css";
 
-type Page = "overview" | "users" | "models" | "devices" | "usage";
+type Page = "overview" | "users" | "models" | "devices" | "usage" | "composio";
 const PAGES: { id: Page; label: string }[] = [
   { id: "overview", label: "概览" },
   { id: "users", label: "用户" },
   { id: "models", label: "模型" },
   { id: "devices", label: "电脑设备" },
   { id: "usage", label: "用量" },
+  { id: "composio", label: "连接器" },
 ];
 
 const message = (e: unknown) => (e instanceof Error ? e.message : "请求失败");
@@ -670,6 +671,64 @@ function UsagePage() {
   );
 }
 
+function ComposioPage() {
+  const load = useCallback(() => api.composio(), []);
+  const { data, error, reload } = useLoad<ComposioSettings>(load);
+  const [enabled, setEnabled] = useState(false);
+  const [baseUrl, setBaseUrl] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [notice, setNotice] = useState("");
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    if (!data) return;
+    setEnabled(data.enabled);
+    setBaseUrl(data.base_url);
+  }, [data]);
+  const save = async (event: FormEvent) => {
+    event.preventDefault();
+    setSaving(true);
+    setNotice("");
+    try {
+      await api.saveComposio({ enabled, base_url: baseUrl, ...(apiKey ? { api_key: apiKey } : {}) });
+      setApiKey("");
+      setNotice("已保存");
+      reload();
+    } catch (e) { setNotice(message(e)); }
+    finally { setSaving(false); }
+  };
+  const test = async () => {
+    setNotice("");
+    try { await api.testComposio(); setNotice("连接成功"); }
+    catch (e) { setNotice(message(e)); }
+  };
+  return (
+    <>
+      <div className="toolbar">
+        <p className="muted">自建 Composio 的地址和项目密钥。保存并启用后，智能体可以搜索、授权和执行第三方应用动作。密钥只留在服务端。未启用时不注册这些工具。</p>
+      </div>
+      {error && <p className="error">{error}</p>}
+      {data && (
+        <form className="card form" onSubmit={save}>
+          <label>地址
+            <input value={baseUrl} placeholder="https://connect.example.com" onChange={(e) => setBaseUrl(e.target.value)} />
+          </label>
+          <label>密钥
+            <input type="password" value={apiKey} placeholder={data.configured ? "已保存，留空则不变" : "项目 API Key"} autoComplete="off" onChange={(e) => setApiKey(e.target.value)} />
+          </label>
+          <label className="check">
+            <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> 启用
+          </label>
+          {notice && <p className={notice === "已保存" || notice === "连接成功" ? "muted" : "error"}>{notice}</p>}
+          <footer>
+            <button type="button" className="ghost" disabled={!data.base_url || !data.configured} onClick={test}>测试连接</button>
+            <button className="primary" disabled={saving}>保存</button>
+          </footer>
+        </form>
+      )}
+    </>
+  );
+}
+
 function App() {
   const [me, setMe] = useState<User | null>(null);
   const [checking, setChecking] = useState(!!session.token);
@@ -723,6 +782,7 @@ function App() {
         {page === "models" && <ModelsPage />}
         {page === "devices" && <DevicesPage />}
         {page === "usage" && <UsagePage />}
+        {page === "composio" && <ComposioPage />}
       </main>
     </div>
   );

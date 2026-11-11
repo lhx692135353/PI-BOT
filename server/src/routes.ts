@@ -13,6 +13,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { ChatImage } from '@pi-bot/agent/images';
 import { imagesSchema } from './images.js';
+import { composioGateway, composioPublic, composioResult, composioSaveBody, saveComposio } from "./composio.js";
 import { fail, type Database, type Row, type Tx } from "./db.js";
 import type { Settings } from "./config.js";
 import type { Hub } from "./hub.js";
@@ -272,6 +273,32 @@ export const routes: Route[] = [
       reply.raw.once("close", onClose);
       try { return await webSearch.search(body.query, body.language, abort.signal, llm); }
       finally { reply.raw.off("close", onClose); }
+    },
+  },
+  {
+    method: "POST", path: "/agent/composio/search", auth: "llm", tag: "connectors", summary: "查找当前用户的第三方应用动作", internal: true,
+    body: z.object({ query: z.string().trim().min(1).max(500) }).strict(),
+    handler: async ({ tx, s, user, body }) => {
+      const gateway = (await composioGateway(tx, s)) ?? fail(409, "连接器未启用");
+      return { text: await composioResult(gateway.search(user.user_id, body.query)) };
+    },
+  },
+  {
+    method: "POST", path: "/agent/composio/connect", auth: "llm", tag: "connectors", summary: "为当前用户生成第三方应用授权链接", internal: true,
+    body: z.object({ toolkit: z.string().trim().regex(/^[a-z0-9_-]{1,64}$/i) }).strict(),
+    handler: async ({ tx, s, user, body }) => {
+      const gateway = (await composioGateway(tx, s)) ?? fail(409, "连接器未启用");
+      const linked = await composioResult(gateway.connect(user.user_id, body.toolkit));
+      return { text: JSON.stringify(linked) };
+    },
+  },
+  {
+    method: "POST", path: "/agent/composio/execute", auth: "llm", tag: "connectors", summary: "代当前用户执行已搜索到的第三方动作", internal: true,
+    body: z.object({ tool_slug: z.string().trim().regex(/^[A-Za-z0-9_]{1,128}$/), arguments: z.record(z.string(), z.unknown()).default({}) }).strict(),
+    handler: async ({ tx, s, user, body }) => {
+      if (JSON.stringify(body.arguments).length > 100000) fail(422, "动作参数过大");
+      const gateway = (await composioGateway(tx, s)) ?? fail(409, "连接器未启用");
+      return { text: await composioResult(gateway.execute(user.user_id, body.tool_slug, body.arguments)) };
     },
   },
   {
@@ -763,6 +790,22 @@ export const routes: Route[] = [
       const d = await tx.update("devices", params.id, { revoked_at: new Date() });
       after(async () => { hub.kick(d.device_id); await failDeviceRuns(db,d.device_id,"执行电脑已解绑",false); });
       return deviceOut(d, false);
+    },
+  },
+  {
+    method: "GET", path: "/admin/api/composio", auth: "admin", tag: "admin", summary: "自建 Composio 连接器配置（不含密钥）",
+    handler: async ({ tx }) => composioPublic(tx),
+  },
+  {
+    method: "PUT", path: "/admin/api/composio", auth: "admin", tag: "admin", summary: "保存自建 Composio 连接器；密钥留空则保持不变",
+    body: composioSaveBody,
+    handler: async ({ tx, s, body }) => saveComposio(tx, s, body),
+  },
+  {
+    method: "POST", path: "/admin/api/composio/test", auth: "admin", tag: "admin", summary: "测试已保存的 Composio 连接", tx: false,
+    handler: async ({ db, s }) => {
+      const gateway = (await db.tx((tx) => composioGateway(tx, s, false))) ?? fail(409, "先保存连接器地址和密钥");
+      return composioResult(gateway.probe());
     },
   },
   {

@@ -3,7 +3,7 @@ import { toolDescriptor, errorInfo } from "@pi-bot/runtime-contracts";
 import { randomUUID } from 'node:crypto';
 import type { ChatImage } from '@pi-bot/agent/images';
 import { join } from 'node:path';
-import { a2uiTools, askAgentTool, taskTools, automationTools, CANCELLED, CONVERSATION_TIMEOUT_MS, createBotAgent, webSearchTool, type AgentFactory, type AgentHandle, type ToolActivity, type SkillSummary } from '@pi-bot/agent';
+import { a2uiTools, askAgentTool, composioTools, taskTools, automationTools, CANCELLED, CONVERSATION_TIMEOUT_MS, createBotAgent, webSearchTool, type AgentFactory, type AgentHandle, type ToolActivity, type SkillSummary } from '@pi-bot/agent';
 import type { Mood } from '@pi-bot/bot-face';
 import { PhoneAdb, isPhoneAdbCommand } from './phone.js';
 import { commandShell } from './platform.js';
@@ -28,6 +28,7 @@ export interface RunContext {
   text: string;
   images?: ChatImage[];
   search_enabled?: boolean;
+  composio_enabled?: boolean;
   agents_enabled?: boolean;
   skills?: SkillSummary[];
   memory_context?:string;task_id?:string;checkpoint_version?:number;observation_enabled?:boolean;
@@ -201,6 +202,7 @@ export class Executor {
       if (run.lane === "conversation") tools.push(...taskTools(api, () => token, run.run_id), ...automationTools(api, () => token, run.run_id));
       if (run.automation) tools.push(...automationTools(api, () => token, run.run_id, true));
       if (run.lane !== "conversation" && run.search_enabled) tools.push(webSearchTool(api, () => token));
+      if (run.composio_enabled && !run.automation_readonly) tools.push(...composioTools(api, () => token));
       if (run.agents_enabled) tools.push(askAgentTool(api, () => token, run.run_id, { conversation: run.lane === "conversation" }));
       tools.push(...reportTools(api, () => token, run.run_id, run.lane === "task" && !run.automation));
       tools.push(...a2uiTools(messages => { event({ kind: 'ui', messages }); }));
