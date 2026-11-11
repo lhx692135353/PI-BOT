@@ -132,6 +132,8 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolDescriptor>> =
     goal_manage: tool("管理目标", "control", "internal"),
     goal_finish: tool("提交目标结果", "control", "internal"),
     send_reply: tool("回复用户", "control", "internal", "working", true),
+    codemode: tool("运行脚本", "control"),
+    tool_search: tool("查找工具", "read", "public", "searching"),
     get_ui_catalog: tool("读取界面组件", "read"),
     show_ui: tool("展示界面", "control"),
     publish_report: { ...tool("保存报告", "write"), fileOutput: true },

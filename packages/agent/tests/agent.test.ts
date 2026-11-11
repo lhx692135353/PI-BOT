@@ -37,9 +37,9 @@ test("a goal review exposes its finish and checkpoint tools without skill manage
 before(async () => {
   dir = mkdtempSync(join(tmpdir(), "pi-bot-agent-"));
   server = createServer(async (req, res) => {
-    let raw = "";
-    for await (const chunk of req) raw += chunk;
-    const json = JSON.parse(raw);
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) chunks.push(Buffer.from(chunk));
+    const json = JSON.parse(Buffer.concat(chunks).toString("utf8"));
     if (req.url === "/agent/automations") {
       res.writeHead(200, { "content-type": "application/json" });
       return void res.end(JSON.stringify({ goals: [] }));
@@ -86,6 +86,12 @@ before(async () => {
         stream.text("我先核对当前目标记录，再说明检查的触发方式。");
         stream.tool("goal_manage", { action: "list" }, "goal_list");
       } else stream.text("已核对目标记录，当前没有进行中的目标。");
+    } else if (user === "脚本查询") {
+      if (!rounds) stream.tool("codemode", { code: "return await tools.lookup({ query: \"天气\" })" }, "code_1");
+      else stream.text("脚本完成。");
+    } else if (user === "查找延后工具") {
+      if (!rounds) stream.tool("tool_search", { query: "archive_note" }, "search_1");
+      else stream.text("已找到归档工具。");
     } else if (user === "挂起") {
       res.flushHeaders();
       return;
@@ -289,7 +295,8 @@ test("all models use Responses without Chat Completions parameters", async () =>
     assert.equal(request.body.input.at(-1).role, "user");
     assert.equal(text(request.body.input.at(-1).content), "直接回答");
     assert.equal(request.body.input.some((m: any) => m.type === "function_call" || m.type === "function_call_output"), false);
-    assert.deepEqual(request.body.tools ?? [], []);
+    assert.deepEqual((request.body.tools ?? []).map((t: any) => t.name), ["codemode", "tool_search"]);
+    assert.doesNotMatch(request.body.tools.find((t: any) => t.name === "codemode").description, /classifiers/);
     for (const key of ["messages", "max_tokens", "stream_options", "chat_template_kwargs"]) assert.equal(key in request.body, false);
   } finally { agent.dispose(); }
 });
@@ -323,7 +330,7 @@ test("createBotAgent runs only the given tools through the proxy and redacts the
     onTool: (t) => tools.push(t),
     onProgress: (lines) => progress.push(lines),
   });
-  assert.deepEqual(agent.tools, ["lookup"]);
+  assert.deepEqual(agent.tools, ["lookup", "codemode", "tool_search"]);
   const seen: string[] = [];
   const reply = await agent.prompt("今天天气？", (t) => seen.push(t));
   agent.dispose();
@@ -338,7 +345,7 @@ test("createBotAgent runs only the given tools through the proxy and redacts the
   const first = requests.find(r => r.body.model === "pi-bot-model-uuid");
   assert.equal(first.headers.authorization, `Bearer ${SECRET}`);
   assert.equal(first.body.model, "pi-bot-model-uuid");
-  assert.deepEqual(first.body.tools.map((t: any) => t.name), ["lookup"]);
+  assert.deepEqual(first.body.tools.map((t: any) => t.name), ["lookup", "codemode", "tool_search"]);
   assert.match(text(first.body.input[0].content), /你是测试 Bot。/);
   assert.equal(first.body.input.some((m: any) => m.role === "user"), true);
   assert.deepEqual(
@@ -352,6 +359,55 @@ test("createBotAgent runs only the given tools through the proxy and redacts the
   assert.deepEqual(JSON.parse(call.arguments), { query: "天气" });
   assert.equal(result.call_id, call.call_id);
   assert.equal(result.output, "天气晴");
+});
+
+test("codemode calls a declared tool and only the script output returns to the model", async () => {
+  const lookup: ToolDefinition = {
+    name: "lookup", label: "查询", description: "查询信息",
+    parameters: Type.Object({ query: Type.String() }),
+    execute: async (_id, args: any) => ({ content: [{ type: "text", text: `${args.query}晴` }], details: {} }),
+  } as ToolDefinition;
+  const agent = await createBotAgent({
+    model: { id: "script", name: "测试", baseUrl: url, modelId: "script-test", contextWindow: 32000, maxTokens: 1000 },
+    apiKey: SECRET, cwd: dir, agentDir: join(dir, "script"), systemPrompt: "测试", history: [], tools: [lookup],
+  });
+  try {
+    assert.equal(await agent.prompt("脚本查询", () => {}), "脚本完成。");
+    const turns = requests.filter(r => r.body.model === "script-test").map(r => r.body);
+    assert.equal(turns.length, 2);
+    const output = turns[1].input.find((item: any) => item.type === "function_call_output");
+    assert.match(output.output, /晴/);
+    assert.equal(turns[1].input.some((item: any) => item.type === "function_call" && item.name === "lookup"), false);
+  } finally { agent.dispose(); }
+});
+
+test("tool_search loads a deferred tool and leaves direct tools declared", async () => {
+  const lookup: ToolDefinition = {
+    name: "lookup", label: "查询", description: "查询信息",
+    parameters: Type.Object({ query: Type.String() }),
+    execute: async () => ({ content: [{ type: "text", text: "晴" }], details: {} }),
+  } as ToolDefinition;
+  const archive: ToolDefinition = {
+    name: "archive_note", label: "归档", description: "把笔记归档到长期库", exposure: "deferred",
+    parameters: Type.Object({ title: Type.String() }),
+    execute: async () => ({ content: [{ type: "text", text: "已归档" }], details: {} }),
+  } as ToolDefinition;
+  const agent = await createBotAgent({
+    model: { id: "search", name: "测试", baseUrl: url, modelId: "search-test", contextWindow: 32000, maxTokens: 1000 },
+    apiKey: SECRET, cwd: dir, agentDir: join(dir, "search"), systemPrompt: "测试", history: [], tools: [lookup, archive],
+  });
+  try {
+    assert.deepEqual(agent.tools, ["lookup", "codemode", "tool_search"]);
+    assert.equal(await agent.prompt("查找延后工具", () => {}), "已找到归档工具。");
+    const turns = requests.filter(r => r.body.model === "search-test").map(r => r.body);
+    assert.deepEqual(turns[0].tools.map((tool: any) => tool.name), ["lookup", "codemode", "tool_search"]);
+    assert.match(turns[1].input.find((item: any) => item.type === "function_call_output").output, /archive_note/);
+    assert.ok(turns[1].tools.some((tool: any) => tool.name === "archive_note"));
+  } finally { agent.dispose(); }
+});
+
+test("callers cannot replace the session script or search tools", async () => {
+  await assert.rejects(createBotAgent({ tools: [{ name: "codemode" }] } as any), /平台工具名称/);
 });
 
 test("summarize prefers the most telling argument and truncates", () => {

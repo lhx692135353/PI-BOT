@@ -25,8 +25,9 @@ const text = (c: any): string => (Array.isArray(c) ? c.map(p => p.text ?? '').jo
 async function scriptedProvider(outside: string) {
   const requests: any[] = [];
   const server = createServer(async (req, res) => {
-    let raw = ''; for await (const chunk of req) raw += chunk;
-    const json = JSON.parse(raw);
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) chunks.push(Buffer.from(chunk));
+    const json = JSON.parse(Buffer.concat(chunks).toString('utf8'));
     requests.push(json);
     if (!json.stream) {
       res.writeHead(200,{'content-type':'application/json'});

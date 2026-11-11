@@ -14,8 +14,9 @@ test("the Pi extension loads private skills without read/bash or filesystem disc
   const requests: any[] = [], calls: any[] = [], tools: ToolActivity[] = [], progress: string[][] = [], output: string[] = [];
   let token = "first-private-token";
   const server = createServer(async (req, res) => {
-    let raw = ""; for await (const chunk of req) raw += chunk;
-    const body = JSON.parse(raw);
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) chunks.push(Buffer.from(chunk));
+    const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
     if (req.url === "/agent/skills") {
       calls.push({ body, token: req.headers.authorization });
       res.writeHead(200, { "Content-Type": "application/json" });
@@ -47,7 +48,7 @@ test("the Pi extension loads private skills without read/bash or filesystem disc
       skills: { baseUrl: root, token: () => token, runId: "my-run", catalog: [{ name: "weekly-report", description: "编写周报时使用", version: 1 }] },
       onTool: tool => tools.push(tool), onProgress: lines => progress.push(lines),
     });
-    assert.deepEqual(agent.tools, ["skill_manage", "skill_load"]);
+    assert.deepEqual(agent.tools, ["skill_manage", "skill_load", "codemode", "tool_search"]);
     token = "refreshed-private-token";
     await agent.setApiKey(token);
     assert.equal(await agent.prompt("整理周报", value => output.push(value)), "周报已完成。");
@@ -59,7 +60,7 @@ test("the Pi extension loads private skills without read/bash or filesystem disc
     assert.match(system, /weekly-report/);
     assert.match(system, /skill_load/);
     assert.doesNotMatch(system, /FORBIDDEN/);
-    assert.deepEqual(requests[0].tools.map((tool: any) => tool.name), ["skill_manage", "skill_load"]);
+    assert.deepEqual(requests[0].tools.map((tool: any) => tool.name), ["skill_manage", "skill_load", "codemode", "tool_search"]);
     assert.match(JSON.stringify(requests[1].input), /先核实来源再整理/);
   } finally {
     agent?.dispose(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve()));

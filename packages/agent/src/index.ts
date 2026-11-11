@@ -7,6 +7,8 @@ export { CONVERSATION_TIMEOUT_MS, MODEL_TIMEOUT_MS } from "./timeouts.js";
 import { modelImages, type ChatImage } from './images.js';
 import {
   createAgentSession,
+  createCodemodeExtension,
+  createToolSearchExtension,
   DefaultResourceLoader,
   ModelRuntime,
   SessionManager,
@@ -264,10 +266,14 @@ export class PiAgent implements AgentHandle {
   }
 }
 
+const SESSION_TOOLS = ["codemode", "tool_search"] as const;
+const discoverable = (exposure: string | undefined) => exposure === "deferred" || exposure === "codemode";
+
 export const createBotAgent: AgentFactory = async (o) => {
   if(o.model?.capabilities?.tools === false)throw new RuntimeError({code:"unsupported",scope:"model",retryable:false,outcome:"not_started",message:"当前模型未启用原生工具调用，请配置支持工具调用的模型"});
   if (o.tools.some(tool => toolDescriptor(tool.name)?.platformOwned && tool.name !== "send_reply")) throw new Error("内部工具名称不能由外部工具覆盖");
   if (o.tools.some(t => t.name === "send_reply")) throw new Error("公开回复工具不能由外部工具覆盖");
+  if (o.tools.some(t => (SESSION_TOOLS as readonly string[]).includes(t.name))) throw new Error("平台工具名称不能由外部工具覆盖");
   const replies: ReplyEvent[] = [];
   const replyClock = { started: 0 };
   const redact = redactor([o.apiKey, ...(o.redactSecrets ?? [])]);
@@ -332,11 +338,11 @@ export const createBotAgent: AgentFactory = async (o) => {
     cwd: o.cwd, agentDir: o.agentDir, settingsManager, systemPrompt: o.systemPrompt,
     noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true,
     appendSystemPromptOverride: () => [],
-    extensionFactories: [{name:"report-context",factory:reportContextExtension},{name:"context-budget",factory:contextBudgetExtension()},...(o.skills ? [{ name: "bot-skills", factory: skillsExtension(o.skills) }] : []),...(o.memory?[{name:"bot-memory",factory:memoryExtension(o.memory)}]:[]),...(o.runId?[{name:"bot-observation",factory:observationExtension(o.runId,o.onObservation)}]:[])],
+    extensionFactories: [{name:"report-context",factory:reportContextExtension},{name:"context-budget",factory:contextBudgetExtension()},...(o.skills ? [{ name: "bot-skills", factory: skillsExtension(o.skills) }] : []),...(o.memory?[{name:"bot-memory",factory:memoryExtension(o.memory)}]:[]),...(o.runId?[{name:"bot-observation",factory:observationExtension(o.runId,o.onObservation)}]:[]),{name:"codemode",factory:createCodemodeExtension({mode:"on",models:false,inlineBudget:0})},{name:"tool-search",factory:createToolSearchExtension()}],
   });
   await resourceLoader.reload();
   if (resourceLoader.getExtensions().errors.length) throw new Error("内部能力插件加载失败");
-  const allowed = new Set([...tools.map(t => t.name), ...(o.skills ? SKILL_TOOLS.filter(n => !o.readonly || n !== "skill_manage") : []),...(o.memory?MEMORY_TOOLS.filter(n=>n!== (o.memory!.lane==="task"?"resume_task":"task_checkpoint")):[])]);
+  const allowed = new Set([...tools.map(t => t.name), ...(o.skills ? SKILL_TOOLS.filter(n => !o.readonly || n !== "skill_manage") : []),...(o.memory?MEMORY_TOOLS.filter(n=>n!== (o.memory!.lane==="task"?"resume_task":"task_checkpoint")):[]),...SESSION_TOOLS]);
   const { session } = await createAgentSession({
     cwd: o.cwd,
     agentDir: o.agentDir,
@@ -350,8 +356,15 @@ export const createBotAgent: AgentFactory = async (o) => {
     sessionManager,
     settingsManager,
   });
+  // A deferred or codemode-exposure tool named in the allowlist starts declared. Deactivate
+  // it so tool_search can find it; direct tools stay declared and scripts can still call them.
+  const deferred = new Set(session.getAllTools().filter(tool => discoverable(tool.exposure)).map(tool => tool.name));
+  if (session.getActiveToolNames().some(name => deferred.has(name)))
+    session.setActiveToolsByName(session.getActiveToolNames().filter(name => !deferred.has(name)));
   const active = session.getActiveToolNames();
-  if (active.length !== allowed.size || active.some((n) => !allowed.has(n))) {
+  const registered = session.getAllTools().map(tool => tool.name);
+  const declared = [...allowed].filter(name => !deferred.has(name));
+  if (registered.length !== allowed.size || registered.some(name => !allowed.has(name)) || active.length !== declared.length || declared.some(name => !active.includes(name))) {
     session.dispose();
     throw new Error("工具隔离校验失败");
   }

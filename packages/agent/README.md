@@ -1,6 +1,8 @@
 # Pi Bot agent 与私有 skills
 
-Mac 与云端共用 `createBotAgent`，统一使用 Pi 的 `openai-responses` 适配器访问 `/llm/v1/responses`，支持 Grok 等兼容 Responses API 的模型。用户输入和历史保留标准的 `role: "user"` / `role: "assistant"` 消息；只有模型真实发起的工具调用使用 `function_call` / `function_call_output`，并通过 `call_id` 配对。消息通过 `input` 发送，服务商不保存会话（`store: false`）。平台通过 Pi SDK 的 `extensionFactories` 加载内置 `skillsExtension`，每个会话只允许显式提供的工具，以及 `skill_manage`、`skill_load`。不会发现用户家目录、资料库或祖先目录中的 extensions、skills、AGENTS、提示词模板；智能体不能修改平台插件。
+Mac 与云端共用 `createBotAgent`，统一使用 Pi 的 `openai-responses` 适配器访问 `/llm/v1/responses`，支持 Grok 等兼容 Responses API 的模型。用户输入和历史保留标准的 `role: "user"` / `role: "assistant"` 消息；只有模型真实发起的工具调用使用 `function_call` / `function_call_output`，并通过 `call_id` 配对。消息通过 `input` 发送，服务商不保存会话（`store: false`）。平台通过 Pi SDK 的 `extensionFactories` 加载内置 `skillsExtension`，以及显式注册的 `codemode`、`tool_search`。每个会话只允许显式提供的工具，以及 `skill_manage`、`skill_load`、`codemode`、`tool_search`。不会发现用户家目录、资料库或祖先目录中的 extensions、skills、AGENTS、提示词模板；智能体不能修改平台插件。
+
+`codemode` 让模型用一段 JavaScript 批量、串联或筛选已经声明的工具。脚本在 QuickJS 里运行，没有 Node、文件、网络或计时器；嵌套调用仍走原来的校验和权限，只有脚本输出回到模型。脚本不能使用模型目录。已有工具保持直接声明，参数不会再抄进脚本工具的说明里。`tool_search` 只查找暴露方式为 `deferred` 或 `codemode`、且当前还没声明给模型的工具；找到后下一轮才会声明。现有文件、技能、记忆和目标工具不进入这个查找范围。
 
 ## 所属与存储
 
@@ -25,7 +27,7 @@ Mac 与云端共用 `createBotAgent`，统一使用 Pi 的 `openai-responses` �
 
 ## 加载与自管理
 
-`buildContext` 从数据库读取已启用目录，只传名称、描述、版本。Extension 在 `before_agent_start` 注入目录及管理规则；Pi 0.87.1 的内置 skill 提示要求 `read` 或 `bash`，因此这里显式引导使用私有 `skill_load`。模型只在任务匹配时读取完整说明，资料按需加载。当前任务创建/更新后可立即读取；下次运行自动刷新目录。
+`buildContext` 从数据库读取已启用目录，只传名称、描述、版本。Extension 在 `before_agent_start` 注入目录及管理规则；Pi 1.5.2 的内置 skill 提示要求 `read` 或 `bash`，因此这里显式引导使用私有 `skill_load`。模型只在任务匹配时读取完整说明，资料按需加载。当前任务创建/更新后可立即读取；下次运行自动刷新目录。
 
 只沉淀经验证的可复用工作方法和明确纠正的流程，不为每轮对话创建 skill；偏好、身份、事项进度继续由长期记忆维护。系统提示禁止保存凭据，禁止将内部正文复制进资料库。平台加载器和普通文件工具不会自动载入 skill 中的可执行插件。
 
