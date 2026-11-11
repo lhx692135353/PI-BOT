@@ -126,6 +126,11 @@ export interface SearchUsage {
   error: string | null;
 }
 export type ModelInput = Omit<Model, "id" | "updated_at"> & { api_key?: string };
+export interface ComposioSettings {
+  enabled: boolean;
+  base_url: string;
+  configured: boolean;
+}
 
 export const api = {
   login: (username: string, password: string) =>
@@ -153,4 +158,8 @@ export const api = {
   revokeDevice: (id: string) => request(adminApi, `devices/${id}/revoke`, "POST"),
   usage: (days: number) => request<Usage>(adminApi, `usage?days=${days}`),
   searchUsage: () => request<SearchUsage>(adminApi, "search/usage"),
+  composio: () => request<ComposioSettings>(adminApi, "composio"),
+  saveComposio: (body: { enabled: boolean; base_url: string; api_key?: string }) =>
+    request<ComposioSettings>(adminApi, "composio", "PUT", body),
+  testComposio: () => request<{ ok: boolean }>(adminApi, "composio/test", "POST", {}),
 };

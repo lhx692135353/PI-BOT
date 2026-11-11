@@ -14,6 +14,7 @@ import {
   automationTools,
   CANCELLED,
   createBotAgent,
+  composioTools,
   webSearchTool,
   type AgentFactory,
   type AgentHandle,
@@ -46,6 +47,7 @@ const requestSchema = z.object({
     text: z.string().min(1),
     images: imagesSchema.optional(),
     search_enabled: z.boolean().default(false),
+    composio_enabled: z.boolean().default(false),
     agents_enabled: z.boolean().default(false),
     skills: z.array(z.object({ name: z.string().max(64), description: z.string().max(1024), version: z.number().int().positive() })).max(64).default([]),
   }),
@@ -131,6 +133,7 @@ export async function createRunner(options: { token: string; dir: string; factor
       const tools = [
         ...(p.run.lane === "conversation" ? [...taskTools(api, () => p.token, p.run.run_id), ...automationTools(api, () => p.token, p.run.run_id)] : []),
         ...(p.run.lane !== "conversation" && p.run.search_enabled ? [webSearchTool(api, () => p.token)] : []),
+        ...(p.run.composio_enabled && !p.run.automation_readonly ? composioTools(api, () => p.token) : []),
         ...(p.run.agents_enabled ? [askAgentTool(api, () => p.token, p.run.run_id, { conversation: p.run.lane === "conversation" })] : []),
       ];
       if(p.run.lane === "task" && p.run.operation_target.startsWith("remote:")) tools.push(...remoteTools(api,()=>p.token,p.run.run_id,p.run.remote_capabilities));
