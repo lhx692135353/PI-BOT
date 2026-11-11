@@ -11,6 +11,8 @@ import { UI_INSTRUCTIONS, PROGRESS_CHARS, PROGRESS_SEGMENTS, type SkillSummary }
 import { skillCatalog } from "./skills.js";
 import { z } from "zod";
 import { SHAPES, COLORS, SCHEMES, DEFAULT_AVATAR, avatarFor } from "@pi-bot/bot-face";
+import { composioIsActive, composioRow } from "./composio.js";
+import { Vault } from "./security.js";
 import { fail, type Row, type Tx } from "./db.js";
 import type { Settings } from "./config.js";
 import { canRemember, scopeText } from './authorizations.js';
@@ -432,7 +434,8 @@ export interface RunContext {
   automation_readonly?: boolean;
   deadline_at?: string;
   automation?: { id: string; kind: "review"; version: number; checkpoint_version: number; checkpoint: Record<string, unknown> };
-  search_enabled: boolean;
+    search_enabled: boolean;
+    composio_enabled: boolean;
   /** Whether the run may hand work to other bots through `ask_agent`. */
   agents_enabled: boolean;
   skills: SkillSummary[];
@@ -616,8 +619,14 @@ export async function buildContext(
   if (truncated || covered < rows.length) system+="\n（部分早期对话超出窗口，需要时用 history_search 检索，不代表没有历史。）";
   if (run.origin === "agent" && from && from.bot_id !== bot.bot_id)
     text = `你收到来自智能体「${from.name}」的委托，它正在为用户处理一项任务：\n\n${text}\n\n请直接完成并给出自包含的结果，「${from.name}」会把它转述给用户。缺少必要信息时直接说明缺什么，不要向用户提问。`;
-  else if (run.origin === "report")
+  else   if (run.origin === "report")
     text = `这是你之前委托给「${from?.name ?? bot.name}」的任务的回报。请据此把结果整理后告诉用户，不要再次委托同一任务：\n\n${text}`;
+  const connector = await composioRow(tx);
+  const composio_enabled = composioIsActive(connector) && !run.automation_readonly && run.origin !== "automation";
+  if (composio_enabled) {
+    new Vault(s.vaultFile, "composio").open(connector!.secret, "config");
+    system += "\n第三方应用：用 composio_search 按用途查找动作和参数，未连接时用 composio_connect 把授权链接交给用户，用户完成后用 composio_execute 执行。不要猜测动作名或参数，也不要索取对方网站的密码。";
+  }
   return {
     run_id: run.run_id,
     executor: run.executor,
@@ -642,6 +651,7 @@ export async function buildContext(
     text,
     images: questionImages,
     search_enabled: run.lane === "task" && search,
+    composio_enabled,
     execution_policy: run.execution_policy,
     automation_readonly: run.automation_readonly,
     deadline_at: run.deadline_at ? new Date(run.deadline_at).toISOString() : undefined,
