@@ -75,6 +75,10 @@ export function settings(env = process.env) {
     runnerUrl: env.PI_BOT_RUNNER_URL ?? "http://runner:8001",
     runnerToken: env.PI_BOT_RUNNER_TOKEN,
     tavilyKey: env.PI_BOT_TAVILY_API_KEY?.trim() || undefined,
+    /** SaaS JEV. The desktop calls /llm/v1/systemone; this process adds the key. Local vLLM d3 is reached by the desktop directly. */
+    jevBaseUrl: env.PI_BOT_JEV_BASE_URL?.trim().replace(/\/+$/, "") || undefined,
+    jevModel: env.PI_BOT_JEV_MODEL?.trim() || "jev-latest",
+    jevApiKey: env.PI_BOT_JEV_API_KEY?.trim() || undefined,
     /** auto: Tavily when its key is set, otherwise the model marked for provider search. */
     searchBackend: z.enum(["auto", "tavily", "provider"]).parse(env.PI_BOT_SEARCH_BACKEND?.trim() || "auto"),
     providerSearchMaxTurns: integer(env.PI_BOT_PROVIDER_SEARCH_MAX_TURNS, 3, 1, 20),

@@ -336,6 +336,12 @@ private fun Intro(bot: Bot) {
         Text("和 ${bot.name} 打个招呼", fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(4.dp))
         Text(bot.persona.ifBlank { "它会记住你们的对话。" }, color = Muted, fontSize = 13.sp, maxLines = 4, overflow = TextOverflow.Ellipsis)
+        if (bot.runtime == "cursor" || bot.runtime == "codex") {
+            Spacer(Modifier.height(4.dp))
+            Text(if (bot.runtime == "cursor") "本机 Cursor" else "本机 Codex", color = Muted, fontSize = 13.sp)
+            if (!bot.cliDirectory.isNullOrBlank()) Text(bot.cliDirectory, color = Muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("电脑不在线时无法在云端运行。", color = Muted, fontSize = 13.sp)
+        }
     }
 }
 

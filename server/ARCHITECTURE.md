@@ -260,3 +260,12 @@ Hub 按 device_id 保存连接；事件广播到用户的所有设备，文件 R
 自动策略依次检查来源电脑、同账号其他电脑（活动任务数、设备 ID 排序）和已启用的远端环境；只有明确上报的能力可用。文件预检不创建目录、不执行 shell、不扩大路径授权。排队期间可以重选，领取时再次检查并持久化；运行后不迁移、不重放。Worker 通过内部鉴权的 `/internal/runs/:id/claim` 请持有设备连接的 API 完成最终选机与原子领取。API 仍须单副本。
 
 目标的策略分组与实际运行节点分离，来源偏好不会变成强制机器约束。报告由云端发布，无需等待电脑在线。文件和检查点记录来源；资料库不做全量同步。
+
+
+## 本机 CLI 智能体
+
+`0024-cli-agents` 给 `bots` 增加 `runtime`（`pi` | `cursor` | `codex`）、`cli_profile`、`cli_directory`、`cli_device_id`。`runtime=pi` 的对话仍由云端 Runner 执行。Cursor 与 Codex 的对话和委托都只下发到创建它的电脑：`executor=device`，`operation_target=device:<cli_device_id>`。这台电脑不在线时运行失败，文案是「这台电脑不在线，CLI 智能体无法在云端运行」，不改派到云端，领取时也不按任务路由重选节点。
+
+对外仍是一条时间线。`cli_sessions` 只给路由用：最近约 6 条公开消息和最多 20 个未关闭会话卡片。桌面优先问本机 vLLM d3 的 `POST /v1/systemone`，否则用服务端 `POST /llm/v1/systemone`（密钥留在服务端），再否则用该 Bot 的当前模型按同一决策要一份 JSON。把握不够就在时间线里追问，不启动 CLI。委托一律新开 CLI session。
+
+Codex 这一次进程可用重复的 `-c` 挂上一次性 `list_agents` / `ask_agent` MCP，打到现有 `POST /agent/tasks`，不改用户全局配置。Cursor 不写项目或全局 `mcp.json`，因此这一方向先不做；别的 Bot 仍可委托给它。写代码的模型来自 CLI profile，Bot 上的模型只做路由回退。手机只展示种类、目录和离线原因，不在手机上创建。

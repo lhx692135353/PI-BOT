@@ -1,3 +1,4 @@
+import { isCliRuntime } from "./cli.js";
 import { resolveTaskTarget, RemotePreparationRequired } from "./targets.js";
 import { finishRun } from "./bots.js";
 import type { Hub } from "./hub.js";
@@ -30,7 +31,7 @@ export async function claimExecution(tx: Tx, id: string, s: Settings, workerId?:
       AND status IN ('running','waiting_approval') AND waiting_on_task_id IS NULL`, [workerId, run.lane]))!;
     if (used >= (run.lane === "conversation" ? s.conversationConcurrency : s.workerConcurrency)) return null;
   }
-  if (hub && run.lane === "task" && run.routing) {
+  if (hub && run.lane === "task" && run.routing && !isCliRuntime(bot.runtime)) {
     try {
       const location = await resolveTaskTarget(tx,s,hub,run.user_id,bot.slug,run.routing);
       const executor = location.execution === "device" ? "device" : "cloud";

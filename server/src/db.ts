@@ -32,6 +32,7 @@ const keys: Record<string, string> = {
   bot_goals: "goal_id",
   automation_rounds: "round_id",
   automation_reports: "report_id",
+  cli_sessions: "session_id",
 };
 export const CHANNEL = "pibot_changes";
 export interface Change {
