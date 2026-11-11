@@ -269,4 +269,4 @@ Bot 的执行统计只包含目标为自己的有效任务，排除等待子任�
 
 对外仍是一条时间线。`cli_sessions` 只给路由用：最近约 6 条公开消息和最多 20 个未关闭会话卡片。桌面优先问本机 vLLM d3 的 `POST /v1/systemone`，否则用服务端 `POST /llm/v1/systemone`（密钥留在服务端），再否则用该 Bot 的当前模型按同一决策要一份 JSON。把握不够就在时间线里追问，不启动 CLI。委托一律新开 CLI session。
 
-Codex 这一次进程可用重复的 `-c` 挂上一次性 `list_agents` / `ask_agent` MCP，打到现有 `POST /agent/tasks`，不改用户全局配置。Cursor 不写项目或全局 `mcp.json`，因此这一方向先不做；别的 Bot 仍可委托给它。写代码的模型来自 CLI profile，Bot 上的模型只做路由回退。手机只展示种类、目录和离线原因，不在手机上创建。
+Codex 这一次进程可用重复的 `-c` 挂上一次性 `list_agents` / `ask_agent` MCP，打到现有 `POST /agent/tasks`，不改用户全局配置。Cursor 不写项目或全局 `mcp.json`，因此这一方向先不做；别的 Bot 仍可委托给它。写代码的模型来自 CLI profile，Bot 上的模型只做路由回退。新建时用登录 shell 的 PATH，以及 Homebrew 和 `~/.local/bin`，查找 `codex` 或 `agent`。找不到时创建按钮保持禁用，并说明未检测到命令。手机只展示种类、目录和离线原因，不在手机上创建。

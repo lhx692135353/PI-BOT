@@ -79,6 +79,7 @@ export function BotEditor({ bot, models, deviceId, onClose, onSaved }: { bot?: B
             </select>
           </label>
           {cli && <p className="muted small">写代码用的模型来自 CLI profile。这里的模型只在 JEV 不可用时判断该续哪一段会话。电脑不在线时不能改到云端运行。</p>}
+          {cli && choices?.installed === false && <p className="error">未检测到 {runtime === "cursor" ? "Cursor CLI（agent）" : "Codex CLI（codex）"}。终端里能运行不够，从程序坞打开时要用登录 shell 的 PATH 才能找到命令，所以创建保持灰色。</p>}
           <div className="field">
             <span>造型</span>
             <div className="shapes">

@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { cliLaunch, parseCliLine, runCliProcess } from "../packages/service/src/cli-engine.js";
-import { scanCliProfiles } from "../packages/service/src/cli-profiles.js";
+import { resolveCliBin, scanCliProfiles } from "../packages/service/src/cli-profiles.js";
 import { writeMcpConfig, writeMcpServer } from "../packages/service/src/cli-mcp.js";
 import { runCliTurn, type CliTurnRun } from "../packages/service/src/cli-run.js";
 import { Executor, type RunContext } from "../packages/service/src/executor.js";
@@ -132,6 +132,22 @@ test("profile scan reads codex names and cursor config directories", () => {
   assert.deepEqual(scan.cursor.profiles.map(profile => profile.id), [cursor, extra]);
   assert.equal(scan.cursor.installed, true);
   assert.equal(scan.codex.installed, false);
+});
+
+test("codex in the user bin is visible when the app PATH cannot see it", () => {
+  const cliHome = join(root, "cli-home");
+  const binDir = join(cliHome, ".local", "bin");
+  mkdirSync(binDir, { recursive: true });
+  const codex = join(binDir, "codex");
+  writeFileSync(codex, "#!/bin/sh\n");
+  chmodSync(codex, 0o755);
+  const hidden = { HOME: cliHome, PATH: "/usr/bin:/bin", PI_BOT_SKIP_LOGIN_PATH: "1" };
+  assert.equal(scanCliProfiles(root, hidden).codex.installed, true);
+  assert.equal(resolveCliBin("codex", hidden), codex);
+  const previous = process.env.PI_BOT_CODEX_BIN;
+  process.env.PI_BOT_CODEX_BIN = codex;
+  try { assert.equal(cliLaunch({ runtime: "codex", profile: "default", directory: "/work", prompt: "hi" }).command, codex); }
+  finally { if (previous === undefined) delete process.env.PI_BOT_CODEX_BIN; else process.env.PI_BOT_CODEX_BIN = previous; }
 });
 
 test("the one-shot MCP server lists and delegates without a global config file", async () => {

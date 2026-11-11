@@ -1,4 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import { delimiter } from "node:path";
+import { cliSearchDirs, resolveCliBin } from "./cli-profiles.js";
 
 export interface CliLaunch {
   runtime: "cursor" | "codex";
@@ -17,6 +19,11 @@ export function codexMcpArgs(node: string, script: string, configPath: string) {
   ];
 }
 
+function cliEnv(extra: NodeJS.ProcessEnv = {}) {
+  const pathKey = process.platform === "win32" ? "Path" : "PATH";
+  return { ...process.env, [pathKey]: cliSearchDirs().join(delimiter), ...extra };
+}
+
 /** Argv for one non-interactive CLI turn. Codex MCP is inline `-c` only; nothing is written into the workspace. */
 export function cliLaunch(spec: CliLaunch) {
   if (spec.runtime === "cursor") {
@@ -24,10 +31,10 @@ export function cliLaunch(spec: CliLaunch) {
     if (spec.resume) args.push("--resume", spec.resume);
     args.push(spec.prompt);
     return {
-      command: spec.bins?.cursor || process.env.PI_BOT_CURSOR_BIN || "agent",
+      command: spec.bins?.cursor || resolveCliBin("agent") || "agent",
       args,
       cwd: spec.directory,
-      env: { ...process.env, CURSOR_CONFIG_DIR: spec.profile },
+      env: cliEnv({ CURSOR_CONFIG_DIR: spec.profile }),
       stdin: undefined as string | undefined,
     };
   }
@@ -38,10 +45,10 @@ export function cliLaunch(spec: CliLaunch) {
   if (spec.mcp) args.push(...codexMcpArgs(spec.mcp.node, spec.mcp.script, spec.mcp.configPath));
   args.push("-");
   return {
-    command: spec.bins?.codex || process.env.PI_BOT_CODEX_BIN || "codex",
+    command: spec.bins?.codex || resolveCliBin("codex") || "codex",
     args,
     cwd: spec.directory,
-    env: { ...process.env },
+    env: cliEnv(),
     stdin: spec.prompt,
   };
 }
