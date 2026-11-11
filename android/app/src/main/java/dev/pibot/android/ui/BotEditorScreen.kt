@@ -82,6 +82,7 @@ fun BotEditorScreen(repository: PiBotRepository, botId: String?, onDone: (String
     var error by remember { mutableStateOf<String?>(null) }
     var confirmArchive by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val cli = existing?.runtime == "cursor" || existing?.runtime == "codex"
 
     LaunchedEffect(Unit) { runCatching { repository.refreshMe(); models = repository.models() }.onFailure { error = errorText(it) } }
 
@@ -128,6 +129,12 @@ fun BotEditorScreen(repository: PiBotRepository, botId: String?, onDone: (String
             }
             Spacer(Modifier.height(16.dp))
             OutlinedTextField(name, { name = it.take(40) }, label = { Text("名字") }, placeholder = { Text("例如：研究助理") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            if (cli) {
+                Spacer(Modifier.height(12.dp))
+                Text(if (existing?.runtime == "cursor") "本机 Cursor" else "本机 Codex", fontWeight = FontWeight.SemiBold)
+                Text(existing?.cliDirectory ?: "", color = Muted, fontSize = 13.sp)
+                Text("电脑不在线时无法在云端运行。profile 和目录请在那台电脑上修改。", color = Muted, fontSize = 13.sp)
+            }
             Spacer(Modifier.height(12.dp))
             OutlinedTextField(
                 persona, { persona = it.take(8000) },
@@ -137,7 +144,8 @@ fun BotEditorScreen(repository: PiBotRepository, botId: String?, onDone: (String
                 modifier = Modifier.fillMaxWidth(),
             )
             Spacer(Modifier.height(12.dp))
-            ModelPicker(models, modelId) { modelId = it }
+            ModelPicker(models, modelId, if (cli) "路由模型" else "模型") { modelId = it }
+            if (cli) Text("写代码用的模型来自 CLI profile。这里的模型只在 JEV 不可用时判断该续哪一段会话。", color = Muted, fontSize = 13.sp)
 
             Section("造型")
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -222,7 +230,7 @@ private fun Section(title: String) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ModelPicker(models: List<Model>, selected: String?, onSelect: (String?) -> Unit) {
+private fun ModelPicker(models: List<Model>, selected: String?, title: String = "模型", onSelect: (String?) -> Unit) {
     var open by remember { mutableStateOf(false) }
     val default = models.firstOrNull { it.isDefault }
     val label = models.firstOrNull { it.id == selected }?.name ?: "跟随默认" + (default?.let { "（${it.name}）" } ?: "")
@@ -230,7 +238,7 @@ private fun ModelPicker(models: List<Model>, selected: String?, onSelect: (Strin
         OutlinedTextField(
             label, {},
             readOnly = true,
-            label = { Text("模型") },
+            label = { Text(title) },
             modifier = Modifier.fillMaxWidth(),
             enabled = false,
             colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(disabledTextColor = Ink, disabledBorderColor = Line, disabledLabelColor = Muted),

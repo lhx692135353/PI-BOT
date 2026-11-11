@@ -15,8 +15,11 @@ struct BotEditorView: View {
     @State private var error: String?
     @State private var confirmArchive = false
     @State private var loaded = false
+    @State private var runtime = "pi"
+    @State private var directory = ""
 
     private var creating: Bool { botId == nil }
+    private var cli: Bool { runtime == "cursor" || runtime == "codex" }
     private var canSave: Bool { !saving && !name.trimmingCharacters(in: .whitespaces).isEmpty }
 
     var body: some View {
@@ -27,6 +30,15 @@ struct BotEditorView: View {
                     TextField("名字（例如：研究助理）", text: $name)
                         .fieldStyle().padding(.top, 16)
                         .onChange(of: name) { if name.count > 40 { name = String(name.prefix(40)) } }
+                    if cli {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(runtime == "cursor" ? "本机 Cursor" : "本机 Codex").fontWeight(.semibold)
+                            if !directory.isEmpty { Text(directory).font(.footnote).foregroundStyle(Palette.muted).lineLimit(2) }
+                            Text("电脑不在线时无法在云端运行。profile 和目录请在那台电脑上修改。")
+                                .font(.footnote).foregroundStyle(Palette.muted)
+                        }
+                        .padding(.top, 12)
+                    }
                     ZStack(alignment: .topLeading) {
                         if persona.isEmpty {
                             Text("人设与职责：它负责做什么、用什么风格说话、有哪些习惯……")
@@ -158,7 +170,7 @@ struct BotEditorView: View {
             ForEach(models) { model in Button(model.name) { modelId = model.id } }
         } label: {
             HStack {
-                Text("模型").foregroundStyle(Palette.muted)
+                Text(cli ? "路由模型" : "模型").foregroundStyle(Palette.muted)
                 Spacer()
                 Text(label).foregroundStyle(Palette.ink).lineLimit(1)
                 Image(systemName: "chevron.up.chevron.down").font(.caption).foregroundStyle(Palette.muted)
@@ -178,6 +190,8 @@ struct BotEditorView: View {
         name = bot.name
         persona = bot.persona
         modelId = bot.modelId
+        runtime = bot.runtime
+        directory = bot.cliDirectory ?? ""
         avatar = bot.avatar.normalized()
     }
 

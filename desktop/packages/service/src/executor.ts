@@ -9,6 +9,7 @@ import { PhoneAdb, isPhoneAdbCommand } from './phone.js';
 import { commandShell } from './platform.js';
 import { libraryDir, libraryTools, Sandbox } from './library.js';
 import { changedSince, LibraryMirror, syncNote } from './library-sync.js';
+import { runCliTurn, type CliRunDeps } from './cli-run.js';
 
 /** What the server sends with `{type:'run'}`; mirrors server `RunContext`. */
 export interface RunContext {
@@ -30,6 +31,15 @@ export interface RunContext {
   agents_enabled?: boolean;
   skills?: SkillSummary[];
   memory_context?:string;task_id?:string;checkpoint_version?:number;observation_enabled?:boolean;
+  cli?: {
+    runtime: 'cursor' | 'codex';
+    profile: string;
+    directory: string;
+    persona: string;
+    fresh: boolean;
+    recent: { role: 'user' | 'assistant'; text: string }[];
+    sessions: { id: string; engine_session_id: string; title: string; summary: string; last_user_text: string; updated_at: string }[];
+  };
 }
 export interface ExecutorDeps {
   libraryRoot: string;
@@ -44,6 +54,8 @@ export interface ExecutorDeps {
   phoneConfigPath?: string;
   /** Cloud library uploads; tests substitute a fake server. */
   fetch?: typeof fetch;
+  /** Local Cursor/Codex runs. Tests substitute the process launcher and decision fetch. */
+  cli?: Partial<CliRunDeps>;
 }
 interface Active {
   run: RunContext;
@@ -62,6 +74,7 @@ const TOKEN_REFRESH_MS = 10 * 60 * 1000;
 
 export class Executor {
   private active = new Map<string, Active>();
+  private cliTail = new Map<string, Promise<void>>();
   private commandsSuspended = false;
   private commands = new Set<{ controller: AbortController; done: Promise<void> }>();
   async suspendCommands() {
@@ -78,6 +91,10 @@ export class Executor {
     const state: Active = { run, cancelled: false, prompted: false, received: new Set((run.instructions ?? []).map(i => i.id)), pending: [...run.instructions ?? []], waiting: new Map(), approvals: new Map(), early: new Map() };
     this.active.set(run.run_id, state);
     const event = (e: Record<string, unknown>) => this.deps.send({ type: 'run_event', run_id: run.run_id, event: e });
+    if (run.cli) {
+      await this.runBoundCli(run, state, event);
+      return;
+    }
     event({ kind: 'started' });
     this.deps.activity(run, null, 'thinking');
     let timedOut = false;
@@ -239,6 +256,38 @@ export class Executor {
       clearTimeout(deadline);
       clearInterval(refresh);
       for (const settle of state.waiting.values()) settle(false);
+      state.agent?.dispose();
+      this.active.delete(run.run_id);
+    }
+  }
+  private enqueueCli(botId: string, job: () => Promise<void>) {
+    const previous = this.cliTail.get(botId) ?? Promise.resolve();
+    const next = previous.then(job, job);
+    this.cliTail.set(botId, next.then(() => undefined, () => undefined));
+    return next;
+  }
+  private async runBoundCli(run: RunContext, state: Active, event: (entry: Record<string, unknown>) => void) {
+    const controller = new AbortController();
+    state.agent = { tools: [], async prompt() { return ''; }, async setApiKey() {}, async abort() { controller.abort(); }, dispose() {} };
+    this.deps.activity(run, null, 'thinking');
+    try {
+      await this.enqueueCli(run.bot.id, () => runCliTurn(run, entry => {
+        if (entry.kind === 'tool') {
+          const running = entry.state === 'running';
+          this.deps.activity(run, running ? String(entry.name ?? '') : null, running ? 'working' : 'thinking');
+        }
+        event(entry);
+        if (entry.kind === 'done') this.deps.activity(run, null, entry.state === 'completed' ? (run.automation ? null : 'celebrate') : entry.state === 'cancelled' ? null : 'error');
+      }, controller.signal, {
+        token: () => this.deps.llmToken(run.bot.id),
+        proxyUrl: this.deps.proxyUrl,
+        fetchImpl: this.deps.cli?.fetchImpl ?? this.deps.fetch,
+        bins: this.deps.cli?.bins,
+        local: this.deps.cli?.local,
+        dataDir: this.deps.cli?.dataDir,
+        launch: this.deps.cli?.launch,
+      }));
+    } finally {
       state.agent?.dispose();
       this.active.delete(run.run_id);
     }

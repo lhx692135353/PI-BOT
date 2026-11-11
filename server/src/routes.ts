@@ -1,3 +1,5 @@
+import { isCliRuntime } from "./cli.js";
+import { saveCliSession } from "./cli-sessions.js";
 import { routingFields } from "./targets.js";
 import { authorizationRoutes } from './authorizations.js';
 import { reportRoutes } from "./reports.js";
@@ -42,7 +44,7 @@ import { cancelTask, createTask, readTask, reportLater, TERMINAL, listTasks, mes
 import { deviceOut, deviceList, cloudComputer, libraryFileId } from './devices.js';
 import { ensureEnvironment } from './remote/environments.js';
 import { posix } from 'node:path';
-import { complete, findModel, proxyResponses, recordUsage } from "./llm.js";
+import { complete, findModel, proxyResponses, proxySystemOne, recordUsage } from "./llm.js";
 import { effectiveModelCapabilities, listCatalog, providerBase } from "./providers.js";
 import type { WebSearch } from "./search.js";
 import { manageSkill, skillRequest } from "./skills.js";
@@ -229,6 +231,22 @@ export const routes: Route[] = [
     handler:async({tx,user,llm,body})=>manageMemory(tx,user.user_id,llm!,body)},
   {method:"POST",path:"/agent/history/search",auth:"llm",tag:"memory",summary:"检索当前 Bot 历史",internal:true,
     body:z.object({run_id:uuid,query:z.string().max(200)}).strict(),handler:async({tx,user,llm,body})=>searchHistory(tx,user.user_id,llm!,body.run_id,body.query)},
+  {
+    method: "POST", path: "/agent/cli-sessions", auth: "llm", tag: "agents", summary: "保存本机 CLI 会话索引",
+    body: z.object({
+      run_id: uuid,
+      session_id: uuid.optional(),
+      engine_session_id: z.string().trim().min(1).max(200),
+      title: z.string().max(80).optional(),
+      summary: z.string().max(500).default(""),
+      last_user_text: z.string().max(500).default(""),
+    }),
+    handler: async ({ tx, user, llm, body }) => {
+      const run = await callerRun(tx, user.user_id, llm!, body.run_id);
+      const saved = await saveCliSession(tx, run, body);
+      return { id: saved.session_id, engine_session_id: saved.engine_session_id, title: saved.title };
+    },
+  },
   {method:"POST",path:"/agent/directory",auth:"llm",tag:"agents",summary:"搜索协作者知识目录",internal:true,
     body:z.object({run_id:uuid,query:z.string().max(200).default("")}).strict(),handler:async({tx,user,llm,body})=>{
       const run=await callerRun(tx,user.user_id,llm!,body.run_id);return {agents:await directory(tx,user.user_id,run.bot_id,body.query)};}},
@@ -421,7 +439,7 @@ export const routes: Route[] = [
   {
     method: "POST", path: "/bots", auth: "actor", tag: "bots", summary: "新建 Bot", body: botInput,
     handler: async ({ tx, user, device, body }) => {
-      const b = await createBot(tx, user.user_id, body);
+      const b = await createBot(tx, user.user_id, body, device?.device_id);
       await tx.notify({ user_id: user.user_id, bot_id: b.bot_id });
       return botOut(tx, b);
     },
@@ -463,6 +481,7 @@ export const routes: Route[] = [
     body:z.object({client:z.enum(["desktop","android","ios"]).optional()}),
     handler: async ({ tx, s, user, device, params, body }) => {
       const bot = await ownBot(tx, user.user_id, params.id);
+      if (isCliRuntime(bot.runtime)) fail(422, "本机 CLI 智能体不支持语音通话");
       return { ticket: await issueVoiceTicket(user.user_id, bot.bot_id, s,{client:device?"desktop":body.client??"legacy",deviceId:device?.device_id}), expires_in: 60 };
     },
   },
@@ -550,6 +569,21 @@ export const routes: Route[] = [
       object: "list",
       data: (await tx.rows("SELECT model_id, name FROM models WHERE enabled ORDER BY created_at")).map((m) => ({ id: m.model_id, object: "model", owned_by: "pi-bot", name: m.name })),
     }),
+  },
+  {
+    method: "POST", path: "/llm/v1/systemone", auth: "llm", tag: "llm", summary: "决策代理：把 System One 请求转到已配置的 SaaS JEV",
+    body: z.object({
+      state: z.union([z.string(), z.record(z.string(), z.unknown()), z.array(z.unknown())]),
+      questions: z.record(z.string(), z.unknown()),
+    }).strict(),
+    tx: false,
+    handler: async ({ s, body, reply }) => {
+      const abort = new AbortController();
+      const onClose = () => abort.abort();
+      reply.raw.once("close", onClose);
+      try { return await proxySystemOne(s, body, abort.signal); }
+      finally { reply.raw.off("close", onClose); }
+    },
   },
   {
     method: "POST", path: "/llm/v1/responses", auth: "llm", tag: "llm", summary: "模型代理：Responses API，model 填 Pi Bot 模型 ID",

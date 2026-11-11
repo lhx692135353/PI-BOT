@@ -2,6 +2,7 @@ import { errorInfo, httpErrorInfo, RuntimeError } from "@pi-bot/runtime-contract
 import { PhoneController } from './phone.js';
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync, rmSync } from 'node:fs';
+import { scanCliProfiles } from './cli-profiles.js';
 import { join } from 'node:path';
 import type { Mood } from '@pi-bot/bot-face';
 import type { AgentFactory } from '@pi-bot/agent';
@@ -44,6 +45,13 @@ export class Application {
   private phone: PhoneController;
   constructor(private o: ApplicationOptions) { this.phone = new PhoneController(join(o.dataDir, 'phone.json'), { acquired: async () => { await this.executor?.suspendCommands(); }, released: () => { this.executor?.resumeCommands(); } }); }
   private get accountFile() { return join(this.o.dataDir, 'account.json'); }
+  private cliDecision() {
+    let saved: { url?: string; model?: string } = {};
+    try { saved = JSON.parse(readFileSync(join(this.o.dataDir, 'cli-decision.json'), 'utf8')); } catch { /* Local d3 is optional. */ }
+    const url = process.env.PI_BOT_D3_URL?.trim() || saved.url?.trim();
+    if (!url) return undefined;
+    return { url, model: process.env.PI_BOT_D3_MODEL?.trim() || saved.model?.trim() || 'vllm-sr/d3' };
+  }
 
   async start() {
     if (!existsSync(this.accountFile)) return;
@@ -78,6 +86,7 @@ export class Application {
       activity: (run, tool, mood) => this.activity(run, tool, mood),
       factory: this.o.factory,
       phoneConfigPath: join(this.o.dataDir, 'phone.json'),
+      cli: { dataDir: this.o.dataDir, local: this.cliDecision() },
     });
     this.socket = new CloudSocket(account.serverUrl, this.sign, {
       open: () => { if (generation !== this.connectionGeneration) return; void this.phone.call('phone.status',{}).then((status:any) => {if (generation === this.connectionGeneration && status.available) this.socket?.send({type:'capabilities',features:['always-on-v1','files','shell','preflight-v1','phone']});}).catch(()=>{}); this.o.log?.('cloud.online'); this.setConnection('online'); this.o.emit({ type: 'bots' }); },
@@ -236,6 +245,7 @@ export class Application {
       case 'uiAction': return this.cloud('POST', `/bots/${input.botId}/messages/${input.messageId}/ui-actions`, { client:"desktop", revision: input.revision, states: input.states, action: input.action, request_id: input.request_id });
       case 'cancel': this.executor?.cancel(input.runId); return this.cloud('POST', `/runs/${input.runId}/cancel`);
       case 'decide': return this.cloud('POST', `/approvals/${input.approvalId}`, { decision: input.decision });
+      case 'cliProfiles': return scanCliProfiles(this.o.dataDir);
       case 'authorizations': return this.cloud('GET', '/authorizations');
       case 'authorizationRevoke': return this.cloud('DELETE', `/authorizations/${input.id}`);
       case 'authorizationLogs': return this.cloud('GET', '/authorizations/logs');

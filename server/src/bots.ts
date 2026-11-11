@@ -1,3 +1,5 @@
+import { absoluteClientPath, isCliRuntime, type CliRuntime } from "./cli.js";
+import { cliRouteMaterial, closeCliSessions } from "./cli-sessions.js";
 import { messageAttachments } from "./reports.js";
 import { CONTEXT_DEFAULTS, toolDescriptor, internalTool, type AppError, type ModelCapabilities, ACTIVE_RUN_STATES } from "@pi-bot/runtime-contracts";
 import { replyAnswer, type ReplySegment } from "@pi-bot/agent";
@@ -31,6 +33,10 @@ export const botInput = z.object({
   persona: z.string().max(8000).default(""),
   model_id: z.string().uuid().nullable().optional(),
   execution_device_id: z.string().uuid().nullable().optional(),
+  runtime: z.enum(["pi", "cursor", "codex"]).optional(),
+  cli_profile: z.string().trim().min(1).max(500).optional(),
+  cli_directory: z.string().trim().min(1).max(2000).optional(),
+  cli_device_id: z.string().uuid().optional(),
   avatar: avatarSchema.optional(),
   slug: z
     .string()
@@ -203,6 +209,10 @@ export async function botOut(tx: Tx, b: Row) {
     slug: b.slug,
     persona: b.persona,
     model_id: b.model_id,
+    runtime: b.runtime ?? "pi",
+    cli_profile: b.cli_profile ?? null,
+    cli_directory: b.cli_directory ?? null,
+    cli_device_id: b.cli_device_id ?? null,
     execution_device_id: null,
     avatar: b.avatar,
     is_main: b.is_main ?? false,
@@ -236,12 +246,31 @@ async function checkModel(tx: Tx, modelId: string | null | undefined) {
   const m = await tx.get("models", modelId);
   if (!m || !m.enabled) fail(422, "模型不可用");
 }
+function cliBinding(input: { runtime?: string; cli_profile?: string; cli_directory?: string }, deviceId?: string) {
+  const runtime = input.runtime ?? "pi";
+  if (runtime === "pi") return { runtime: "pi" as const, cli_profile: null, cli_directory: null, cli_device_id: null };
+  if (!deviceId) fail(422, "请在绑定了 Cursor 或 Codex 的电脑上创建");
+  const profile = input.cli_profile;
+  if (!profile) fail(422, "请选择 CLI profile");
+  const directory = absoluteClientPath(input.cli_directory ?? "");
+  if (!directory) fail(422, "请选择本机绝对路径目录");
+  if (runtime === "codex") {
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(profile!)) fail(422, "Codex profile 无效");
+  } else if (!absoluteClientPath(profile!)) fail(422, "请选择 Cursor 配置目录");
+  return { runtime: runtime as CliRuntime, cli_profile: profile!, cli_directory: directory, cli_device_id: deviceId };
+}
 export async function createBot(
   tx: Tx,
   userId: string,
   input: z.infer<typeof botInput>,
+  boundDeviceId?: string,
 ) {
   await checkModel(tx, input.model_id);
+  const cli = cliBinding(input, boundDeviceId ?? input.cli_device_id);
+  if (cli.cli_device_id) {
+    const device = await tx.one("SELECT 1 FROM devices WHERE device_id=$1 AND user_id=$2 AND revoked_at IS NULL", [cli.cli_device_id, userId]);
+    if (!device) fail(422, "绑定的电脑不存在");
+  }
   const id = randomUUID();
   const slug = await uniqueSlug(tx, userId, input.slug ?? slugBase(input.name));
   const bot = await tx.insert("bots", {
@@ -252,6 +281,10 @@ export async function createBot(
     persona: input.persona,
     model_id: input.model_id ?? null,
     execution_device_id: null,
+    runtime: cli.runtime,
+    cli_profile: cli.cli_profile,
+    cli_directory: cli.cli_directory,
+    cli_device_id: cli.cli_device_id,
     avatar: input.avatar ?? avatarFor(id),
   });
   return bot;
@@ -264,12 +297,30 @@ export async function updateBot(
 ) {
   const bot = await ownBot(tx, userId, botId, true);
   if (patch.model_id !== undefined) await checkModel(tx, patch.model_id);
+  if (patch.runtime && patch.runtime !== (bot.runtime ?? "pi")) fail(422, "不能更换智能体运行时");
+  let cliProfile = bot.cli_profile as string | null;
+  let cliDirectory = bot.cli_directory as string | null;
+  if (isCliRuntime(bot.runtime)) {
+    if (patch.cli_profile) {
+      if (bot.runtime === "codex" && !/^[A-Za-z0-9_-]{1,64}$/.test(patch.cli_profile)) fail(422, "Codex profile 无效");
+      if (bot.runtime === "cursor" && !absoluteClientPath(patch.cli_profile)) fail(422, "请选择 Cursor 配置目录");
+      cliProfile = patch.cli_profile;
+    }
+    if (patch.cli_directory) {
+      const directory = absoluteClientPath(patch.cli_directory);
+      if (!directory) fail(422, "请选择本机绝对路径目录");
+      cliDirectory = directory;
+    }
+    if (cliProfile !== bot.cli_profile || cliDirectory !== bot.cli_directory) await closeCliSessions(tx, botId);
+  }
   // The library directory keeps its slug when a bot is renamed.
   return tx.update("bots", botId, {
     name: patch.name,
     persona: patch.persona,
     model_id: patch.model_id,
     execution_device_id: undefined,
+    cli_profile: isCliRuntime(bot.runtime) ? cliProfile : undefined,
+    cli_directory: isCliRuntime(bot.runtime) ? cliDirectory : undefined,
     avatar: patch.avatar,
     updated_at: new Date(),
   });
@@ -354,7 +405,17 @@ export async function insertRun(tx: Tx, o: NewRun) {
   const runId = randomUUID(),
     userMessageId = randomUUID(),
     assistantMessageId = randomUUID();
-  const executor = (o.lane ?? "conversation") === "conversation" ? "cloud" : o.computer || o.targetDeviceId ? "device" : "cloud";
+  const bot = await tx.get("bots", o.botId);
+  const cli = isCliRuntime(bot?.runtime);
+  if (cli && !bot.cli_device_id) fail(422, "CLI 智能体尚未绑定电脑");
+  let executor: "device" | "cloud" = (o.lane ?? "conversation") === "conversation" ? "cloud" : o.computer || o.targetDeviceId ? "device" : "cloud";
+  let deviceId = executor === "device" ? o.targetDeviceId ?? o.computer?.deviceId ?? null : null;
+  let operationTarget = o.operationTarget??((o.lane ?? "conversation") === "conversation" ? "cloud" : null);
+  if (cli) {
+    executor = "device";
+    deviceId = bot.cli_device_id;
+    operationTarget = `device:${bot.cli_device_id}`;
+  }
   const task=o.taskId?await tx.get("agent_tasks",o.taskId):null;
   const parent=task?await tx.get("bot_runs",task.parent_run_id):null;
   const seq = await nextSeq(tx, o.botId, 2, (o.executionPolicy ?? parent?.execution_policy) !== "device_only" || o.origin === "report");
@@ -364,11 +425,11 @@ export async function insertRun(tx: Tx, o: NewRun) {
     user_id: o.userId,
     request_id: o.requestId,
     routing:o.routing ?? (o.lane === "task" ? task?.routing : null),
-    operation_target:o.operationTarget??((o.lane ?? "conversation") === "conversation" ? "cloud" : parent?.operation_target??"legacy"),
+    operation_target:operationTarget??parent?.operation_target??"legacy",
     source_client:o.sourceClient??parent?.source_client??"legacy",
     source_device_id:o.sourceDeviceId??parent?.source_device_id??null,
     executor,
-    device_id: executor === "device" ? o.targetDeviceId ?? o.computer?.deviceId ?? null : null,
+    device_id: deviceId,
     status: "queued",
     user_message_id: userMessageId,
     assistant_message_id: assistantMessageId,
@@ -436,6 +497,17 @@ export interface RunContext {
   /** Whether the run may hand work to other bots through `ask_agent`. */
   agents_enabled: boolean;
   skills: SkillSummary[];
+  /** Present only for a Cursor or Codex bot. The desktop routes and spawns the CLI. */
+  cli?: {
+    runtime: CliRuntime;
+    profile: string;
+    directory: string;
+    persona: string;
+    /** Delegation and other task-lane runs always open a new CLI session. */
+    fresh: boolean;
+    recent: { role: "user" | "assistant"; text: string }[];
+    sessions: { id: string; engine_session_id: string; title: string; summary: string; last_user_text: string; updated_at: string }[];
+  };
 }
 /** Deepest delegation level that may still be created: user -> A -> B -> C. */
 export const MAX_DELEGATION_DEPTH = 2;
@@ -618,6 +690,14 @@ export async function buildContext(
     text = `你收到来自智能体「${from.name}」的委托，它正在为用户处理一项任务：\n\n${text}\n\n请直接完成并给出自包含的结果，「${from.name}」会把它转述给用户。缺少必要信息时直接说明缺什么，不要向用户提问。`;
   else if (run.origin === "report")
     text = `这是你之前委托给「${from?.name ?? bot.name}」的任务的回报。请据此把结果整理后告诉用户，不要再次委托同一任务：\n\n${text}`;
+  const cli = isCliRuntime(bot.runtime) ? {
+    runtime: bot.runtime as CliRuntime,
+    profile: String(bot.cli_profile ?? ""),
+    directory: String(bot.cli_directory ?? ""),
+    persona: String(bot.persona ?? ""),
+    fresh: run.origin === "agent" || run.lane === "task",
+    ...(await cliRouteMaterial(tx, bot.bot_id, question.seq)),
+  } : undefined;
   return {
     run_id: run.run_id,
     executor: run.executor,
@@ -648,6 +728,7 @@ export async function buildContext(
     automation: automation ? { id: automation.automation_id, kind: automation.kind, version: automation.version, checkpoint_version: automation.checkpoint_version, checkpoint: automation.checkpoint } : undefined,
     agents_enabled: run.origin !== "automation" && !run.automation_readonly && depth<MAX_DELEGATION_DEPTH,
     skills,
+    cli,
   };
 }
 export async function setContent(tx: Tx, run: Row, content: string) {

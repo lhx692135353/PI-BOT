@@ -30,6 +30,11 @@ import { observationExtension, type Observation } from "./observations.js";
 import { contextBudgetExtension } from "./context-budget.js";
 export type { Observation } from "./observations.js";
 export { textTokens, clipText } from "./context-budget.js";
+export {
+  chooseRoute, decideFromScores, fallbackInput, matchUserPick, routeState, systemOneBody, wantsNewSession,
+  scoresFromFallbackText, scoresFromSystemOne,
+  type RouteDecision, type RouteState, type SessionCard,
+} from "./cli-router.js";
 
 /**
  * A model reachable through the Pi Bot model proxy. `modelId` is the Pi Bot

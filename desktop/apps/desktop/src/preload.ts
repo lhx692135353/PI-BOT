@@ -13,5 +13,6 @@ const bridge: DesktopBridge = {
   defaultServerUrl: () => ipcRenderer.invoke('agent:defaultServerUrl'),
   openLibrary: slug => ipcRenderer.invoke('agent:openLibrary', slug),
   openExternal: url => ipcRenderer.invoke('agent:openExternal', url),
+  pickDirectory: () => ipcRenderer.invoke('agent:pickDirectory'),
 };
 contextBridge.exposeInMainWorld('agent', bridge);

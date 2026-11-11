@@ -8,6 +8,7 @@ import { z } from "zod";
 import { fail, type Database, type Row, type Tx } from "./db.js";
 import type { Settings } from "./config.js";
 import type { DeviceConnection, Hub } from "./hub.js";
+import { CLI_OFFLINE, isCliRuntime } from "./cli.js";
 import {
   ACTIVE,
   approvalOut,
@@ -32,6 +33,11 @@ export async function dispatchDevice(db: Database, s: Settings, hub: Hub, runId:
     const run = await tx.one("SELECT * FROM bot_runs WHERE run_id=$1 FOR NO KEY UPDATE SKIP LOCKED", [runId]);
     if (!run || run.status !== "queued" || run.executor !== "device") return null;
     const conn = hub.device(run.user_id,run.device_id);
+    const bot = await tx.get("bots", run.bot_id);
+    if (isCliRuntime(bot?.runtime) && !conn) {
+      await finishRun(tx, runId, "failed", CLI_OFFLINE, CLI_OFFLINE);
+      return null;
+    }
     if (run.execution_policy === "device_only") {
       if (!run.routing && !conn?.capabilities?.includes("always-on-v1")) return null;
       await tx.rows("UPDATE bot_automations SET status='enabled' WHERE automation_id=$1 AND status='waiting_device'", [run.automation_id]);

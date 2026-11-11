@@ -40,8 +40,8 @@ export const schemas = {
   library: z.object({ id, target:z.string().optional(), path: z.string().max(2000).default('') }),
   libraryRead: z.object({ id, target:z.string().optional(), path: z.string().min(1).max(2000) }),
   bots: z.object({}),
-  botCreate: z.object({ name: z.string().trim().min(1).max(40), persona: z.string().max(8000).default(''), model_id: id.nullable().optional(), execution_device_id: id.nullable().optional(), avatar: avatarSchema }),
-  botUpdate: z.object({ id, name: z.string().trim().min(1).max(40).optional(), persona: z.string().max(8000).optional(), model_id: id.nullable().optional(), execution_device_id: id.nullable().optional(), avatar: avatarSchema.optional() }),
+  botCreate: z.object({ name: z.string().trim().min(1).max(40), persona: z.string().max(8000).default(''), model_id: id.nullable().optional(), execution_device_id: id.nullable().optional(), runtime: z.enum(['pi', 'cursor', 'codex']).optional(), cli_profile: z.string().trim().min(1).max(500).optional(), cli_directory: z.string().trim().min(1).max(2000).optional(), cli_device_id: id.optional(), avatar: avatarSchema }),
+  botUpdate: z.object({ id, name: z.string().trim().min(1).max(40).optional(), persona: z.string().max(8000).optional(), model_id: id.nullable().optional(), execution_device_id: id.nullable().optional(), runtime: z.enum(['pi', 'cursor', 'codex']).optional(), cli_profile: z.string().trim().min(1).max(500).optional(), cli_directory: z.string().trim().min(1).max(2000).optional(), avatar: avatarSchema.optional() }),
   botDelete: z.object({ id }),
   taskConversation: z.object({ botId: id, taskId: id, after: z.number().int().nonnegative().optional() }),
   messages: z.object({ botId: id, before: z.number().int().positive().optional() }),
@@ -55,6 +55,7 @@ export const schemas = {
   authorizations: z.object({}),
   authorizationRevoke: z.object({ id }),
   authorizationLogs: z.object({}),
+  cliProfiles: z.object({}).strict(),
 } as const;
 export type Method = keyof typeof schemas;
 export function parseInput(method: Method, input: unknown) {
@@ -77,7 +78,7 @@ export interface Message { attachments?: ArtifactRef[]; reply_segments?: ReplySe
 export interface Approval { id: string; run_id: string; bot_id: string; kind: 'outside_access'; path: string; reason: string; status: string; expires_at: string; access?: string; scope?: string; can_remember?: boolean }
 export interface SavedAuthorization { id: string; target: string; target_label: string; resource: string; resource_type: string; operation: string; created_at: string; last_used_at: string | null }
 export interface AuthorizationLog { id: number; action: string; resource: string; operation: string; target: string; created_at: string }
-export interface Bot { execution_device_id?: string | null; active_tasks?: AgentTaskRef[]; activity?: { status: RunStatus | null; tool: string | null; summary: string | null; running_count: number; queued_count: number }; id: string; name: string; slug: string; persona: string; model_id: string | null; avatar: Avatar; is_main?: boolean; created_at: string; last_active_at: string; latest_run: Run | null; last_message: { role: string; preview: string; status: string; created_at: string } | null; pending_approvals: Approval[] }
+export interface Bot { runtime?: 'pi' | 'cursor' | 'codex'; cli_profile?: string | null; cli_directory?: string | null; cli_device_id?: string | null; execution_device_id?: string | null; active_tasks?: AgentTaskRef[]; activity?: { status: RunStatus | null; tool: string | null; summary: string | null; running_count: number; queued_count: number }; id: string; name: string; slug: string; persona: string; model_id: string | null; avatar: Avatar; is_main?: boolean; created_at: string; last_active_at: string; latest_run: Run | null; last_message: { role: string; preview: string; status: string; created_at: string } | null; pending_approvals: Approval[] }
 export interface ModelOption { id: string; name: string; is_default: boolean }
 export interface Device { id: string; label: string; platform: 'linux' | 'darwin' | 'win32'; online: boolean; revoked_at: string | null; last_seen_at: string | null }
 /** The server-side computer every client uses like one of its own; it holds the cloud library. */
@@ -118,6 +119,7 @@ export interface DesktopBridge {
   defaultServerUrl(): Promise<string>;
   openLibrary(botId: string): Promise<void>;
   openExternal(url: string): Promise<void>;
+  pickDirectory?(): Promise<string | null>;
 }
 
 export type UpdateChannel = 'stable' | 'test';

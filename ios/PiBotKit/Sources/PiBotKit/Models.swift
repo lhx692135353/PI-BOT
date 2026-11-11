@@ -321,11 +321,16 @@ public struct Bot: Decodable, Hashable, Identifiable, Sendable {
     public var activity: BotActivity?
     public var pendingApprovals: [Approval]
     public var executionDeviceId: String?
+    public var runtime: String
+    public var cliProfile: String?
+    public var cliDirectory: String?
+    public var cliDeviceId: String?
 
     enum CodingKeys: String, CodingKey {
         case id, name, slug, persona, modelId = "model_id", avatar, isMain = "is_main", lastActiveAt = "last_active_at"
         case latestRun = "latest_run", lastMessage = "last_message", activeTasks = "active_tasks", activity
         case pendingApprovals = "pending_approvals", executionDeviceId = "execution_device_id"
+        case runtime, cliProfile = "cli_profile", cliDirectory = "cli_directory", cliDeviceId = "cli_device_id"
     }
 
     public init(id: String, name: String, slug: String, lastActiveAt: String, persona: String = "", avatar: Avatar = Avatar(),
@@ -333,7 +338,8 @@ public struct Bot: Decodable, Hashable, Identifiable, Sendable {
                 pendingApprovals: [Approval] = []) {
         self.id = id; self.name = name; self.slug = slug; self.persona = persona; self.avatar = avatar; self.isMain = isMain
         self.lastActiveAt = lastActiveAt; self.latestRun = latestRun; self.lastMessage = lastMessage; activeTasks = []
-        self.activity = activity; self.pendingApprovals = pendingApprovals
+        self.activity = activity; self.pendingApprovals = pendingApprovals; executionDeviceId = nil
+        runtime = "pi"; cliProfile = nil; cliDirectory = nil; cliDeviceId = nil
     }
 
     public init(from decoder: Decoder) throws {
@@ -352,6 +358,10 @@ public struct Bot: Decodable, Hashable, Identifiable, Sendable {
         activity = try c.decodeIfPresent(BotActivity.self, forKey: .activity)
         pendingApprovals = try c.value(.pendingApprovals, [])
         executionDeviceId = try c.decodeIfPresent(String.self, forKey: .executionDeviceId)
+        runtime = try c.value(.runtime, "pi")
+        cliProfile = try c.decodeIfPresent(String.self, forKey: .cliProfile)
+        cliDirectory = try c.decodeIfPresent(String.self, forKey: .cliDirectory)
+        cliDeviceId = try c.decodeIfPresent(String.self, forKey: .cliDeviceId)
     }
 }
 

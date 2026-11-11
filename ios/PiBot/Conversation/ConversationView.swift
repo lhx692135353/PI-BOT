@@ -296,6 +296,14 @@ private struct Intro: View {
             Text("和 \(bot.name) 打个招呼").fontWeight(.semibold).padding(.top, 8)
             Text(bot.persona.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "它会记住你们的对话。" : bot.persona)
                 .font(.footnote).foregroundStyle(Palette.muted).lineLimit(4).multilineTextAlignment(.center)
+            if bot.runtime == "cursor" || bot.runtime == "codex" {
+                Text(bot.runtime == "cursor" ? "本机 Cursor" : "本机 Codex")
+                    .font(.footnote).foregroundStyle(Palette.muted)
+                if let directory = bot.cliDirectory, !directory.isEmpty {
+                    Text(directory).font(.footnote).foregroundStyle(Palette.muted).lineLimit(1)
+                }
+                Text("电脑不在线时无法在云端运行。").font(.footnote).foregroundStyle(Palette.muted)
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 40)

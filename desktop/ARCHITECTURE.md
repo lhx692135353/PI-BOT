@@ -259,3 +259,12 @@ Bot 的执行统计只包含目标为自己的有效任务，排除等待子任�
 运行保存 first_reply_at、first_reply_generated_at 和执行端单调时钟测得的 first_reply_generation_ms。可观测性导出首回复总耗时、执行端生成耗时及派发/传输/入库合计开销；不以两台机器的时钟差计算网络延迟。旧执行端没有生成耗时时保持空值。升级需同步更新 API、Worker、Runner、桌面和 Android。
 
 用户发起的对话下发 `verify_execution_claims`，Agent 按本轮成功工具回执检查明确的创建、核查及变更说法：无依据的文字不会先通过 delta 或 send_reply 泄露给用户，最多纠正一次；已经创建的任务不能因纠正被重复创建。任务回报与后台执行通道不启用该对话检查。任务状态始终来自执行记录，不能用模型说“正在做”代替真实任务。未开始操作时，应明确告知未启动，不能虚报进度来掩盖无任务状态。
+
+
+## 本机 CLI 智能体
+
+`0023-cli-agents` 给 `bots` 增加 `runtime`（`pi` | `cursor` | `codex`）、`cli_profile`、`cli_directory`、`cli_device_id`。`runtime=pi` 的对话仍由云端 Runner 执行。Cursor 与 Codex 的对话和委托都只下发到创建它的电脑：`executor=device`，`operation_target=device:<cli_device_id>`。这台电脑不在线时运行失败，文案是「这台电脑不在线，CLI 智能体无法在云端运行」，不改派到云端，领取时也不按任务路由重选节点。
+
+对外仍是一条时间线。`cli_sessions` 只给路由用：最近约 6 条公开消息和最多 20 个未关闭会话卡片。桌面优先问本机 vLLM d3 的 `POST /v1/systemone`，否则用服务端 `POST /llm/v1/systemone`（密钥留在服务端），再否则用该 Bot 的当前模型按同一决策要一份 JSON。把握不够就在时间线里追问，不启动 CLI。委托一律新开 CLI session。
+
+Codex 这一次进程可用重复的 `-c` 挂上一次性 `list_agents` / `ask_agent` MCP，打到现有 `POST /agent/tasks`，不改用户全局配置。Cursor 不写项目或全局 `mcp.json`，因此这一方向先不做；别的 Bot 仍可委托给它。写代码的模型来自 CLI profile，Bot 上的模型只做路由回退。手机只展示种类、目录和离线原因，不在手机上创建。

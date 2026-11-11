@@ -32,6 +32,7 @@ export const bridge: DesktopBridge = {
   defaultServerUrl: () => agent().defaultServerUrl(),
   openLibrary: botId => agent().openLibrary(botId),
   openExternal: url => agent().openExternal(url),
+  pickDirectory: () => agent().pickDirectory?.() ?? Promise.resolve(null),
 };
 export function call<T>(method: Method, input?: unknown) { return bridge.call(method, input) as Promise<T>; }
 export const errorText = (e: unknown) => (e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : '操作失败');

@@ -120,6 +120,10 @@ data class Bot(
     val activity: BotActivity? = null,
     @SerialName("pending_approvals") val pendingApprovals: List<Approval> = emptyList(),
     @SerialName("execution_device_id") val executionDeviceId: String? = null,
+    val runtime: String = "pi",
+    @SerialName("cli_profile") val cliProfile: String? = null,
+    @SerialName("cli_directory") val cliDirectory: String? = null,
+    @SerialName("cli_device_id") val cliDeviceId: String? = null,
 )
 
 @Serializable

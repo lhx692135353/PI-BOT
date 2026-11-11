@@ -416,7 +416,7 @@ function App() {
                 <PiBot avatar={bot.avatar} mood={botMood(bot, activities[bot.id], now)} size={52} followPointer />
                 <span className="bot-title">
                   <h1>{bot.name}</h1>
-                  <span className="muted small">{bot.is_main ? '主智能体 · ' : ''}{models.find(m => m.id === bot.model_id)?.name ?? '默认模型'}</span>
+                  <span className="muted small cli-path" title={bot.cli_directory ?? undefined}>{bot.runtime === 'cursor' || bot.runtime === 'codex' ? `${bot.runtime === 'cursor' ? '本机 Cursor' : '本机 Codex'} · ${bot.cli_directory}` : `${bot.is_main ? '主智能体 · ' : ''}${models.find(m => m.id === bot.model_id)?.name ?? '默认模型'}`}</span>
                 </span>
               </button>
               <button type="button" className="ghost icon-button" title="打开手机预览" aria-label="打开手机预览" onClick={() => setPhoneTarget({ botId: bot.id, deviceId: null })}><Icon name="phone" /></button>
@@ -462,7 +462,7 @@ function App() {
         </div>
       </>}
       {phoneTarget && <PhoneDock key={phoneAssociationKey(account.serverUrl, account.user?.id ?? null)} associationKey={phoneAssociationKey(account.serverUrl, account.user?.id ?? null)} botId={phoneTarget.botId ? bot?.id ?? phoneTarget.botId : null} pinnedDeviceId={phoneTarget.deviceId} devices={devices} executionDeviceId={null} onClose={() => setPhoneTarget(null)} />}
-      {editor && <BotEditor bot={editor === 'new' ? undefined : editor} models={models} onClose={() => setEditor(null)} onSaved={b => { setEditor(null); setSelected(b.id); void loadBots(); }} />}
+      {editor && <BotEditor bot={editor === 'new' ? undefined : editor} models={models} deviceId={account.deviceId} onClose={() => setEditor(null)} onSaved={b => { setEditor(null); setSelected(b.id); void loadBots(); }} />}
       {settings && <Settings state={account} cloud={cloud} onClose={() => setSettings(false)} onOpenPhone={device => { setSettings(false); setPhoneTarget({ botId: null, deviceId: device.id }); }} />}
     </div>
   );

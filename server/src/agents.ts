@@ -7,6 +7,7 @@ import { fail, type Database, type Row, type Tx } from "./db.js";
 import type { Settings } from "./config.js";
 import type { Hub } from "./hub.js";
 import type { LlmClaims } from "./security.js";
+import { CLI_OFFLINE, isCliRuntime } from "./cli.js";
 import { ACTIVE, MAX_DELEGATION_DEPTH, delegationChain, insertRun, resolveModel, finishRun } from "./bots.js";
 import { cancelRun, dispatchDevice } from "./runs.js";
 import { AutomationScheduler } from "./automations.js";
@@ -191,7 +192,12 @@ export async function startTask(tx: Tx, hub: Hub, task: Row, settings?:Settings)
     await failQueued(tx, task, "管理员尚未配置可用模型");
     return null;
   }
-  if (task.routing) {
+  if (isCliRuntime(target.runtime)) {
+    if (!target.cli_device_id) { await failQueued(tx, task, "CLI 智能体尚未绑定电脑"); return null; }
+    const pinned = { execution: "device", device_id: target.cli_device_id, operation_target: `device:${target.cli_device_id}` };
+    await tx.update("agent_tasks", task.task_id, pinned);
+    Object.assign(task, pinned);
+  } else if (task.routing) {
     try {
       const location = await resolveTaskTarget(tx,settings,hub,task.user_id,target.slug,task.routing);
       await tx.update("agent_tasks",task.task_id,location);
@@ -203,6 +209,7 @@ export async function startTask(tx: Tx, hub: Hub, task: Row, settings?:Settings)
     }
   }
   const conn = hub.device(task.user_id,task.device_id);
+  if (isCliRuntime(target.runtime) && !conn) { await failQueued(tx, task, CLI_OFFLINE); return null; }
   if(task.execution==="device"&&task.operation_target!=="legacy"&&!conn){await failQueued(tx,task,"指定电脑已离线，本次操作未执行");return null;}
   const parent = await tx.get("bot_runs", task.parent_run_id);
   if (parent?.execution_policy === "device_only" && (!conn?.capabilities?.includes("always-on-v1") || parent.cancel_requested || !ACTIVE.includes(parent.status))) return null;

@@ -198,6 +198,8 @@ button.menu-backdrop:hover { background: transparent; }
 .approval { background: var(--accent-soft); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; display: grid; gap: 6px; }
 .approval code { font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; background: var(--overlay); padding: 4px 8px; border-radius: 6px; word-break: break-all; }
 .row-end { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.row { display: flex; gap: 8px; align-items: center; }
+.row input { flex: 1; }
 
 .composer { padding: 10px 0 24px; display: grid; gap: 6px; }
 .composer > * { width: min(var(--conversation-width), calc(100% - 64px)); margin: 0 auto; }
@@ -228,6 +230,7 @@ button.menu-backdrop:hover { background: transparent; }
 .editor { display: grid; grid-template-columns: 240px 1fr; width: min(760px, 100%); overflow: hidden; }
 .editor-preview { background: var(--side); display: grid; align-content: center; justify-items: center; gap: 6px; padding: 24px; text-align: center; }
 .editor-preview strong { font-size: 16px; }
+.bot-title .cli-path { display: block; max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .editor-fields { min-width: 0; padding: 22px 24px; display: grid; gap: 14px; max-height: calc(100vh - 48px); overflow-y: auto; }
 .shapes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .shapes button { padding: 2px; background: var(--panel); border-radius: 12px; display: grid; place-items: center; border: 2px solid transparent; }
