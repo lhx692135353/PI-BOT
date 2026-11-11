@@ -1,0 +1,19 @@
+.github/workflows/desktop.yml
+  s_bb3948ee1d9478::t_615ddff3c0a727 33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b399dc67710f19129d218d411db37d068dc54ae9",
+  "prompts": {},
+  "sessions": {
+    "s_bb3948ee1d9478": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "1f1ebcc6-9cd3-4a42-88d8-ba353301a643",
+        "model": "grok-4.7"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
