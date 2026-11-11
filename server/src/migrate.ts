@@ -8,7 +8,7 @@ export async function migrate(db: Database) {
     await tx.rows(
       "CREATE TABLE IF NOT EXISTS schema_migrations(version text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())",
     );
-    for (const version of [...versions, "0017-push", "0020-saved-authorizations", "0021-local-environments", "0022-task-budget", "0023-composio", "0024-cli-agents"]) {
+    for (const version of [...versions, "0017-push", "0020-saved-authorizations", "0021-local-environments", "0022-task-budget", "0023-composio", "0024-cli-agents", "0025-jev"]) {
       if (await tx.one("SELECT 1 FROM schema_migrations WHERE version=$1", [version]))
         continue;
       await tx.rows(

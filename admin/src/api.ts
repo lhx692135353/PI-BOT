@@ -131,6 +131,13 @@ export interface ComposioSettings {
   base_url: string;
   configured: boolean;
 }
+export interface JevSettings {
+  enabled: boolean;
+  base_url: string;
+  model: string;
+  configured: boolean;
+  source: "database" | "environment" | "none";
+}
 
 export const api = {
   login: (username: string, password: string) =>
@@ -158,6 +165,10 @@ export const api = {
   revokeDevice: (id: string) => request(adminApi, `devices/${id}/revoke`, "POST"),
   usage: (days: number) => request<Usage>(adminApi, `usage?days=${days}`),
   searchUsage: () => request<SearchUsage>(adminApi, "search/usage"),
+  jev: () => request<JevSettings>(adminApi, "jev"),
+  saveJev: (body: { enabled: boolean; base_url: string; model: string; api_key?: string }) =>
+    request<JevSettings>(adminApi, "jev", "PUT", body),
+  testJev: () => request<{ ok: boolean }>(adminApi, "jev/test", "POST", {}),
   composio: () => request<ComposioSettings>(adminApi, "composio"),
   saveComposio: (body: { enabled: boolean; base_url: string; api_key?: string }) =>
     request<ComposioSettings>(adminApi, "composio", "PUT", body),

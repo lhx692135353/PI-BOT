@@ -14,6 +14,7 @@ import { z } from "zod";
 import type { ChatImage } from '@pi-bot/agent/images';
 import { imagesSchema } from './images.js';
 import { composioGateway, composioPublic, composioResult, composioSaveBody, saveComposio } from "./composio.js";
+import { jevCredentials, jevPublic, jevSaveBody, probeJev, saveJev } from "./jev.js";
 import { fail, type Database, type Row, type Tx } from "./db.js";
 import type { Settings } from "./config.js";
 import type { Hub } from "./hub.js";
@@ -604,11 +605,12 @@ export const routes: Route[] = [
       questions: z.record(z.string(), z.unknown()),
     }).strict(),
     tx: false,
-    handler: async ({ s, body, reply }) => {
+    handler: async ({ db, s, body, reply }) => {
+      const config = await db.tx((tx) => jevCredentials(tx, s)) ?? fail(404, "尚未配置 JEV");
       const abort = new AbortController();
       const onClose = () => abort.abort();
       reply.raw.once("close", onClose);
-      try { return await proxySystemOne(s, body, abort.signal); }
+      try { return await proxySystemOne(config, body, abort.signal); }
       finally { reply.raw.off("close", onClose); }
     },
   },
@@ -790,6 +792,22 @@ export const routes: Route[] = [
       const d = await tx.update("devices", params.id, { revoked_at: new Date() });
       after(async () => { hub.kick(d.device_id); await failDeviceRuns(db,d.device_id,"执行电脑已解绑",false); });
       return deviceOut(d, false);
+    },
+  },
+  {
+    method: "GET", path: "/admin/api/jev", auth: "admin", tag: "admin", summary: "SaaS JEV 配置（不含密钥）",
+    handler: async ({ tx, s }) => jevPublic(tx, s),
+  },
+  {
+    method: "PUT", path: "/admin/api/jev", auth: "admin", tag: "admin", summary: "保存 SaaS JEV；密钥留空则保持不变",
+    body: jevSaveBody,
+    handler: async ({ tx, s, body }) => saveJev(tx, s, body),
+  },
+  {
+    method: "POST", path: "/admin/api/jev/test", auth: "admin", tag: "admin", summary: "测试已保存的 JEV 连接", tx: false,
+    handler: async ({ db, s }) => {
+      const config = await db.tx((tx) => jevCredentials(tx, s, true)) ?? fail(409, "先保存 JEV 地址和密钥");
+      return probeJev(config);
     },
   },
   {
