@@ -4008,6 +4008,101 @@
         }
       }
     },
+    "/admin/api/jev": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "SaaS JEV 配置（不含密钥）",
+        "security": [
+          {
+            "UserBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "{ detail }"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "保存 SaaS JEV；密钥留空则保持不变",
+        "security": [
+          {
+            "UserBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "base_url": {
+                    "default": "",
+                    "type": "string",
+                    "maxLength": 300
+                  },
+                  "model": {
+                    "default": "jev-latest",
+                    "type": "string",
+                    "maxLength": 80
+                  },
+                  "api_key": {
+                    "type": "string",
+                    "maxLength": 500
+                  }
+                },
+                "required": [
+                  "enabled"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "{ detail }"
+          }
+        }
+      }
+    },
+    "/admin/api/jev/test": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "测试已保存的 JEV 连接",
+        "security": [
+          {
+            "UserBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "{ detail }"
+          }
+        }
+      }
+    },
     "/admin/api/composio": {
       "get": {
         "tags": [

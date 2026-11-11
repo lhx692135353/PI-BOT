@@ -2,10 +2,10 @@ import { StrictMode, useCallback, useEffect, useState, type FormEvent, type Reac
 import { createRoot } from "react-dom/client";
 import { PiBot } from "@pi-bot/bot-face/react";
 import type { Mood } from "@pi-bot/bot-face";
-import { api, ApiError, session, type CatalogModel, type ComposioSettings, type Device, type Model, type ModelInput, type Overview, type ProviderName, type Usage, type User } from "./api.js";
+import { api, ApiError, session, type CatalogModel, type ComposioSettings, type Device, type JevSettings, type Model, type ModelInput, type Overview, type ProviderName, type Usage, type User } from "./api.js";
 import "./style.css";
 
-type Page = "overview" | "users" | "models" | "devices" | "usage" | "composio";
+type Page = "overview" | "users" | "models" | "devices" | "usage" | "composio" | "jev";
 const PAGES: { id: Page; label: string }[] = [
   { id: "overview", label: "概览" },
   { id: "users", label: "用户" },
@@ -13,6 +13,7 @@ const PAGES: { id: Page; label: string }[] = [
   { id: "devices", label: "电脑设备" },
   { id: "usage", label: "用量" },
   { id: "composio", label: "连接器" },
+  { id: "jev", label: "JEV" },
 ];
 
 const message = (e: unknown) => (e instanceof Error ? e.message : "请求失败");
@@ -671,6 +672,70 @@ function UsagePage() {
   );
 }
 
+function JevPage() {
+  const load = useCallback(() => api.jev(), []);
+  const { data, error, reload } = useLoad<JevSettings>(load);
+  const [enabled, setEnabled] = useState(false);
+  const [baseUrl, setBaseUrl] = useState("");
+  const [model, setModel] = useState("jev-latest");
+  const [apiKey, setApiKey] = useState("");
+  const [notice, setNotice] = useState("");
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    if (!data) return;
+    setEnabled(data.enabled);
+    setBaseUrl(data.base_url);
+    setModel(data.model || "jev-latest");
+  }, [data]);
+  const save = async (event: FormEvent) => {
+    event.preventDefault();
+    setSaving(true);
+    setNotice("");
+    try {
+      await api.saveJev({ enabled, base_url: baseUrl, model, ...(apiKey ? { api_key: apiKey } : {}) });
+      setApiKey("");
+      setNotice("已保存");
+      reload();
+    } catch (e) { setNotice(message(e)); }
+    finally { setSaving(false); }
+  };
+  const test = async () => {
+    setNotice("");
+    try { await api.testJev(); setNotice("连接成功"); }
+    catch (e) { setNotice(message(e)); }
+  };
+  return (
+    <>
+      <div className="toolbar">
+        <p className="muted">SaaS JEV 的地址、模型和密钥。保存并启用后，本机 CLI 智能体在没有本地 d3 时用它判断该续哪一段会话。密钥只留在服务端。本机 vLLM 仍在那台电脑上配置。</p>
+      </div>
+      {error && <p className="error">{error}</p>}
+      {data && (
+        <form className="card form" onSubmit={save}>
+          {data.source === "environment" && <p className="muted small">当前仍使用环境变量。保存后改由这里管理，密钥不会回显。</p>}
+          <label>地址
+            <input value={baseUrl} placeholder="https://jev.example.com" onChange={(e) => setBaseUrl(e.target.value)} />
+          </label>
+          <label>模型
+            <input value={model} placeholder="jev-latest" onChange={(e) => setModel(e.target.value)} />
+          </label>
+          <label>密钥
+            <input type="password" value={apiKey} placeholder={data.configured ? "已保存，留空则不变" : "API Key"} autoComplete="off" onChange={(e) => setApiKey(e.target.value)} />
+          </label>
+          <label className="check">
+            <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> 启用
+          </label>
+          {notice && <p className={notice === "已保存" || notice === "连接成功" ? "muted" : "error"}>{notice}</p>}
+          <footer>
+            <button type="button" className="ghost" disabled={!data.base_url || !data.configured} onClick={test}>测试连接</button>
+            <button className="primary" disabled={saving}>保存</button>
+          </footer>
+        </form>
+      )}
+    </>
+  );
+}
+
 function ComposioPage() {
   const load = useCallback(() => api.composio(), []);
   const { data, error, reload } = useLoad<ComposioSettings>(load);
@@ -783,6 +848,7 @@ function App() {
         {page === "devices" && <DevicesPage />}
         {page === "usage" && <UsagePage />}
         {page === "composio" && <ComposioPage />}
+        {page === "jev" && <JevPage />}
       </main>
     </div>
   );
