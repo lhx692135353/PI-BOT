@@ -30,8 +30,9 @@ export function vaultFile(dir: string) {
 }
 
 async function body(req: IncomingMessage) {
-  let text = "";
-  for await (const chunk of req) text += chunk;
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) chunks.push(Buffer.from(chunk));
+  const text = Buffer.concat(chunks).toString("utf8");
   return text ? JSON.parse(text) : {};
 }
 /** User messages that make the mock model call `ask_agent` with these arguments. */

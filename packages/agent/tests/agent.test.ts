@@ -37,9 +37,9 @@ test("a goal review exposes its finish and checkpoint tools without skill manage
 before(async () => {
   dir = mkdtempSync(join(tmpdir(), "pi-bot-agent-"));
   server = createServer(async (req, res) => {
-    let raw = "";
-    for await (const chunk of req) raw += chunk;
-    const json = JSON.parse(raw);
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) chunks.push(Buffer.from(chunk));
+    const json = JSON.parse(Buffer.concat(chunks).toString("utf8"));
     if (req.url === "/agent/automations") {
       res.writeHead(200, { "content-type": "application/json" });
       return void res.end(JSON.stringify({ goals: [] }));
