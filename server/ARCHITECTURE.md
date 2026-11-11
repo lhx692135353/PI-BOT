@@ -266,6 +266,6 @@ Hub 按 device_id 保存连接；事件广播到用户的所有设备，文件 R
 
 `0024-cli-agents` 给 `bots` 增加 `runtime`（`pi` | `cursor` | `codex`）、`cli_profile`、`cli_directory`、`cli_device_id`。`runtime=pi` 的对话仍由云端 Runner 执行。Cursor 与 Codex 的对话和委托都只下发到创建它的电脑：`executor=device`，`operation_target=device:<cli_device_id>`。这台电脑不在线时运行失败，文案是「这台电脑不在线，CLI 智能体无法在云端运行」，不改派到云端，领取时也不按任务路由重选节点。
 
-对外仍是一条时间线。`cli_sessions` 只给路由用：最近约 6 条公开消息和最多 20 个未关闭会话卡片。桌面优先问本机 vLLM d3 的 `POST /v1/systemone`，否则用服务端 `POST /llm/v1/systemone`（密钥留在服务端），再否则用该 Bot 的当前模型按同一决策要一份 JSON。把握不够就在时间线里追问，不启动 CLI。委托一律新开 CLI session。
+对外仍是一条时间线。`cli_sessions` 只给路由用：最近约 6 条公开消息和最多 20 个未关闭会话卡片。桌面优先问本机 vLLM d3 的 `POST /v1/systemone`，否则用服务端 `POST /llm/v1/systemone`。SaaS JEV 在管理后台「JEV」页配置，密钥加密后只留在服务端；后台尚未保存时仍可读环境变量 `PI_BOT_JEV_BASE_URL` 和 `PI_BOT_JEV_API_KEY`。两者都没有时，用该 Bot 的当前模型按同一决策要一份 JSON。把握不够就在时间线里追问，不启动 CLI。委托一律新开 CLI session。
 
 Codex 这一次进程可用重复的 `-c` 挂上一次性 `list_agents` / `ask_agent` MCP，打到现有 `POST /agent/tasks`，不改用户全局配置。Cursor 不写项目或全局 `mcp.json`，因此这一方向先不做；别的 Bot 仍可委托给它。写代码的模型来自 CLI profile，Bot 上的模型只做路由回退。手机只展示种类、目录和离线原因，不在手机上创建。

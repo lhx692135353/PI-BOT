@@ -282,15 +282,11 @@ export async function complete(
   };
 }
 
-export async function proxySystemOne(s: Settings, body: { state: unknown; questions: Record<string, unknown> }, signal: AbortSignal) {
-  const base = s.jevBaseUrl;
-  const key = s.jevApiKey;
-  if (!base || !key) fail(404, "尚未配置 JEV");
-  const url = base!.endsWith("/v1/systemone") ? base! : `${base!}/v1/systemone`;
-  const upstream = await fetch(url, {
+export async function proxySystemOne(config: { baseUrl: string; model: string; apiKey: string }, body: { state: unknown; questions: Record<string, unknown> }, signal: AbortSignal) {
+  const upstream = await fetch(config.baseUrl.endsWith("/v1/systemone") ? config.baseUrl : `${config.baseUrl}/v1/systemone`, {
     method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${key!}` },
-    body: JSON.stringify({ model: s.jevModel, state: body.state, questions: body.questions }),
+    headers: { "content-type": "application/json", authorization: `Bearer ${config.apiKey}` },
+    body: JSON.stringify({ model: config.model, state: body.state, questions: body.questions }),
     signal: AbortSignal.any([signal, AbortSignal.timeout(MODEL_TIMEOUT_MS)]),
     redirect: "error",
   }).catch(() => fail(502, "无法连接 JEV"));
