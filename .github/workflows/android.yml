@@ -36,6 +36,10 @@ jobs:
           yes | sdkmanager --licenses >/dev/null || true
           sdkmanager --install "platforms;android-37.0" "build-tools;36.0.0"
       - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Route Gradle through the Maven Central mirror
+        run: |
+          mkdir -p "$HOME/.gradle/init.d"
+          cp .github/gradle/maven-central-mirror.init.gradle "$HOME/.gradle/init.d/"
       - name: Unit tests and debug APK
         working-directory: android
         run: ./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon
