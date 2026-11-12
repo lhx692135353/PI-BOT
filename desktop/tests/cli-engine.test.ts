@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
-import { cliLaunch, parseCliLine, runCliProcess } from "../packages/service/src/cli-engine.js";
+import { cliLaunch, discoverCodexThreads, parseCliLine, runCliProcess } from "../packages/service/src/cli-engine.js";
 import { resolveCliBin, scanCliProfiles } from "../packages/service/src/cli-profiles.js";
 import { writeMcpConfig, writeMcpServer } from "../packages/service/src/cli-mcp.js";
 import { runCliTurn, type CliTurnRun } from "../packages/service/src/cli-run.js";
@@ -117,6 +117,22 @@ test("two close sessions ask and do not launch the CLI", async () => {
   assert.equal(launched, false);
   assert.equal(events.at(-1)?.state, "completed");
   assert.match(String(events.at(-1)?.text), /请回复编号/);
+});
+
+test("thread.started is the Codex session id", () => {
+  const pieces = parseCliLine("codex", JSON.stringify({ type: "thread.started", thread_id: "019ce6ce-65fd-7530-8e6b-9ccce0436091" }));
+  assert.equal(pieces.find(piece => piece.kind === "session")?.id, "019ce6ce-65fd-7530-8e6b-9ccce0436091");
+});
+
+test("existing Codex rollout files for this directory are visible to routing", () => {
+  const home = join(root, "codex-home-sessions");
+  const directory = "/Users/liuhx/personal/T-AGENT";
+  const day = join(home, "sessions", "2026", "11", "12");
+  mkdirSync(day, { recursive: true });
+  writeFileSync(join(day, "rollout-2026-11-12T08-00-00-019ce6ce-65fd-7530-8e6b-9ccce0436091.jsonl"), `{"cwd":"${directory}","source":"exec"}\n`);
+  writeFileSync(join(day, "rollout-2026-11-12T08-05-00-11111111-1111-4111-8111-111111111111.jsonl"), `{"cwd":"/somewhere/else"}\n`);
+  const found = discoverCodexThreads(directory, { CODEX_HOME: home });
+  assert.deepEqual(found.map(thread => thread.id), ["019ce6ce-65fd-7530-8e6b-9ccce0436091"]);
 });
 
 test("profile scan reads codex names and cursor config directories", () => {
