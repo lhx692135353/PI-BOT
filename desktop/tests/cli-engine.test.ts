@@ -25,7 +25,9 @@ test("cursor and codex argv stay out of the user's mcp config", () => {
     runtime: "codex", profile: "work", directory: "/work", prompt: "继续", resume: "thread-1",
     mcp: { node: "/usr/bin/node", script: "/data/cli-mcp-server.mjs", configPath: "/data/cli-mcp.json" },
   });
-  assert.deepEqual(codex.args.slice(0, 3), ["exec", "resume", "thread-1"]);
+  const resumeAt = codex.args.indexOf("resume");
+  assert.ok(codex.args.indexOf("--cd") < resumeAt);
+  assert.deepEqual(codex.args.slice(resumeAt, resumeAt + 2), ["resume", "thread-1"]);
   assert.ok(codex.args.includes("--profile"));
   assert.ok(codex.args.includes("workspace-write"));
   assert.equal(codex.args.at(-1), "-");

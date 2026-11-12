@@ -87,11 +87,11 @@ export function cliLaunch(spec: CliLaunch) {
       stdin: undefined as string | undefined,
     };
   }
-  const args = ["exec"];
-  if (spec.resume) args.push("resume", spec.resume);
-  args.push("--json", "--skip-git-repo-check", "--cd", spec.directory, "--sandbox", "workspace-write", "--color", "never");
+  // `resume` only accepts the session id and prompt. --cd and the other exec flags must come first.
+  const args = ["exec", "--json", "--skip-git-repo-check", "--cd", spec.directory, "--sandbox", "workspace-write", "--color", "never"];
   if (spec.profile && spec.profile !== "default") args.push("--profile", spec.profile);
   if (spec.mcp) args.push(...codexMcpArgs(spec.mcp.node, spec.mcp.script, spec.mcp.configPath));
+  if (spec.resume) args.push("resume", spec.resume);
   args.push("-");
   return {
     command: spec.bins?.codex || resolveCliBin("codex") || "codex",
