@@ -1,6 +1,6 @@
 import { existsSync, rmSync, writeFileSync } from "node:fs";
 import { chooseRoute, routeState, type RouteDecision } from "@pi-bot/agent";
-import { parseCliLine, runCliProcess, type CliLaunch } from "./cli-engine.js";
+import { discoverCodexThreads, parseCliLine, runCliProcess, type CliLaunch } from "./cli-engine.js";
 import { writeMcpConfig, writeMcpServer } from "./cli-mcp.js";
 
 export interface CliTurnRun {
@@ -51,7 +51,16 @@ export async function runCliTurn(run: CliTurnRun, event: (entry: Record<string, 
   try {
     if (signal.aborted) return finish({ state: "cancelled" });
     if (!existsSync(cli.directory)) return finish({ state: "failed", error: "目录不存在" });
-    const state = routeState(run.text, cli.recent, cli.sessions.map(session => ({
+    const known = new Map(cli.sessions.map(session => [session.engine_session_id, session]));
+    if (cli.runtime === "codex") {
+      for (const thread of discoverCodexThreads(cli.directory)) {
+        if (!known.has(thread.id)) known.set(thread.id, {
+          id: thread.id, engine_session_id: thread.id, title: thread.title, summary: "", last_user_text: "", updated_at: thread.updated_at,
+        });
+      }
+    }
+    const routable = [...known.values()];
+    const state = routeState(run.text, cli.recent, routable.map(session => ({
       id: session.id, title: session.title, summary: session.summary, last_user: session.last_user_text, updated_at: session.updated_at,
     })));
     const decision: RouteDecision = cli.fresh
@@ -65,7 +74,9 @@ export async function runCliTurn(run: CliTurnRun, event: (entry: Record<string, 
           signal,
         });
     if (decision.action === "ask") return finish({ state: "completed", text: decision.prompt });
-    const resume = decision.action === "resume" ? cli.sessions.find(session => session.id === decision.session_id) : undefined;
+    const resume = decision.action === "resume"
+      ? routable.find(session => session.id === decision.session_id || session.engine_session_id === decision.session_id)
+      : undefined;
     if (decision.action === "resume" && !resume) return finish({ state: "failed", error: "要续的会话已经不在索引里" });
     const opening = decision.action === "new";
     const mcp = cli.runtime === "codex" && deps.dataDir ? (() => {
@@ -115,7 +126,7 @@ export async function runCliTurn(run: CliTurnRun, event: (entry: Record<string, 
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
         body: JSON.stringify({
           run_id: run.run_id,
-          session_id: resume?.id,
+          session_id: cli.sessions.find(session => session.id === resume?.id)?.id,
           engine_session_id: sessionId,
           title: clip(run.text, 80),
           summary: clip(text, 500),

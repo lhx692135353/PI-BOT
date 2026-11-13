@@ -1,5 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { delimiter } from "node:path";
+import { closeSync, existsSync, openSync, readdirSync, readSync, statSync } from "node:fs";
+import { homedir } from "node:os";
+import { delimiter, join } from "node:path";
 import { cliSearchDirs, resolveCliBin } from "./cli-profiles.js";
 
 export interface CliLaunch {
@@ -22,6 +24,53 @@ export function codexMcpArgs(node: string, script: string, configPath: string) {
 function cliEnv(extra: NodeJS.ProcessEnv = {}) {
   const pathKey = process.platform === "win32" ? "Path" : "PATH";
   return { ...process.env, [pathKey]: cliSearchDirs().join(delimiter), ...extra };
+}
+
+const THREAD_ID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+export interface LocalCodexThread { id: string; title: string; updated_at: string }
+
+function sessionDayDirs(root: string) {
+  if (!existsSync(root)) return [];
+  const days: string[] = [];
+  for (const year of readdirSync(root).filter(name => /^\d{4}$/.test(name)).sort().reverse()) {
+    for (const month of readdirSync(join(root, year)).filter(name => /^\d{2}$/.test(name)).sort().reverse()) {
+      for (const day of readdirSync(join(root, year, month)).filter(name => /^\d{2}$/.test(name)).sort().reverse()) {
+        days.push(join(root, year, month, day));
+      }
+    }
+  }
+  return days.slice(0, 14);
+}
+
+/** Threads Codex already wrote for this directory. Pi Bot's own index can be empty while these files exist. */
+export function discoverCodexThreads(directory: string, env: NodeJS.ProcessEnv = process.env, limit = 20): LocalCodexThread[] {
+  const home = env.CODEX_HOME || join(homedir(), ".codex");
+  const needle = directory.replace(/\/+$/, "");
+  const found: LocalCodexThread[] = [];
+  for (const dir of sessionDayDirs(join(home, "sessions"))) {
+    const files = readdirSync(dir).flatMap(name => {
+      if (!name.endsWith(".jsonl")) return [];
+      const file = join(dir, name);
+      try { return [{ file, mtime: statSync(file).mtimeMs }]; } catch { return []; }
+    }).sort((a, b) => b.mtime - a.mtime);
+    for (const item of files) {
+      if (found.length >= limit) return found;
+      const id = item.file.match(THREAD_ID)?.[0];
+      if (!id || found.some(thread => thread.id === id)) continue;
+      const buf = Buffer.alloc(4000);
+      let head = "";
+      try {
+        const fd = openSync(item.file, "r");
+        const size = readSync(fd, buf, 0, 4000, 0);
+        closeSync(fd);
+        head = buf.subarray(0, size).toString("utf8");
+      } catch { continue; }
+      if (!head.includes(needle)) continue;
+      found.push({ id, title: "Codex 会话", updated_at: new Date(item.mtime).toISOString() });
+    }
+  }
+  return found;
 }
 
 /** Argv for one non-interactive CLI turn. Codex MCP is inline `-c` only; nothing is written into the workspace. */
