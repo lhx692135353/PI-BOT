@@ -1,0 +1,33 @@
+desktop/tests/timeline-paging.harness.tsx
+  s_2c169087b58dd5::t_883ebb332b2c5b 16,25-26
+desktop/apps/desktop/ui/timeline.tsx
+  s_2c169087b58dd5::t_9ae7fc174ae7e7 168,197-201,206-209
+  s_2c169087b58dd5::t_fee234e53cf284 232-234,245
+desktop/packages/service/src/browser-test.ts
+  s_2c169087b58dd5::t_834cf1636b7e5f 79,101,103,105-108,111
+.github/workflows/ci.yml
+  s_2c169087b58dd5::t_834cf1636b7e5f 48-51,55-56
+.github/workflows/desktop.yml
+  s_2c169087b58dd5::t_834cf1636b7e5f 56
+.github/scripts/install-ci-chromium.sh
+  s_2c169087b58dd5::t_834cf1636b7e5f 1-9
+desktop/tests/timeline-paging-runner.mjs
+  s_2c169087b58dd5::t_883ebb332b2c5b 36-40
+  s_2c169087b58dd5::t_fee234e53cf284 51-52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f17bd929bd55a6597e3726c63c5e3ec65d6e9253",
+  "prompts": {},
+  "sessions": {
+    "s_2c169087b58dd5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1e4a8-7aad-7831-a016-54738d594741",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
