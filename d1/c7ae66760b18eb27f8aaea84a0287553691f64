@@ -1,0 +1,23 @@
+desktop/tests/browser-test.test.ts
+  s_2c169087b58dd5::t_72a59e94d4e83c 13,20,23-27,45-47,49-51
+  s_2c169087b58dd5::t_02c760719be52d 48
+desktop/packages/service/src/browser-test.ts
+  s_2c169087b58dd5::t_72a59e94d4e83c 4,53,72-73,121-126,128-132,172,174-178,180-181,184
+  s_2c169087b58dd5::t_02c760719be52d 173
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d1c7ae66760b18eb27f8aaea84a0287553691f64",
+  "prompts": {},
+  "sessions": {
+    "s_2c169087b58dd5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1e4a8-7aad-7831-a016-54738d594741",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
