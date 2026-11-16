@@ -165,6 +165,7 @@ export function Timeline({ bot, messages, hasMore, mood, online, onLoadMore, onS
   const [farFromBottom, setFarFromBottom] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const loadingOlderRef = useRef(false);
+  const requestedPage = useRef<{ bot: string; oldest: string } | null>(null);
   const [olderError, setOlderError] = useState('');
   const [drafts, setDrafts] = useState(readDrafts);
   const text = drafts[bot.id]?.text ?? '';
@@ -193,13 +194,19 @@ export function Timeline({ bot, messages, hasMore, mood, online, onLoadMore, onS
     return node ? node.getBoundingClientRect().top - el.getBoundingClientRect().top : null;
   };
   const loadOlder = () => {
-    if (!hasMore || loadingOlderRef.current || !messages.length) return;
+    const oldest = messages[0]?.id;
+    if (!hasMore || loadingOlderRef.current || !oldest) return;
+    // The request can settle before React commits the older messages.
+    if (requestedPage.current?.bot === bot.id && requestedPage.current.oldest === oldest) return;
+    const request = requestedPage.current = { bot: bot.id, oldest };
     loadingOlderRef.current = true;
     setLoadingOlder(true);
     setOlderError('');
-    const botId = bot.id;
     onLoadMore()
-      .catch(e => { if (activeBot.current === botId) setOlderError(errorText(e)); })
+      .catch(e => {
+        if (requestedPage.current === request) requestedPage.current = null;
+        if (activeBot.current === request.bot) setOlderError(errorText(e));
+      })
       .finally(() => { loadingOlderRef.current = false; setLoadingOlder(false); });
   };
   const onScroll = () => {
@@ -222,6 +229,9 @@ export function Timeline({ bot, messages, hasMore, mood, online, onLoadMore, onS
     if (!el) return;
     const previous = anchor.current;
     const first = messages[0]?.id;
+    if (requestedPage.current && (requestedPage.current.bot !== bot.id || requestedPage.current.oldest !== first)) {
+      requestedPage.current = null;
+    }
     if (previous.bot !== bot.id) { stick.current = true; setFarFromBottom(false); }
     if (stick.current) el.scrollTop = el.scrollHeight;
     else if (previous.id) {
@@ -232,7 +242,7 @@ export function Timeline({ bot, messages, hasMore, mood, online, onLoadMore, onS
     }
     anchor.current = { bot: bot.id, id: first, offset: firstOffset(el, first) ?? 0 };
     if (hasMore && el.scrollTop < LOAD_AHEAD && !loadingOlderRef.current && !olderError) loadOlder();
-  }, [messages, bot.pending_approvals.length, loadingOlder, olderError]);
+  }, [messages, bot.id, bot.pending_approvals.length, loadingOlder, olderError]);
   useEffect(() => { setError(''); setOlderError(''); setConversationTask(null); }, [bot.id]);
   const addImages = async (files: File[]) => {
     if (!files.length || readingRef.current || submitting.current || !online) return;

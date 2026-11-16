@@ -33,7 +33,11 @@ app.whenReady().then(async () => {
     await until(() => js(`window.__paging.loads === 1 && !!document.querySelector('.load-more')`), 'reaching the top did not load older messages');
     const before = await js(rectOf('m-91'));
     await screenshot('paging-loading.png');
-    await js('window.__paging.release()');
+    await js('window.__paging.finishRequest()');
+    await until(() => js(`window.__paging.loads > 1 || !document.querySelector('.load-more')`), 'the page request did not settle');
+    await js(`document.querySelector('.timeline').dispatchEvent(new Event('scroll'))`);
+    await check(`window.__paging.loads === 1`, 'the same page was requested again before the new messages were rendered');
+    await js('window.__paging.prependPage()');
     await until(() => js('document.querySelectorAll("[data-message]").length === 60'), 'older page not prepended');
     await wait(100);
     const after = await js(rectOf('m-91'));
@@ -44,6 +48,8 @@ app.whenReady().then(async () => {
     await js(`document.querySelector('.jump-bottom').click()`);
     await until(() => js(`(${state}).gap < 2 && !document.querySelector('.jump-bottom')`), 'jump button did not return to the newest message');
     await screenshot('paging-bottom.png');
+    await js(`document.querySelector('.timeline').scrollTop = 0; document.querySelector('.timeline').dispatchEvent(new Event('scroll'))`);
+    await until(() => js('window.__paging.loads === 2'), 'scrolling back to the top did not request the next page');
     writeFileSync(join(dir, 'result.json'), JSON.stringify({ ok: true }));
     win.destroy(); app.exit(0);
   } catch (e) {

@@ -53,11 +53,7 @@ jobs:
         env:
           PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/pibot-playwright
         run: |
-          node node_modules/playwright/cli.js install --with-deps --no-shell chromium
-          if [ "$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null || true)" = 1 ]; then
-            browser=$(node -p "require('playwright').chromium.executablePath()")
-            printf 'abi <abi/4.0>,\ninclude <tunables/global>\nprofile pibot-ci-chromium "%s" flags=(unconfined) {\n  userns,\n}\n' "$browser" | sudo apparmor_parser -r
-          fi
+          bash .github/scripts/install-ci-chromium.sh
           node desktop/scripts/smoke-browser-runtime.mjs desktop/out/linux/pi-bot-service-linux-x64
       - if: runner.os == 'macOS'
         name: Verify browser tests in the macOS runtime

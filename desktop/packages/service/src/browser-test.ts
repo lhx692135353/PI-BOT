@@ -76,7 +76,7 @@ export class BrowserTest {
     });
     if (this.stopped) throw new Error('浏览器测试已取消');
     const options = {
-      chromiumSandbox: true, headless: true, timeout: 15000,
+      chromiumSandbox: true, headless: true, timeout: 30000,
       proxy: { server: this.proxy.url, bypass: '<-loopback>' },
       args: ['--disable-quic', '--force-webrtc-ip-handling-policy=disable_non_proxied_udp'],
     };
@@ -98,13 +98,17 @@ export class BrowserTest {
     };
     try {
       this.browser = await launch(this.config.browser === 'chromium' ? 'chromium' : 'chrome');
-    } catch {
+    } catch (error) {
       this.browser = undefined;
+      let cause = error;
       if (this.config.browser === 'auto' && !this.stopped) {
-        this.browser = await launch('chromium').catch(() => undefined);
+        this.browser = await launch('chromium').catch(fallbackError => {
+          cause = fallbackError;
+          return undefined;
+        });
       }
       if (!this.browser) throw new Error(this.stopped ? '浏览器测试已取消' :
-        '无法安全启动测试浏览器。请检查 Chrome Stable、代理和沙箱，或运行 npx --yes playwright@1.65.1 install --no-shell chromium。');
+        '无法安全启动测试浏览器。请检查 Chrome Stable、代理和沙箱，或运行 npx --yes playwright@1.65.1 install --no-shell chromium。', { cause });
     }
     if (this.stopped) throw new Error('浏览器测试已取消');
     const context = await this.browser.newContext({ acceptDownloads: false, serviceWorkers: 'block' });

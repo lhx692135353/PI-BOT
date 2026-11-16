@@ -13,7 +13,7 @@ const history: Message[] = Array.from({ length: 120 }, (_, i) => ({
   content: `第 ${i + 1} 条消息。${'这是一段用来撑开高度的历史内容。'.repeat(1 + (i % 4))}`, created_at: now, updated_at: now,
 }));
 const PAGE = 30;
-const harness = { loads: 0, release: () => {} };
+const harness = { loads: 0, finishRequest: () => {}, prependPage: () => {} };
 (window as any).__paging = harness;
 window.agent = { call: async () => ({}), subscribe: () => () => {}, computerName: async () => '', defaultServerUrl: async () => '', openLibrary: async () => {}, openExternal: async () => {} };
 
@@ -22,10 +22,10 @@ function App() {
   const hasMore = messages[0].seq > 1;
   const onLoadMore = () => new Promise<void>(resolve => {
     harness.loads++;
-    harness.release = () => {
+    harness.finishRequest = resolve;
+    harness.prependPage = () => {
       const before = messages[0].seq;
       setMessages(current => [...history.filter(m => m.seq < before).slice(-PAGE), ...current]);
-      resolve();
     };
   });
   return <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}><Timeline bot={bot} messages={messages} hasMore={hasMore} mood="idle" online onLoadMore={onLoadMore} onSent={() => {}} onOpenBot={() => {}} /></div>;
