@@ -1,0 +1,55 @@
+server/tests/browser-test-routing.test.ts
+  s_2c169087b58dd5::t_5da38f6f9fb87e 5-14
+desktop/packages/service/src/executor.ts
+  s_2c169087b58dd5::t_8bba5847ab8971 23,103-119,136-142,161-162,254
+server/migrations/0028-browser-task-approvals.sql
+  s_2c169087b58dd5::t_8bba5847ab8971 1-2
+server/src/targets.ts
+  s_2c169087b58dd5::t_5da38f6f9fb87e 66
+  s_2c169087b58dd5::t_381052217e2c30 7,23,37-55,58-60,65,67-68,81,95,161
+server/src/migrate.ts
+  s_2c169087b58dd5::t_23c663292312a8 11
+ios/PiBot/Conversation/MessageRow.swift
+  s_2c169087b58dd5::t_23c663292312a8 155,171-173,177
+desktop/apps/desktop/ui/timeline.tsx
+  s_2c169087b58dd5::t_23c663292312a8 137,149-150,152,157
+server/openapi.json
+  s_2c169087b58dd5::t_cd9456ed3e7d4b 1761-1762
+desktop/packages/protocol/src/index.ts
+  s_2c169087b58dd5::t_23c663292312a8 83
+desktop/packages/service/src/application.ts
+  s_2c169087b58dd5::t_381052217e2c30 81
+desktop/tests/harness-e2e.test.ts
+  s_2c169087b58dd5::t_aa73fb6271a097 278-279
+  s_2c169087b58dd5::t_5da38f6f9fb87e 7,29,37-40,55,64,83,105-115,201,217,219,240-241,250,273-277,280-309
+  s_2c169087b58dd5::t_2bf28b044e6b1f 310-311
+android/app/src/main/java/dev/pibot/android/ui/TimelineScreen.kt
+  s_2c169087b58dd5::t_23c663292312a8 490,504,506
+server/src/runs.ts
+  s_2c169087b58dd5::t_8bba5847ab8971 26,94-98,189-204,210-211,326-332
+  s_2c169087b58dd5::t_25c5d0f1248484 325
+server/src/bots.ts
+  s_2c169087b58dd5::t_381052217e2c30 488,599,727-728
+  s_2c169087b58dd5::t_8bba5847ab8971 154
+desktop/README.md
+  s_2c169087b58dd5::t_f3efda445b6327 3
+  s_2c169087b58dd5::t_23c663292312a8 28-30,41
+desktop/packages/service/src/browser-test.ts
+  s_2c169087b58dd5::t_d43acaa6bcc173 17-18,20,27-28,39,48,51-54,68-81,83-92,102,147-149,164,200,202-206,210-211,215,223,226,229,273,275,277,287
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "778eb3e54481fd8d4aeaece7d7a4043a5b96804c",
+  "prompts": {},
+  "sessions": {
+    "s_2c169087b58dd5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1e4a8-7aad-7831-a016-54738d594741",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
