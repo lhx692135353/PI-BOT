@@ -1,0 +1,87 @@
+desktop/scripts/smoke-browser-runtime.mjs
+  s_2c169087b58dd5::t_50430e04c7e629 1-22
+server/openapi.json
+  s_2c169087b58dd5::t_07fbe547dbd2a7 1512-1513,1539-1541
+  s_2c169087b58dd5::t_2556941ce2eaf5 1542
+.github/workflows/ci.yml
+  s_2c169087b58dd5::t_89bc2c54a5761e 51
+server/src/targets.ts
+  s_2c169087b58dd5::t_55014e8a37ccd0 47-48
+  s_2c169087b58dd5::t_9457562cbb8988 7,22,31-46,49-75,106-108,139-142
+desktop/packages/service/src/application.ts
+  s_2c169087b58dd5::t_19e8ce35fed25c 91,96-98,100-104,157,268
+  s_2c169087b58dd5::t_0f831bb3a25b0c 15,81,95,99
+desktop/tests/harness-e2e.test.ts
+  s_2c169087b58dd5::t_71645a475aef2a 101-107,247-253
+  s_2c169087b58dd5::t_a3da6fe2133507 7-8,23-56,60,79-100,108,173,185-186,202-205,217,221-246
+  s_2c169087b58dd5::t_f72b23473e128f 254-255
+server/tests/browser-test-routing.test.ts
+  s_2c169087b58dd5::t_9ff740f503aba1 1-18,20-31,33-39,41-48
+  s_2c169087b58dd5::t_917ca09f56fbd0 19
+  s_2c169087b58dd5::t_55014e8a37ccd0 32,40
+THIRD_PARTY_NOTICES.md
+  s_2c169087b58dd5::t_781c2576360e5c 26-29
+desktop/README.md
+  s_2c169087b58dd5::t_9ff740f503aba1 3,26-36,38-39
+  s_2c169087b58dd5::t_89bc2c54a5761e 37
+  s_2c169087b58dd5::t_3a443daa501720 40
+server/src/routes.ts
+  s_2c169087b58dd5::t_9457562cbb8988 310
+desktop/packages/service/src/browser-test.ts
+  s_2c169087b58dd5::t_3cba828d7d701d 88
+  s_2c169087b58dd5::t_71645a475aef2a 72-74
+  s_2c169087b58dd5::t_917ca09f56fbd0 81,83-87,89-96,100
+  s_2c169087b58dd5::t_86050c7fa78a3e 179-181,189-190,192-195,198-201
+  s_2c169087b58dd5::t_0a1ca8785e299a 1-71,75-80,97,99,101,103-104,106-178,182-188,191,196-197,202-257
+  s_2c169087b58dd5::t_89bc2c54a5761e 82,98,102,105
+desktop/packages/service/src/cloud.ts
+  s_2c169087b58dd5::t_0f831bb3a25b0c 68,78-80,94
+server/src/agents.ts
+  s_2c169087b58dd5::t_9457562cbb8988 4,111,134-138
+server/src/observations.ts
+  s_2c169087b58dd5::t_0f831bb3a25b0c 351-352
+desktop/runtime-package-lock.json
+  s_2c169087b58dd5::t_c0e87f47d51dad 12,1420-1446
+desktop/packages/service/src/browser-test-proxy.ts
+  s_2c169087b58dd5::t_3cba828d7d701d 29-30
+  s_2c169087b58dd5::t_917ca09f56fbd0 3,22,82-83,85-86
+  s_2c169087b58dd5::t_bdb9cf47831181 1-2,4-21,23-28,31-81,84,87-92
+.github/workflows/desktop.yml
+  s_2c169087b58dd5::t_89bc2c54a5761e 53-54,56-60,65,117
+  s_2c169087b58dd5::t_570d59d871d781 52,55,61-64,66,115-116,118
+  s_2c169087b58dd5::t_7a56e419e601a0 51
+desktop/packages/service/src/executor.ts
+  s_2c169087b58dd5::t_0f831bb3a25b0c 13,19,58,67,108,112-117,215-223,225,235-237,240,242-243,266-268,281,337,356-359
+  s_2c169087b58dd5::t_86050c7fa78a3e 106-107,130,134,274
+  s_2c169087b58dd5::t_129bd4b1220dbb 360
+server/src/bots.ts
+  s_2c169087b58dd5::t_5eea804fd5b0c7 482,593,717-718
+packages/agent/src/tasks.ts
+  s_2c169087b58dd5::t_55014e8a37ccd0 26
+  s_2c169087b58dd5::t_9457562cbb8988 24-25,27-29
+desktop/scripts/prepare-runtime.mjs
+  s_2c169087b58dd5::t_5eea804fd5b0c7 14
+desktop/tests/browser-test.test.ts
+  s_2c169087b58dd5::t_50430e04c7e629 1-7,9-27,29-59
+  s_2c169087b58dd5::t_89bc2c54a5761e 8,28
+desktop/package.json
+  s_2c169087b58dd5::t_cf7347c0a0997d 29
+package-lock.json
+  s_2c169087b58dd5::t_bd694da96bb3d9 60,11254-11280
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0393a61577d2d92be8bb811d359ab9ea96b83ba1",
+  "prompts": {},
+  "sessions": {
+    "s_2c169087b58dd5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1e4a8-7aad-7831-a016-54738d594741",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
