@@ -10,15 +10,21 @@ import { BrowserTest, type BrowserTestConfig } from '../packages/service/src/bro
 const mode = process.env.PI_BOT_TEST_BROWSER;
 const enabled = mode === 'chrome' || mode === 'chromium' || mode === 'auto';
 
-test('browser test sessions isolate cookies and close pending navigation when cancelled', { skip: !enabled, timeout: 60000 }, async () => {
+test('browser test sessions recover from blocked navigation, isolate cookies and respect cancellation', { skip: !enabled, timeout: 60000 }, async () => {
   const root = await mkdtemp(join(tmpdir(), 'pi-bot-browser-'));
   const library = join(root, 'library');
   const data = join(root, 'data');
   await Promise.all([mkdir(library), mkdir(data)]);
   let navigationStarted!: () => void;
   const reached = new Promise<void>(resolve => { navigationStarted = resolve; });
+  let outsideHits = 0;
   const server = createServer((req, res) => {
     if (req.url === '/pending') { navigationStarted(); return; }
+    if (req.url === '/redirect') {
+      const port = (server.address() as AddressInfo).port;
+      return void res.writeHead(302, { Location: `http://localhost:${port}/outside` }).end();
+    }
+    if (req.url === '/outside') outsideHits++;
     if (req.url === '/cookie') res.setHeader('Set-Cookie', 'fixture=present; Path=/');
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.end(`<h1>${req.headers.cookie ? 'Cookie present' : 'Fresh session'}</h1>`);
@@ -36,6 +42,13 @@ test('browser test sessions isolate cookies and close pending navigation when ca
   };
   try {
     assert.equal((await execute(first, { op: 'open', url: origin + '/cookie' })).opened, true);
+    for (let repeat = 0; repeat < 3; repeat++) {
+      const blocked = await execute(first, { op: 'open', url: origin + '/redirect' });
+      assert.equal(blocked.opened, false);
+      await assert.rejects(execute(first, { op: 'observe' }), /请先打开测试页面/);
+      assert.equal((await execute(first, { op: 'open', url: origin })).opened, true);
+    }
+    assert.equal(outsideHits, 0);
     await Promise.all([first, second].map(async session => {
       assert.equal((await execute(session, { op: 'open', url: origin })).opened, true);
       const result = await execute(session, { op: 'observe' });

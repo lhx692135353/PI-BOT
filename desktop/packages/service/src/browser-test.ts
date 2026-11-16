@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { mkdir, mkdtemp, realpath, writeFile } from 'node:fs/promises';
 import { isAbsolute, join, relative, sep } from 'node:path';
-import { chromium, type Browser, type Page } from 'playwright';
+import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
 import { Type } from 'typebox';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { browserTestProxy, browserTestUrl } from './browser-test-proxy.js';
@@ -50,6 +50,7 @@ type Diagnostic = { kind: 'console' | 'page' | 'request' | 'http' | 'blocked'; m
 
 export class BrowserTest {
   private browser?: Browser;
+  private context?: BrowserContext;
   private proxy?: Awaited<ReturnType<typeof browserTestProxy>>;
   private page?: Page;
   private evidenceDir?: string;
@@ -68,7 +69,8 @@ export class BrowserTest {
     this.events.push({ kind, message: clean(message, 1500) });
   }
 
-  private async openPage() {
+  private async openContext() {
+    await this.proxy?.close().catch(() => {});
     this.proxy = await browserTestProxy(this.config.origins, origin => {
       if (this.page) this.log('blocked', origin);
     });
@@ -116,15 +118,18 @@ export class BrowserTest {
       this.log('blocked', 'WebSocket ' + netLocation(socket.url().replace(/^ws/, 'http')));
       return socket.close();
     });
+    this.context = context;
+    return context;
+  }
+
+  private async openPage() {
+    const context = this.context ?? await this.openContext();
     const page = this.page = await context.newPage();
-    const attachLogs = (target: Page) => {
-      target.on('console', message => { if (message.type() === 'error' || message.type() === 'warning') this.log('console', message.text()); });
-      target.on('pageerror', error => this.log('page', error.message));
-      target.on('requestfailed', request => this.log('request', request.url() + ' ' + (request.failure()?.errorText ?? '')));
-      target.on('response', response => { if (response.status() >= 400) this.log('http', response.status() + ' ' + response.url()); });
-    };
-    attachLogs(page);
-    context.on('page', popup => { if (popup !== page) void popup.close().catch(() => {}); });
+    page.on('console', message => { if (message.type() === 'error' || message.type() === 'warning') this.log('console', message.text()); });
+    page.on('pageerror', error => this.log('page', error.message));
+    page.on('requestfailed', request => this.log('request', request.url() + ' ' + (request.failure()?.errorText ?? '')));
+    page.on('response', response => { if (response.status() >= 400) this.log('http', response.status() + ' ' + response.url()); });
+    page.on('popup', popup => { void popup.close().catch(() => {}); });
     return page;
   }
 
@@ -164,14 +169,21 @@ export class BrowserTest {
       if (url.origin !== this.origin) throw new Error('请打开本任务已选定的测试站点');
       const page = this.page ?? await this.openPage();
       const response = await page.goto(url.href, { waitUntil: 'domcontentloaded' }).catch(() => undefined);
+      const origin = netLocation(page.url());
+      const allowed = this.config.origins.has(origin) && this.config.origins.has(netLocation(response?.url() ?? page.url()));
+      if (!response || !allowed) {
+        // A blocked navigation can still commit Chromium's error document after goto rejects.
+        await page.close().catch(() => {});
+        this.page = undefined;
+      }
       return {
-        opened: !!response && response.ok() && this.config.origins.has(netLocation(page.url())),
-        status: response?.status() ?? null, origin: netLocation(page.url()), errors: this.counts,
+        opened: !!response && response.ok() && allowed,
+        status: response?.status() ?? null, origin, errors: this.counts,
       };
     }
+    if (args.op === 'diagnostics') return { errors: this.counts, evidence: await this.saveEvidence() };
     const page = this.page;
     if (!page) throw new Error('请先打开测试页面');
-    if (args.op === 'diagnostics') return { errors: this.counts, evidence: await this.saveEvidence() };
     if (!this.config.origins.has(netLocation(page.url()))) throw new Error('测试页面已离开允许的站点');
     if (args.op === 'screenshot') return { screenshot: await this.capture(page) };
     if (args.op === 'observe') {
