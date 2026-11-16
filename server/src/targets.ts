@@ -4,7 +4,7 @@ import { fail, HttpError, type Tx, type Row } from "./db.js";
 import type { Settings } from "./config.js";
 import type { Hub } from "./hub.js";
 
-export const CAPABILITIES = ["files", "shell", "browser", "desktop", "phone", "always-on-v1", "preflight-v1"] as const;
+export const CAPABILITIES = ["files", "shell", "browser", "desktop", "phone", "always-on-v1", "preflight-v1", "browser-test"] as const;
 export const resourceSchema = z.object({
   target: z.string().regex(/^(device|remote):[0-9a-f-]{36}$/).refine(value => z.string().uuid().safeParse(value.slice(7)).success,"资源机器 ID 无效"),
   path: z.string().min(1).max(2000).optional(),
@@ -19,6 +19,7 @@ export interface Routing {
   execution: "auto" | "device" | "cloud" | "remote";
   device_id?: string;
   preferred_device_id?: string;
+  browser_test_origin?: string;
   requirements: string[];
   resources: { target: string; path?: string }[];
 }
@@ -26,6 +27,51 @@ export class RemotePreparationRequired extends HttpError {
   constructor() { super(503, "云端执行环境正在准备"); }
 }
 export const targetDevice = (target?: string) => target?.startsWith("device:") ? target.slice(7) : null;
+
+async function browserTestPreflight(hub: Hub, s: Settings | undefined, userId: string, deviceId: string, origin: string) {
+  const result = await hub.rpc(userId, "browser-test.preflight", { origin }, s?.rpcTimeoutMs ?? 5000, deviceId) as { available?: boolean };
+  return result.available === true;
+}
+
+export async function browserTestRouting(tx: Tx, s: Settings | undefined, hub: Hub, userId: string,
+  source: Row, input: Partial<Routing> & { browser_test_origin: string }): Promise<Routing> {
+  let origin: URL;
+  try { origin = new URL(input.browser_test_origin); }
+  catch { return fail(422, "请提供测试站点的 HTTP 或 HTTPS origin"); }
+  if (!["http:", "https:"].includes(origin.protocol) || origin.username || origin.password ||
+      origin.pathname !== "/" || origin.search || origin.hash) fail(422, "测试站点只填协议、主机和端口");
+  if (input.execution === "cloud" || input.execution === "remote") fail(422, "端侧浏览器测试需要使用用户电脑");
+  const routing = await taskRouting(tx, userId, source, { ...input, execution: "auto" });
+  routing.execution = "device";
+  routing.browser_test_origin = origin.origin;
+  const requirements = input.requirements?.filter(capability => capability !== "browser") ?? [];
+  routing.requirements = [...new Set([...requirements, "browser-test"])].sort();
+  const knownTargets = [...new Set(routing.resources.map(resource => resource.target))];
+  if (knownTargets.length > 1 || knownTargets.some(target => !targetDevice(target))) fail(422, "请确认测试项目所在的用户电脑");
+  const projectDevice = targetDevice(knownTargets[0]);
+  if (projectDevice && input.device_id && projectDevice !== input.device_id) fail(422, "指定电脑与项目所在电脑不同，请确认使用哪台");
+  const pinned = input.device_id ?? projectDevice;
+  if (pinned) return { ...routing, device_id: pinned };
+  const rows = await tx.rows("SELECT device_id,label FROM devices WHERE user_id=$1 AND revoked_at IS NULL ORDER BY label,device_id", [userId]);
+  const current = rows.find(device => device.device_id === source.source_device_id);
+  const usable = async (device: Row) => {
+    const conn = hub.device(userId, device.device_id);
+    if (!conn || routing.requirements.some(capability => !conn.capabilities?.includes(capability))) return false;
+    return browserTestPreflight(hub, s, userId, device.device_id, origin.origin)
+      .then(allowed => allowed && hub.device(userId, device.device_id) === conn, () => false);
+  };
+  if (current && await usable(current)) return { ...routing, device_id: current.device_id };
+  const suitable = (await Promise.all(rows.filter(device => device !== current).map(async device => await usable(device) ? device : null)))
+    .filter(device => device !== null);
+  const local = origin.hostname === "localhost" || origin.hostname.endsWith(".localhost") ||
+    /^127\./.test(origin.hostname) && /^\d+\.\d+\.\d+\.\d+$/.test(origin.hostname) || origin.hostname === "[::1]";
+  if (suitable.length === 1 && !(local && current)) return { ...routing, device_id: suitable[0].device_id };
+  if (suitable.length) {
+    const names = suitable.map(device => String(device.label).slice(0, 60)).slice(0, 4).join("、");
+    fail(409, `请在聊天中确认使用哪台电脑。可用电脑：${names}`);
+  }
+  return fail(409, "没有在线且已允许该测试站点的电脑，请检查本机浏览器测试配置");
+}
 
 export async function taskRouting(tx: Tx, userId: string, source: Row, input: Partial<Routing> = {}): Promise<Routing> {
   const execution = input.execution ?? (input.device_id ? "device" : "auto");
@@ -57,6 +103,9 @@ export const routingKey = (routing: Routing) => "policy:" + createHash("sha256")
 /** Select only at dispatch. A past execution node is never an automatic preference. */
 export async function resolveTaskTarget(tx: Tx, s: Settings | undefined, hub: Hub, userId: string, slug: string, routing: Routing) {
   const resources = routing.resources ?? [], required = routing.requirements ?? [];
+  if ((routing.browser_test_origin || required.includes("browser-test")) &&
+      (!routing.browser_test_origin || routing.execution !== "device" || !routing.device_id))
+    fail(422, "浏览器测试需要站点 origin 和已选定的用户电脑");
   const targets = new Set(resources.map(r => r.target));
   if (targets.size > 1) fail(422, "一个任务需要多台机器的资源，请先拆分任务或明确传输所需文件");
   const permits = (target: string) => !targets.size || targets.has(target);
@@ -87,6 +136,10 @@ export async function resolveTaskTarget(tx: Tx, s: Settings | undefined, hub: Hu
     if (!conn) { rejected.set(d.device_id, "电脑已离线，本次操作未执行"); continue; }
     const missing = required.filter(c => !conn.capabilities?.includes(c));
     if (missing.length) { rejected.set(d.device_id, `电脑已连接，但未提供任务所需能力：${missing.join(", ")}；本次操作未执行`); continue; }
+    if (routing.browser_test_origin) {
+      const allowed = await browserTestPreflight(hub, s, userId, d.device_id, routing.browser_test_origin).catch(() => false);
+      if (!allowed) { rejected.set(d.device_id, "指定电脑未允许该测试站点，或设备检查未响应；本次操作未执行"); continue; }
+    }
     if (paths.length) {
       if (!conn.capabilities?.includes("preflight-v1")) { rejected.set(d.device_id, "电脑已连接，但客户端不支持资源检查，请更新该电脑客户端"); continue; }
       try {

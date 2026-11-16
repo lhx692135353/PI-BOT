@@ -26,6 +26,7 @@
     "@earendil-works/pi-coding-agent": "1.5.2",
     "@pi-bot/agent": "*",
     "@pi-bot/bot-face": "*",
+    "playwright": "1.65.1",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-markdown": "10.1.0",

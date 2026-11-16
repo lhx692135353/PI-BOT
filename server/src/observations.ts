@@ -348,8 +348,8 @@ export async function recordGeneration(
     "LLM Call",
     data.started,
     data.ended ?? new Date(),
-    bounded(data.input, data.secrets),
-    bounded(data.output, data.secrets),
+    run.routing?.browser_test_origin ? undefined : bounded(data.input, data.secrets),
+    run.routing?.browser_test_origin ? undefined : bounded(data.output, data.secrets),
     {
       parentObservationId: spanId(
         data.parentTool ? `${run.run_id}:${data.parentTool}` : run.run_id,

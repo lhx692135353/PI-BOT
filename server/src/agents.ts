@@ -1,7 +1,7 @@
 import { artifactOut } from "./reports.js";
 import { internalTool, TERMINAL_RUN_STATES } from "@pi-bot/runtime-contracts";
 import { taskMessage } from "./task-conversation.js";
-import {taskRouting,resolveTaskTarget,RemotePreparationRequired,type Routing} from "./targets.js";
+import {browserTestRouting,taskRouting,resolveTaskTarget,RemotePreparationRequired,type Routing} from "./targets.js";
 import { randomUUID } from "node:crypto";
 import { fail, type Database, type Row, type Tx } from "./db.js";
 import type { Settings } from "./config.js";
@@ -108,7 +108,7 @@ export async function createTask(
   hub: Hub,
   userId: string,
   claims: LlmClaims,
-  body: { run_id: string; agent?: string; task: string; wait: boolean; kind?: "background" | "delegation"; title?: string; request_id?: string;resumed_from?:string; execution?: "auto" | "device" | "cloud" | "remote"; device_id?:string; operation_target?:string; requirements?:string[]; resources?:Routing["resources"] },
+  body: { run_id: string; agent?: string; task: string; wait: boolean; kind?: "background" | "delegation"; title?: string; request_id?: string;resumed_from?:string; execution?: "auto" | "device" | "cloud" | "remote"; device_id?:string; operation_target?:string; requirements?:string[]; resources?:Routing["resources"]; browser_test_origin?: string },
   settings?:Settings,
 ) {
   const parent = await callerRun(tx, userId, claims, body.run_id);
@@ -131,7 +131,11 @@ export async function createTask(
     fail(409, `「${target.name}」正在等你完成另一项任务，同步等待会互相卡住${depth === 0 ? "；可以改用 wait=false" : "，请自己完成"}`);
   const { n } = (await tx.one("SELECT count(*) AS n FROM agent_tasks WHERE parent_run_id=$1", [parent.run_id]))!;
   if (n >= MAX_TASKS_PER_RUN) fail(422, `本次任务已委托 ${MAX_TASKS_PER_RUN} 次，达到上限，请自己完成剩余部分`);
-  const routing = await taskRouting(tx,userId,parent,body);
+  if (body.browser_test_origin !== undefined && (kind !== "background" || isCliRuntime(target.runtime)))
+    fail(422, "浏览器测试需要由 Pi 智能体安排为端侧后台任务");
+  const routing = body.browser_test_origin !== undefined
+    ? await browserTestRouting(tx, settings, hub, userId, parent, { ...body, browser_test_origin: body.browser_test_origin })
+    : await taskRouting(tx,userId,parent,body);
   // Explicit destinations fail immediately when unavailable. Automatic work is resolved at dispatch.
   let location = {execution:"cloud",device_id:null as string | null,operation_target:"pending"};
   if (routing.execution !== "auto" || body.operation_target) {

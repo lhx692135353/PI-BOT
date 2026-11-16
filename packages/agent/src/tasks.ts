@@ -21,7 +21,12 @@ export function taskTools(baseUrl: string, token: () => string, runId: string): 
     {
       name: "start_task", label: "安排后台任务",
       description: "创建独立的后台任务并立即返回。先简短回应用户要核实什么，再安排任务。task 自包含但精简，保留目标、必要上下文、位置、约束和期望输出；详细执行计划交给后台，不复制历史全文，不省略关键条件，不重复创建已有任务。最多同时执行两个，其他排队。" + routingDescription,
-      parameters: Type.Object({ ...routingParameters, title: Type.String({ minLength: 1, maxLength: 80, description: "用户能看懂的简短任务名称，通常 10–20 字，例如检查显存占用；不填内部代号、命令或参数" }), task: Type.String({ minLength: 1, maxLength: 8000 }) }),
+      parameters: Type.Object({
+        ...routingParameters,
+        browser_test_origin: Type.Optional(Type.String({ maxLength: 2048, description: "端侧 Web 功能测试的 HTTP(S) origin，只含协议、主机和端口。服务端自动添加端侧浏览器能力要求。未指定电脑时省略 device_id。已知项目设备时保留 resources.target。" })),
+        title: Type.String({ minLength: 1, maxLength: 80, description: "用户能看懂的简短任务名称，通常 10–20 字，例如检查显存占用；不填内部代号、命令或参数" }),
+        task: Type.String({ minLength: 1, maxLength: 8000 }),
+      }),
       execute: async (id, args: any) => result(await call("POST", "", { ...args, run_id: runId, kind: "background", wait: false, request_id: id })),
     },
     {

@@ -65,7 +65,7 @@ export async function cloudFetch<T>(serverUrl: string, method: string, path: str
   return await response.json() as T;
 }
 
-export interface SocketHandlers { message(message: Record<string, any>): void; open(): void; close(authFailed: boolean): void }
+export interface SocketHandlers { message(message: Record<string, any>): void; open(): void; close(authFailed: boolean): void; features?(): string[] }
 /** The harness connection: runs, cancels, approvals and file RPCs arrive here. */
 export class CloudSocket {
   private socket: WebSocket | null = null; private stopped = true; private retry: NodeJS.Timeout | undefined; private ping: NodeJS.Timeout | undefined; private attempts = 0; private lastPong = 0;
@@ -75,6 +75,9 @@ export class CloudSocket {
   stop() { this.stopped = true; clearTimeout(this.retry); clearInterval(this.ping); const socket = this.socket; this.socket = null; this.connected = false; socket?.removeAllListeners(); socket?.on('error', () => {}); socket?.terminate(); }
   reconnectNow() { if (this.stopped || this.connected) return; clearTimeout(this.retry); this.attempts = 0; this.open(); }
   send(message: Record<string, unknown>) { if (this.socket?.readyState === WebSocket.OPEN) { this.socket.send(JSON.stringify(message)); return true; } return false; }
+  capabilities(...features: string[]) {
+    this.send({ type: 'capabilities', features: ['always-on-v1', 'files', 'shell', 'preflight-v1', ...(this.handlers.features?.() ?? []), ...features] });
+  }
   private open() {
     const url = new URL(`${this.serverUrl.replace(/\/$/, '')}/ws/device`); url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
     // ws supplies createConnection, which otherwise bypasses Node's environment proxy agent.
@@ -88,7 +91,7 @@ export class CloudSocket {
     socket.on('message', raw => {
       let message: any; try { message = JSON.parse(raw.toString()); } catch { return; }
       if (message?.type === 'pong') this.lastPong = Date.now();
-      else if (message?.type === 'hello') { this.connected = true; this.send({ type: 'capabilities', features: ['always-on-v1', 'files', 'shell', 'preflight-v1'] }); this.handlers.open(); }
+      else if (message?.type === 'hello') { this.connected = true; this.capabilities(); this.handlers.open(); }
       else this.handlers.message(message);
     });
     socket.on('unexpected-response', (_request, response) => { authFailed = response.statusCode === 401 || response.statusCode === 403; socket.terminate(); });

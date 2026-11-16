@@ -1509,7 +1509,8 @@
                         "desktop",
                         "phone",
                         "always-on-v1",
-                        "preflight-v1"
+                        "preflight-v1",
+                        "browser-test"
                       ]
                     }
                   },
@@ -1534,6 +1535,10 @@
                       ],
                       "additionalProperties": false
                     }
+                  },
+                  "browser_test_origin": {
+                    "type": "string",
+                    "maxLength": 2048
                   },
                   "agent": {
                     "type": "string",

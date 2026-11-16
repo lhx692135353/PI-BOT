@@ -4,7 +4,8 @@ import { isRealToolResult, latestUserText, realToolOutputs, ResponseStream } fro
 import test, { after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApp } from '../../server/src/app.js';
@@ -19,10 +20,44 @@ import { MemoryCredentials } from '../packages/service/src/keychain.js';
 import type { AppEvent, Bot, MessagePage } from '../packages/protocol/src/index.js';
 
 const skip = !TEST_DB && '需要 PI_BOT_TEST_DATABASE_URL';
+const browserMode = process.env.PI_BOT_TEST_BROWSER;
+const browserSkip = skip || (!['chrome', 'chromium', 'auto'].includes(browserMode ?? '') && '需要 PI_BOT_TEST_BROWSER=chrome 或 chromium');
+const BROWSER_PRIVATE_LOG = 'LOCAL-ONLY-BROWSER-DIAGNOSTIC';
+
+async function browserPages() {
+  let forbiddenHits = 0;
+  const listen = async (server: ReturnType<typeof createServer>) => {
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+    return 'http://127.0.0.1:' + (server.address() as AddressInfo).port;
+  };
+  const forbidden = createServer((_req, res) => { forbiddenHits++; res.end('outside'); });
+  const other = await listen(forbidden);
+  const site = createServer((req, res) => {
+    if (req.url === '/redirect') return void res.writeHead(302, { location: other + '/redirect-target' }).end();
+    res.writeHead(200, { 'content-type': 'text/html' }).end(`
+      <title>Registration</title>
+      <form><label>Email <input aria-label="Email"></label><button>Register</button></form>
+      <div role="status"></div>
+      <script>
+        document.querySelector('form').onsubmit = e => {
+          e.preventDefault();
+          document.querySelector('[role=status]').textContent = document.querySelector('input').value ? 'Registration saved' : 'Missing email';
+          console.error('${BROWSER_PRIVATE_LOG}');
+          fetch('${other}/subrequest').catch(() => {});
+        };
+      </script>`);
+  });
+  const origin = await listen(site);
+  return { origin, hits: () => forbiddenHits, async close() {
+    await Promise.all([site, forbidden].map(server => new Promise<void>(resolve => {
+      server.closeAllConnections(); server.close(() => resolve());
+    })));
+  } };
+}
 const text = (c: any): string => (Array.isArray(c) ? c.map(p => p.text ?? '').join('') : String(c ?? ''));
 
 /** A provider double that drives the agent through tool calls based on the latest user text. */
-async function scriptedProvider(outside: string) {
+async function scriptedProvider(outside: string, browserOrigin?: string) {
   const requests: any[] = [];
   const server = createServer(async (req, res) => {
     const chunks: Buffer[] = [];
@@ -41,7 +76,36 @@ async function scriptedProvider(outside: string) {
     let reply: { text?: string; tool?: { name: string; args: object } };
     const goalId = user.match(/"id":"([0-9a-f-]{36})"/)?.[1];
     const originalUser = latestUserText(messages);
-    if (originalUser === '问问压测智能体为什么停了') {
+    if (user === '测试网页注册流程') {
+      assert.ok(!json.tools.some((tool: any) => tool.name === 'browser_test'));
+      reply = toolDone ? { text: '已安排网页测试。' } :
+        { tool: { name: 'start_task', args: { browser_test_origin: browserOrigin, title: '网页注册测试', task: '验证浏览器注册流程' } } };
+    } else if (user === '验证浏览器注册流程') {
+      assert.ok(!json.tools.some((tool: any) => ['run_command', 'web_search'].includes(tool.name)));
+      const steps = [
+        { op: 'open', url: browserOrigin + '/redirect' }, { op: 'open', url: browserOrigin },
+        { op: 'observe' }, { op: 'fill', role: 'textbox', name: 'Email', text: 'fixture@example.test' },
+        { op: 'click', role: 'button', name: 'Register' },
+        { op: 'assert', role: 'status', text: 'Registration saved' },
+        { op: 'assert', role: 'status', text: 'Missing email' }, { op: 'diagnostics' },
+      ];
+      if (!results.length) {
+        assert.ok(!json.tools.some((tool: any) => tool.name === 'browser_test'));
+        reply = { tool: { name: 'tool_search', args: { query: 'browser_test' } } };
+      } else {
+        assert.match(results[0], /browser_test/);
+        assert.ok(json.tools.some((tool: any) => tool.name === 'browser_test'));
+        const args = steps[results.length - 1];
+        reply = args ? { tool: { name: 'browser_test', args } } : { text: '注册流程通过，错误消息校验失败，已保存本机截图。' };
+      }
+    } else if (user === '核对云端测试工具') {
+      reply = toolDone ? { text: '已安排云端核查。' } :
+        { tool: { name: 'start_task', args: { execution: 'cloud', title: '核对云端工具', task: '在云端搜索端侧浏览器工具' } } };
+    } else if (user === '在云端搜索端侧浏览器工具') {
+      assert.ok(!json.tools.some((tool: any) => tool.name === 'browser_test'));
+      reply = toolDone ? { text: '云端未提供端侧浏览器工具。' } :
+        { tool: { name: 'tool_search', args: { query: 'browser_test' } } };
+    } else if (originalUser === '问问压测智能体为什么停了') {
       const asked = messages.some(m => m.type === 'function_call' && m.name === 'ask_agent');
       reply = asked ? { text: '询问已提交，等对方回报。' }
         : { tool: { name: 'ask_agent', args: { agent: '压测智能体', task: '请核实停止原因，并报告已有数据。', wait: false, execution: 'device' } } };
@@ -106,6 +170,7 @@ let adminToken = '';
 let serverDb: Database;
 let runner: Awaited<ReturnType<typeof createRunner>>, worker: Worker, workerDb: Database, workerLoop: Promise<void>;
 let search: Awaited<ReturnType<typeof mockSearch>>;
+let pages: Awaited<ReturnType<typeof browserPages>> | undefined;
 async function http(method: string, path: string, body?: unknown, token = adminToken) {
   const r = await fetch(base + path, { method, headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` }, body: body === undefined ? undefined : JSON.stringify(body) });
   return { status: r.status, json: await r.json() as any };
@@ -117,7 +182,8 @@ before(async () => {
   mkdirSync(join(dir, 'Desktop'));
   writeFileSync(join(dir, 'Desktop', 'plan.txt'), 'x');
   await resetDatabase(TEST_DB!);
-  provider = await scriptedProvider(join(dir, 'Desktop'));
+  if (!browserSkip) pages = await browserPages();
+  provider = await scriptedProvider(join(dir, 'Desktop'), pages?.origin);
   search = await mockSearch();
   serverDb = new Database(TEST_DB!);
   runner=await createRunner({token:'r'.repeat(40),dir:join(dir,'runner')});
@@ -133,6 +199,10 @@ before(async () => {
   await http('POST', '/admin/api/users', { username: 'bob', password: 'bob-password' });
   await http('POST', '/admin/api/models', { name: 'Scripted', base_url: provider.url, provider_model: 'scripted', api_key: 'sk-scripted', context_window: 32000, max_tokens: 1000 });
   app = new Application({ dataDir: join(dir, 'data'), libraryRoot: join(dir, 'pi-bot'), credentials: new MemoryCredentials(), emit: e => events.push(e), backoff: { baseMs: 50, maxMs: 200 } });
+  if (pages) {
+    mkdirSync(join(dir, 'data'), { recursive: true });
+    writeFileSync(join(dir, 'data', 'browser-test.json'), JSON.stringify({ enabled: true, origins: [pages.origin], browser: browserMode }));
+  }
 });
 after(async () => {
   if (skip) return;
@@ -144,7 +214,43 @@ after(async () => {
   await runner?.close();
   await api?.close();
   await search?.close();
+  await pages?.close();
   rmSync(dir, { recursive: true, force: true });
+});
+
+test('browser testing is discovered on the selected desktop and keeps raw evidence local', { skip: browserSkip }, async () => {
+  if (!app.state().user) await app.login({ serverUrl: base, username: 'bob', password: 'bob-password', label: 'Bob 的 Mac' });
+  await eventually(() => app.state().connection === 'online');
+  const bot = await app.call('botCreate', { name: 'Web Tester', persona: '', avatar: { shape: 'bean', color: 'mint', scheme: 'light' } }) as Bot;
+  await app.call('send', { botId: bot.id, text: '测试网页注册流程' });
+  const reply = await eventually(async () => {
+    const page = await app.call('messages', { botId: bot.id }) as MessagePage;
+    return page.messages.find(message => /注册流程通过/.test(message.content) && message.status === 'completed');
+  }, 45000);
+  assert.match(reply.content, /已保存本机截图/);
+  const task = await serverDb.tx(tx => tx.one("SELECT * FROM agent_tasks WHERE parent_bot_id=$1 AND title='网页注册测试'", [bot.id]));
+  assert.equal(task?.execution, 'device');
+  assert.equal(task?.device_id, app.state().deviceId);
+  const turns = provider.requests.filter(request => latestUserText(request.input) === '验证浏览器注册流程');
+  const output = realToolOutputs(turns.at(-1).input).map((item: any) => text(item.output));
+  assert.match(output[1], /"opened":false/);
+  assert.match(output[2], /"opened":true/);
+  assert.match(output[3], /textbox/);
+  assert.match(output[6], /"passed":true/);
+  assert.match(output[7], /"passed":false/);
+  assert.equal(pages?.hits(), 0);
+  assert.doesNotMatch(JSON.stringify(provider.requests), new RegExp(BROWSER_PRIVATE_LOG));
+  const root = join(dir, 'data', 'browser-test-evidence');
+  const evidence = join(root, readdirSync(root)[0]);
+  assert.match(readFileSync(join(evidence, 'diagnostics.json'), 'utf8'), new RegExp(BROWSER_PRIVATE_LOG));
+  assert.equal(readFileSync(join(evidence, 'screenshot-1.png')).subarray(1, 4).toString(), 'PNG');
+
+  await app.call('send', { botId: bot.id, text: '核对云端测试工具' });
+  const cloud = await eventually(async () => {
+    const page = await app.call('messages', { botId: bot.id }) as MessagePage;
+    return page.messages.find(message => /云端未提供端侧浏览器工具/.test(message.content) && message.status === 'completed');
+  }, 15000);
+  assert.equal(cloud.executor, 'cloud');
 });
 
 test('the Mac harness logs in, binds itself and runs bots against its library', { skip }, async () => {

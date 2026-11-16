@@ -307,6 +307,7 @@ export const routes: Route[] = [
     body: z.object({
       run_id: uuid,
       ...routingFields,
+      browser_test_origin: z.string().trim().max(2048).optional(),
       agent: z.string().trim().min(1).max(100).optional(),
       kind: z.enum(["background", "delegation"]).default("delegation"),
       title: z.string().trim().min(1).max(80).optional(),

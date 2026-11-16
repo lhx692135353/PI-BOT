@@ -49,6 +49,22 @@ jobs:
       - if: runner.os == 'macOS'
         run: npm run pack:mac --workspace=pi-bot-desktop
       - if: runner.os == 'Linux'
+        name: Verify browser tests in the Linux runtime
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/pibot-playwright
+        run: |
+          node node_modules/playwright/cli.js install --with-deps --no-shell chromium
+          if [ "$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null || true)" = 1 ]; then
+            browser=$(node -p "require('playwright').chromium.executablePath()")
+            printf 'abi <abi/4.0>,\ninclude <tunables/global>\nprofile pibot-ci-chromium "%s" flags=(unconfined) {\n  userns,\n}\n' "$browser" | sudo apparmor_parser -r
+          fi
+          node desktop/scripts/smoke-browser-runtime.mjs desktop/out/linux/pi-bot-service-linux-x64
+      - if: runner.os == 'macOS'
+        name: Verify browser tests in the macOS runtime
+        run: |
+          node node_modules/playwright/cli.js install --no-shell chromium
+          node desktop/scripts/smoke-browser-runtime.mjs "desktop/apps/desktop/out/Pi Bot-darwin-arm64/Pi Bot.app/Contents/Resources/runtime"
+      - if: runner.os == 'Linux'
         name: Smoke test packaged service
         env:
           PI_BOT_DATA_DIR: ${{ runner.temp }}/pi-bot-smoke
@@ -96,6 +112,10 @@ jobs:
           npm run typecheck --workspace=@pi-bot/admin
       - name: Build, native security tests and unsigned x64 installer
         run: npm run pack:win --workspace=pi-bot-desktop
+      - name: Verify browser tests in the Windows runtime
+        run: |
+          node node_modules/playwright/cli.js install --no-shell chromium
+          node desktop/scripts/smoke-browser-runtime.mjs desktop/apps/desktop/runtime
       - name: File-tool and offline logout regression on native Windows
         run: node --import tsx --test --test-timeout=120000 desktop/tests/library.test.ts desktop/tests/logout.test.ts
       - uses: actions/upload-artifact@v4

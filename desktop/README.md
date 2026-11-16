@@ -1,6 +1,6 @@
 # Pi Bot 电脑端
 
-Pi Bot 的电脑端是 Bot 们的 **harness**：登录后这台电脑注册到你的账号，Bot 在这里读写资料库、执行命令。支持文件与命令工具，以及通过 Server 提供的联网搜索；支持 Bot 私有 skills，没有浏览器自动化或 MCP。
+Pi Bot 的电脑端是 Bot 们的 **harness**：登录后这台电脑注册到你的账号，Bot 在这里读写资料库、执行命令，也可以在启用后运行 Web 功能测试。支持 Bot 私有 skills 和通过 Server 提供的联网搜索。
 
 聊天输入框的「＋」可选择图片，也支持拖入图片或粘贴截图。发送前可预览、移除，支持只发图片；历史图片点击可放大。支持 JPEG、PNG、WebP、GIF，每条最多 4 张，单张不超过 2 MB、合计不超过 4 MB；模型需要支持视觉输入。
 
@@ -22,6 +22,21 @@ Windows 本地服务只监听 `127.0.0.1`，默认按用户和数据目录计算
 退出登录会先断开连接并清除本机登录信息，保留资料库文件；服务端宕机或断网也可以退出。随后最多等待 3 秒尝试远端解绑。若解绑失败，服务端可能仍保留该电脑的绑定记录，恢复联网后可在其他已登录客户端的设备列表中解绑。
 
 Linux 安装、后台服务与 systemd 请看 [Linux 指南](LINUX.md)。
+
+## 聊天中发起 Web 功能测试
+
+升级服务端及要执行测试的桌面端。在本机服务数据目录下创建 `browser-test.json`，填入允许访问的站点和所需的 API 或静态资源 origin，然后重启桌面服务。
+
+```json
+{
+  "enabled": true,
+  "origins": ["http://localhost:3000", "https://staging.example.com"]
+}
+```
+
+数据目录默认是 macOS 的 `~/Library/Application Support/Pi Bot`、Windows 的 `%LOCALAPPDATA%\Pi Bot` 或 Linux 的 `${XDG_DATA_HOME:-~/.local/share}/pi-bot`，也可用 `PI_BOT_DATA_DIR` 指定。浏览器优先使用已安装的 Chrome Stable。需要备选 Chromium 时，以运行桌面服务的用户执行 `npx --yes playwright@1.65.1 install --no-shell chromium`。Linux 环境需要 Playwright 的系统依赖并允许 Chromium 沙箱运行。
+
+直接在聊天里说「测一下 http://localhost:3000 的注册流程，验证提交后是否显示成功」。Bot 根据项目或当前聊天所在的电脑选机，也会检查哪些在线电脑允许访问该站点。设备归属不确定时，Bot 会在聊天里确认。每个任务使用临时浏览器会话，请使用测试数据。截图和原始诊断放在数据目录的 `browser-test-evidence` 下，聊天里可以查看测试结果及本机证据路径。
 
 Mac 前置条件：macOS、Xcode Command Line Tools（`xcrun swiftc --version` 可执行），以及一个可访问的 Pi Bot 服务器（见 [server/README.md](../server/README.md)）。
 

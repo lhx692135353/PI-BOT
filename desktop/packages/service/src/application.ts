@@ -12,6 +12,7 @@ import type { Credentials } from './keychain.js';
 import { Executor, agentDirFor, type RunContext } from './executor.js';
 import { previewList, previewRead, preflightLibrary } from './library.js';
 import type { LogEvent } from './log.js';
+import { readBrowserTestConfig } from './browser-test.js';
 
 interface Account {
   serverUrl: string;
@@ -77,6 +78,7 @@ export class Application {
     const generation = ++this.connectionGeneration;
     this.account = account;
     this.sign = signer(account.deviceId, privateKey);
+    const features = () => readBrowserTestConfig(this.o.dataDir) ? ['browser-test'] : [];
     this.executor = new Executor({
       libraryRoot: this.o.libraryRoot,
       agentDir: agentDirFor(this.o.dataDir),
@@ -86,10 +88,20 @@ export class Application {
       activity: (run, tool, mood) => this.activity(run, tool, mood),
       factory: this.o.factory,
       phoneConfigPath: join(this.o.dataDir, 'phone.json'),
+      browserTestDataDir: this.o.dataDir,
       cli: { dataDir: this.o.dataDir, local: this.cliDecision() },
     });
     this.socket = new CloudSocket(account.serverUrl, this.sign, {
-      open: () => { if (generation !== this.connectionGeneration) return; void this.phone.call('phone.status',{}).then((status:any) => {if (generation === this.connectionGeneration && status.available) this.socket?.send({type:'capabilities',features:['always-on-v1','files','shell','preflight-v1','phone']});}).catch(()=>{}); this.o.log?.('cloud.online'); this.setConnection('online'); this.o.emit({ type: 'bots' }); },
+      features,
+      open: () => {
+        if (generation !== this.connectionGeneration) return;
+        void this.phone.call('phone.status', {}).then((status: any) => {
+          if (generation === this.connectionGeneration && status.available) this.socket?.capabilities('phone');
+        }).catch(() => {});
+        this.o.log?.('cloud.online');
+        this.setConnection('online');
+        this.o.emit({ type: 'bots' });
+      },
       close: authFailed => {
         if (generation !== this.connectionGeneration) return;
         this.o.log?.(authFailed ? 'cloud.revoked' : 'cloud.offline');
@@ -142,6 +154,7 @@ export class Application {
           const p = m.params ?? {};
           const result = typeof m.method === 'string' && m.method.startsWith('phone.') ? await this.phone.call(m.method, p)
             : m.method === 'tasks.preflight' ? await preflightLibrary(this.o.libraryRoot, String(p.slug), Array.isArray(p.paths) && p.paths.every((x: unknown) => typeof x === 'string') ? p.paths : ['../invalid'])
+            : m.method === 'browser-test.preflight' ? { available: typeof p.origin === 'string' && readBrowserTestConfig(this.o.dataDir)?.origins.has(p.origin) === true }
             : m.method === 'files.list' ? await previewList(this.o.libraryRoot, String(p.slug), String(p.path ?? ''))
             : m.method === 'files.read' ? await previewRead(this.o.libraryRoot, String(p.slug), String(p.path ?? ''))
             : (() => { throw new RuntimeError(httpErrorInfo(501,'不支持的请求','device')); })();
@@ -252,5 +265,5 @@ export class Application {
     }
     throw new RuntimeError(httpErrorInfo(501,'未知方法','local-service'));
   }
-  async shutdown() { this.connectionGeneration++; this.phone.close(); this.executor?.stopAll(); this.socket?.stop(); for (const timer of this.afterglow.values()) clearTimeout(timer); this.afterglow.clear(); }
+  async shutdown() { this.connectionGeneration++; this.phone.close(); const stopped = this.executor?.stopAll(); this.socket?.stop(); for (const timer of this.afterglow.values()) clearTimeout(timer); this.afterglow.clear(); await stopped; }
 }
