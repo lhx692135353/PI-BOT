@@ -1758,7 +1758,8 @@
                         "phone",
                         "always-on-v1",
                         "preflight-v1",
-                        "browser-test"
+                        "browser-test",
+                        "browser-test-task-v1"
                       ]
                     }
                   },

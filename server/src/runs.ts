@@ -23,6 +23,7 @@ import {
 import { claimExecution } from "./scheduling.js";
 import {recordUi} from "./ui.js";
 import { observationSchema, recordObservation } from "./observations.js";
+import { browserTestOrigin } from "./targets.js";
 import { PROGRESS_CHARS, PROGRESS_SEGMENTS } from "@pi-bot/agent";
 
 export const DEVICE_OFFLINE = "执行电脑已离线，本次运行已中断；请核实结果后重新安排任务";
@@ -89,6 +90,11 @@ const runEvent = z.discriminatedUnion("kind", [
     reason: z.string().max(2000),
     access: z.enum(['read','write','execute']).optional(),
     resource_type: z.enum(['file','directory']).optional(),
+  }),
+  z.object({
+    kind: z.literal("browser_approval"),
+    request_id: z.string().max(80),
+    origins: z.array(z.string().max(2048)).min(1).max(8),
   }),
   z.object({
     kind: z.literal("done"),
@@ -180,15 +186,29 @@ export async function handleRunEvent(
       await tx.notify({ user_id: run.user_id, bot_id: run.bot_id });
       return null;
     }
-    if (run.automation_readonly) return null;
+    if (run.automation_readonly || run.cancel_requested) return null;
+    const browser = e.kind === "browser_approval";
+    let detail: Row;
+    if (browser) {
+      if (!run.routing?.browser_test_authorization || run.lane !== "task") return null;
+      const origins = [...new Set(e.origins)];
+      if (origins.some(origin => browserTestOrigin(origin) !== origin)) return null;
+      const device = await tx.get("devices", run.device_id);
+      detail = {
+        path: origins.join("\n"), origins, access: "browser", target_label: device?.label ?? "执行电脑",
+        reason: "本次 Web 测试需要访问这些站点",
+      };
+    } else {
+      detail = { path: e.path, reason: e.reason, access: e.access ?? 'legacy',
+        authorization_scope: await approvalScope(tx, run, e.path, e.access ?? 'legacy', e.resource_type ?? 'unknown') };
+    }
     const approval = await tx.insert("approvals", {
       approval_id: randomUUID(),
       run_id: runId,
       bot_id: run.bot_id,
       user_id: run.user_id,
-      kind: "outside_access",
-      detail: { path: e.path, reason: e.reason, access: e.access ?? 'legacy',
-        authorization_scope: await approvalScope(tx, run, e.path, e.access ?? 'legacy', e.resource_type ?? 'unknown') },
+      kind: browser ? "browser_access" : "outside_access",
+      detail,
       status: "pending",
       expires_at: new Date(Date.now() + s.approvalTtl * 1000),
     });
@@ -302,8 +322,14 @@ export async function decideApproval(
   if (!a) fail(404, "审批不存在");
   if (a!.status !== "pending" || new Date(a!.expires_at) < new Date())
     fail(409, "审批已失效");
-  if (!run || run.cancel_requested || !['running','waiting_approval'].includes(run.status)) fail(409,'任务已结束，审批已失效');
-  if (decision === 'approve_always') await rememberAuthorization(tx, a!);
+  if (!run || run.cancel_requested || !['running','waiting_approval'].includes(run.status)) return fail(409,'任务已结束，审批已失效');
+  if (a!.kind === 'browser_access') {
+    if (decision === 'approve_always') fail(422, '浏览器访问权限仅适用于本次任务');
+    for (const origin of a!.detail.origins) await tx.insert('authorization_logs', {
+      user_id: userId, target: `device:${run.device_id}`, operation: 'browser', resource: origin,
+      action: decision === 'reject' ? 'reject' : 'allow_once', approval_id: approvalId, run_id: run.run_id,
+    });
+  } else if (decision === 'approve_always') await rememberAuthorization(tx, a!);
   else {
     const scope = a!.detail.authorization_scope ?? await approvalScope(tx,run!,a!.detail.path,'legacy','unknown');
     await authorizationLog(tx,userId,scope,decision === 'reject' ? 'reject' : 'allow_once',{approval_id:approvalId,run_id:a!.run_id});

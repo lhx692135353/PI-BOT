@@ -2,7 +2,16 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Hub, type DeviceConnection } from "../src/hub.js";
 import type { Row, Tx } from "../src/db.js";
-import { browserTestRouting, resolveTaskTarget } from "../src/targets.js";
+import { browserTestOriginInMessage, browserTestRouting, resolveTaskTarget } from "../src/targets.js";
+
+test("the user-provided URL authorizes only its exact origin", () => {
+  const origin = "https://staging.example.test";
+  assert.equal(browserTestOriginInMessage("测一下 [注册](https://staging.example.test/register)。", origin), true);
+  assert.equal(browserTestOriginInMessage("测试 http://[::1]:3000/hello", "http://[::1]:3000"), true);
+  assert.equal(browserTestOriginInMessage("测试 https://staging.example.test:8443/a", origin), false);
+  assert.equal(browserTestOriginInMessage("测试 https://other.test/?redirect=https://staging.example.test", origin), false);
+  assert.equal(browserTestOriginInMessage("测试 https://staging.example.test@other.test/a", origin), false);
+});
 
 test("browser-test routing chooses an eligible computer and pins its destination", async () => {
   const user = "owner";

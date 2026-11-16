@@ -4,7 +4,7 @@ import { isRealToolResult, latestUserText, realToolOutputs, ResponseStream } fro
 import test, { after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -26,6 +26,7 @@ const BROWSER_PRIVATE_LOG = 'LOCAL-ONLY-BROWSER-DIAGNOSTIC';
 
 async function browserPages() {
   let forbiddenHits = 0;
+  let redirectHits = 0;
   const listen = async (server: ReturnType<typeof createServer>) => {
     await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
     return 'http://127.0.0.1:' + (server.address() as AddressInfo).port;
@@ -33,7 +34,10 @@ async function browserPages() {
   const forbidden = createServer((_req, res) => { forbiddenHits++; res.end('outside'); });
   const other = await listen(forbidden);
   const site = createServer((req, res) => {
-    if (req.url === '/redirect') return void res.writeHead(302, { location: other + '/redirect-target' }).end();
+    if (req.url === '/redirect') {
+      redirectHits++;
+      return void res.writeHead(302, { location: other + '/redirect-target' }).end();
+    }
     res.writeHead(200, { 'content-type': 'text/html' }).end(`
       <title>Registration</title>
       <form><label>Email <input aria-label="Email"></label><button>Register</button></form>
@@ -48,7 +52,7 @@ async function browserPages() {
       </script>`);
   });
   const origin = await listen(site);
-  return { origin, hits: () => forbiddenHits, async close() {
+  return { origin, other, hits: () => forbiddenHits, redirects: () => redirectHits, async close() {
     await Promise.all([site, forbidden].map(server => new Promise<void>(resolve => {
       server.closeAllConnections(); server.close(() => resolve());
     })));
@@ -57,7 +61,7 @@ async function browserPages() {
 const text = (c: any): string => (Array.isArray(c) ? c.map(p => p.text ?? '').join('') : String(c ?? ''));
 
 /** A provider double that drives the agent through tool calls based on the latest user text. */
-async function scriptedProvider(outside: string, browserOrigin?: string) {
+async function scriptedProvider(outside: string, browserOrigin?: string, dependencyOrigin?: string) {
   const requests: any[] = [];
   const server = createServer(async (req, res) => {
     const chunks: Buffer[] = [];
@@ -76,7 +80,7 @@ async function scriptedProvider(outside: string, browserOrigin?: string) {
     let reply: { text?: string; tool?: { name: string; args: object } };
     const goalId = user.match(/"id":"([0-9a-f-]{36})"/)?.[1];
     const originalUser = latestUserText(messages);
-    if (user === '测试网页注册流程') {
+    if (user === `测试网页注册流程 ${browserOrigin}/register`) {
       assert.ok(!json.tools.some((tool: any) => tool.name === 'browser_test'));
       reply = toolDone ? { text: '已安排网页测试。' } :
         { tool: { name: 'start_task', args: { browser_test_origin: browserOrigin, title: '网页注册测试', task: '验证浏览器注册流程' } } };
@@ -98,6 +102,17 @@ async function scriptedProvider(outside: string, browserOrigin?: string) {
         const args = steps[results.length - 1];
         reply = args ? { tool: { name: 'browser_test', args } } : { text: '注册流程通过，错误消息校验失败，已保存本机截图。' };
       }
+    } else if (user === '检查推断的测试站点' || user === '重新检查推断的测试站点') {
+      reply = toolDone ? { text: '已安排网站权限测试。' } :
+        { tool: { name: 'start_task', args: { browser_test_origin: browserOrigin, title: '单次网站权限', task: '验证本次网站授权' } } };
+    } else if (user === '验证本次网站授权') {
+      const browserCalls = messages.filter(message => message.type === 'function_call' && message.name === 'browser_test');
+      if (!toolDone) reply = { tool: { name: 'tool_search', args: { query: 'browser_test' } } };
+      else if (!browserCalls.length) reply = { tool: { name: 'browser_test', args: { op: 'open', url: browserOrigin + '/redirect' } } };
+      else if (results.at(-1)?.includes('本次任务未获得网站访问授权')) reply = { text: '未获授权，未访问推断的网站。' };
+      else if (browserCalls.length === 1) reply = { tool: { name: 'browser_test', args: { op: 'authorize', origins: [dependencyOrigin] } } };
+      else if (browserCalls.length === 2) reply = { tool: { name: 'browser_test', args: { op: 'open', url: browserOrigin + '/redirect' } } };
+      else reply = { text: '已访问本次授权的依赖站点。' };
     } else if (user === '核对云端测试工具') {
       reply = toolDone ? { text: '已安排云端核查。' } :
         { tool: { name: 'start_task', args: { execution: 'cloud', title: '核对云端工具', task: '在云端搜索端侧浏览器工具' } } };
@@ -183,7 +198,7 @@ before(async () => {
   writeFileSync(join(dir, 'Desktop', 'plan.txt'), 'x');
   await resetDatabase(TEST_DB!);
   if (!browserSkip) pages = await browserPages();
-  provider = await scriptedProvider(join(dir, 'Desktop'), pages?.origin);
+  provider = await scriptedProvider(join(dir, 'Desktop'), pages?.origin, pages?.other);
   search = await mockSearch();
   serverDb = new Database(TEST_DB!);
   runner=await createRunner({token:'r'.repeat(40),dir:join(dir,'runner')});
@@ -199,9 +214,9 @@ before(async () => {
   await http('POST', '/admin/api/users', { username: 'bob', password: 'bob-password' });
   await http('POST', '/admin/api/models', { name: 'Scripted', base_url: provider.url, provider_model: 'scripted', api_key: 'sk-scripted', context_window: 32000, max_tokens: 1000 });
   app = new Application({ dataDir: join(dir, 'data'), libraryRoot: join(dir, 'pi-bot'), credentials: new MemoryCredentials(), emit: e => events.push(e), backoff: { baseMs: 50, maxMs: 200 } });
-  if (pages) {
+  if (pages && browserMode === 'chromium') {
     mkdirSync(join(dir, 'data'), { recursive: true });
-    writeFileSync(join(dir, 'data', 'browser-test.json'), JSON.stringify({ enabled: true, origins: [pages.origin], browser: browserMode }));
+    writeFileSync(join(dir, 'data', 'browser-test.json'), JSON.stringify({ enabled: true, browser: browserMode }));
   }
 });
 after(async () => {
@@ -222,7 +237,8 @@ test('browser testing is discovered on the selected desktop and keeps raw eviden
   if (!app.state().user) await app.login({ serverUrl: base, username: 'bob', password: 'bob-password', label: 'Bob 的 Mac' });
   await eventually(() => app.state().connection === 'online');
   const bot = await app.call('botCreate', { name: 'Web Tester', persona: '', avatar: { shape: 'bean', color: 'mint', scheme: 'light' } }) as Bot;
-  await app.call('send', { botId: bot.id, text: '测试网页注册流程' });
+  if (browserMode !== 'chromium') assert.equal(existsSync(join(dir, 'data', 'browser-test.json')), false);
+  await app.call('send', { botId: bot.id, text: `测试网页注册流程 ${pages!.origin}/register` });
   const reply = await eventually(async () => {
     const page = await app.call('messages', { botId: bot.id }) as MessagePage;
     return page.messages.find(message => /注册流程通过/.test(message.content) && message.status === 'completed');
@@ -231,6 +247,7 @@ test('browser testing is discovered on the selected desktop and keeps raw eviden
   const task = await serverDb.tx(tx => tx.one("SELECT * FROM agent_tasks WHERE parent_bot_id=$1 AND title='网页注册测试'", [bot.id]));
   assert.equal(task?.execution, 'device');
   assert.equal(task?.device_id, app.state().deviceId);
+  assert.equal(task?.routing.browser_test_authorization, 'user');
   const turns = provider.requests.filter(request => latestUserText(request.input) === '验证浏览器注册流程');
   const output = realToolOutputs(turns.at(-1).input).map((item: any) => text(item.output));
   assert.match(output[1], /"opened":false/);
@@ -251,6 +268,45 @@ test('browser testing is discovered on the selected desktop and keeps raw eviden
     return page.messages.find(message => /云端未提供端侧浏览器工具/.test(message.content) && message.status === 'completed');
   }, 15000);
   assert.equal(cloud.executor, 'cloud');
+});
+
+test('inferred sites and blocked dependencies require an approval that expires with the task', { skip: browserSkip }, async () => {
+  const fixture = pages!;
+  await eventually(() => app.state().connection === 'online');
+  const bot = await app.call('botCreate', { name: 'Scope Tester', persona: '', avatar: { shape: 'bean', color: 'mint', scheme: 'light' } }) as Bot;
+  const approval = async () => eventually(async () => {
+    const { bots } = await app.call('bots', {}) as { bots: Bot[] };
+    return bots.find(record => record.id === bot.id)?.pending_approvals[0];
+  }, 15000);
+  const redirects = fixture.redirects();
+  const hits = fixture.hits();
+  await app.call('send', { botId: bot.id, text: '检查推断的测试站点' });
+  const initial = await approval();
+  assert.equal(initial.kind, 'browser_access');
+  assert.equal(initial.path, fixture.origin);
+  assert.equal(fixture.redirects(), redirects);
+  await assert.rejects(app.call('decide', { approvalId: initial.id, decision: 'approve_always' }), /仅适用于本次任务/);
+  await app.call('decide', { approvalId: initial.id, decision: 'approve' });
+  const dependency = await approval();
+  assert.equal(dependency.path, fixture.other);
+  assert.equal(fixture.hits(), hits);
+  await app.call('decide', { approvalId: dependency.id, decision: 'approve' });
+  await eventually(() => fixture.hits() > hits, 15000);
+  await eventually(async () => {
+    const page = await app.call('messages', { botId: bot.id }) as MessagePage;
+    return page.messages.find(message => message.status === 'completed' && /已访问本次授权/.test(message.content));
+  }, 15000);
+  const beforeSecond = fixture.redirects();
+  await app.call('send', { botId: bot.id, text: '重新检查推断的测试站点' });
+  const again = await approval();
+  assert.equal(again.path, fixture.origin);
+  assert.equal(fixture.redirects(), beforeSecond);
+  await app.call('decide', { approvalId: again.id, decision: 'reject' });
+  await eventually(async () => {
+    const page = await app.call('messages', { botId: bot.id }) as MessagePage;
+    return page.messages.find(message => message.status === 'completed' && /未获授权/.test(message.content));
+  }, 15000);
+  assert.equal(fixture.redirects(), beforeSecond);
 });
 
 test('the Mac harness logs in, binds itself and runs bots against its library', { skip }, async () => {

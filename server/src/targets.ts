@@ -4,7 +4,7 @@ import { fail, HttpError, type Tx, type Row } from "./db.js";
 import type { Settings } from "./config.js";
 import type { Hub } from "./hub.js";
 
-export const CAPABILITIES = ["files", "shell", "browser", "desktop", "phone", "always-on-v1", "preflight-v1", "browser-test"] as const;
+export const CAPABILITIES = ["files", "shell", "browser", "desktop", "phone", "always-on-v1", "preflight-v1", "browser-test", "browser-test-task-v1"] as const;
 export const resourceSchema = z.object({
   target: z.string().regex(/^(device|remote):[0-9a-f-]{36}$/).refine(value => z.string().uuid().safeParse(value.slice(7)).success,"资源机器 ID 无效"),
   path: z.string().min(1).max(2000).optional(),
@@ -20,6 +20,7 @@ export interface Routing {
   device_id?: string;
   preferred_device_id?: string;
   browser_test_origin?: string;
+  browser_test_authorization?: "user" | "prompt";
   requirements: string[];
   resources: { target: string; path?: string }[];
 }
@@ -33,18 +34,38 @@ async function browserTestPreflight(hub: Hub, s: Settings | undefined, userId: s
   return result.available === true;
 }
 
+export function browserTestOrigin(value: string): string | undefined {
+  try {
+    const url = new URL(value);
+    if (["http:", "https:"].includes(url.protocol) && !url.username && !url.password &&
+        url.pathname === "/" && !url.search && !url.hash) return url.origin;
+  } catch { /* Invalid input. */ }
+}
+
+export function browserTestOriginInMessage(text: string, origin: string): boolean {
+  // Consume the whole link so URLs embedded inside another URL never grant access.
+  for (const [link] of text.matchAll(/\bhttps?:\/\/[^\s<>"'`）。，、；！？]+/gi)) {
+    try {
+      const url = new URL(link.replace(/[),;!}]+$/, ""));
+      if (!url.username && !url.password && url.origin === origin) return true;
+    } catch { /* Ignore malformed links. */ }
+  }
+  return false;
+}
+
 export async function browserTestRouting(tx: Tx, s: Settings | undefined, hub: Hub, userId: string,
   source: Row, input: Partial<Routing> & { browser_test_origin: string }): Promise<Routing> {
-  let origin: URL;
-  try { origin = new URL(input.browser_test_origin); }
-  catch { return fail(422, "请提供测试站点的 HTTP 或 HTTPS origin"); }
-  if (!["http:", "https:"].includes(origin.protocol) || origin.username || origin.password ||
-      origin.pathname !== "/" || origin.search || origin.hash) fail(422, "测试站点只填协议、主机和端口");
+  const normalized = browserTestOrigin(input.browser_test_origin);
+  if (!normalized) return fail(422, "测试站点只填 HTTP(S) 协议、主机和端口");
+  const origin = new URL(normalized);
   if (input.execution === "cloud" || input.execution === "remote") fail(422, "端侧浏览器测试需要使用用户电脑");
   const routing = await taskRouting(tx, userId, source, { ...input, execution: "auto" });
   routing.execution = "device";
   routing.browser_test_origin = origin.origin;
-  const requirements = input.requirements?.filter(capability => capability !== "browser") ?? [];
+  const message = source.origin === "user" && source.user_message_id ? await tx.get("bot_messages", source.user_message_id) : null;
+  routing.browser_test_authorization = message?.role === "user" && message.visibility === "public" && !message.ui_action &&
+    browserTestOriginInMessage(String(message.content ?? ""), normalized) ? "user" : "prompt";
+  const requirements = input.requirements?.filter(capability => !["browser", "browser-test-task-v1"].includes(capability)) ?? [];
   routing.requirements = [...new Set([...requirements, "browser-test"])].sort();
   const knownTargets = [...new Set(routing.resources.map(resource => resource.target))];
   if (knownTargets.length > 1 || knownTargets.some(target => !targetDevice(target))) fail(422, "请确认测试项目所在的用户电脑");
@@ -57,6 +78,7 @@ export async function browserTestRouting(tx: Tx, s: Settings | undefined, hub: H
   const usable = async (device: Row) => {
     const conn = hub.device(userId, device.device_id);
     if (!conn || routing.requirements.some(capability => !conn.capabilities?.includes(capability))) return false;
+    if (conn.capabilities?.includes("browser-test-task-v1")) return true;
     return browserTestPreflight(hub, s, userId, device.device_id, origin.origin)
       .then(allowed => allowed && hub.device(userId, device.device_id) === conn, () => false);
   };
@@ -70,7 +92,7 @@ export async function browserTestRouting(tx: Tx, s: Settings | undefined, hub: H
     const names = suitable.map(device => String(device.label).slice(0, 60)).slice(0, 4).join("、");
     fail(409, `请在聊天中确认使用哪台电脑。可用电脑：${names}`);
   }
-  return fail(409, "没有在线且已允许该测试站点的电脑，请检查本机浏览器测试配置");
+  return fail(409, "没有可运行此浏览器测试的在线电脑，请检查连接或更新桌面端");
 }
 
 export async function taskRouting(tx: Tx, userId: string, source: Row, input: Partial<Routing> = {}): Promise<Routing> {
@@ -136,7 +158,7 @@ export async function resolveTaskTarget(tx: Tx, s: Settings | undefined, hub: Hu
     if (!conn) { rejected.set(d.device_id, "电脑已离线，本次操作未执行"); continue; }
     const missing = required.filter(c => !conn.capabilities?.includes(c));
     if (missing.length) { rejected.set(d.device_id, `电脑已连接，但未提供任务所需能力：${missing.join(", ")}；本次操作未执行`); continue; }
-    if (routing.browser_test_origin) {
+    if (routing.browser_test_origin && !(routing.browser_test_authorization && conn.capabilities?.includes("browser-test-task-v1"))) {
       const allowed = await browserTestPreflight(hub, s, userId, d.device_id, routing.browser_test_origin).catch(() => false);
       if (!allowed) { rejected.set(d.device_id, "指定电脑未允许该测试站点，或设备检查未响应；本次操作未执行"); continue; }
     }

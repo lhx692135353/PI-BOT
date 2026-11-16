@@ -151,7 +151,7 @@ export const approvalOut = (a: Row) => ({
   path: a.detail.path,
   reason: a.detail.reason,
   access: a.detail.access ?? 'legacy',
-  scope: scopeText(a.detail.authorization_scope),
+  scope: a.kind === 'browser_access' ? `${a.detail.target_label} · 仅本次任务可访问以上站点` : scopeText(a.detail.authorization_scope),
   can_remember: canRemember(a.detail.authorization_scope),
   status:
     a.status === "pending" && new Date(a.expires_at) < new Date()
@@ -485,6 +485,7 @@ export interface RunContext {
   operation_target?:string;
   remote_capabilities?: string[];
   browser_test_origin?: string;
+  browser_test_authorization?: "user" | "prompt";
   bot: { id: string; name: string; slug: string };
   model: { id: string; name: string; context_window: number; max_tokens: number; capabilities?: Partial<ModelCapabilities> };
   system: string;
@@ -595,7 +596,7 @@ export function systemPrompt(
     "闲聊和已有依据的简单问题直接回答。凡需要搜索、读写文件、执行命令或较长推理的工作，先用 send_reply(phase=opening) 发一句简短、具体的回应，说明要核实什么，再立即用 start_task 创建后台任务。首轮不推演完整方案，也不展开执行计划；详细分析交给后台。只有创建成功后才能确认已安排，然后结束当前回合；创建失败则说明失败，不宣称已启动。你自己不能执行这些工作，也不要等待后台完成。",
     "start_task 默认 execution=auto，每个新任务优先在云端电脑执行；需要用户电脑上的文件、应用或用户明确指定电脑时用 execution=device 并填 device_id；纯联网搜索或不依赖本地文件的云端处理可指定 execution=cloud。start_task 的 task 必须自包含但精简：保留用户目标、必要上下文、已有条件、文件位置、约束和期望输出。用文件引用代替复制历史全文，不附详细执行计划或重复首句；不要为精简而省略关键条件。避免重复创建已有任务。",
     "查询任务用 task_status，结果仅代表记录的活动和更新时间；查询外部训练、部署的最新状态时，另建一个简短的核查任务，不要把缓存当作刚查到的外部进度。",
-    "本机开发站或指定测试站的 Web 功能测试用 start_task 的 browser_test_origin（HTTP(S) 协议、主机和端口），在 task 保留待测页面及目标。用户指定电脑或明确继续同一台电脑上的测试时填 device_id；项目所在设备用 resources.target；其余情况省略设备，由服务端选机。目标不明或选机有歧义时在聊天里核实；设备离线或配置缺失时说明原因。",
+    "本机开发站或指定测试站的 Web 功能测试用 start_task 的 browser_test_origin（HTTP(S) 协议、主机和端口），在 task 保留待测页及目标。用户本轮明确提供的 URL 授权该站点一次，其他站点由桌面任务发起审批。用户指定电脑或明确继续同一台电脑上的测试时填 device_id；项目所在设备用 resources.target；其余情况省略设备，由服务端选机。目标不明或选机有歧义时在聊天里核实。",
     "用户补充或改变已有任务要求时，用 task_message 发给准确的任务。工具会说明是已传达、排队或已结束；已结束则结合原结果用 start_task 创建后续任务。",
     "用户要求询问、转告其他智能体时必须实际调用 ask_agent；若是已有活动委托的追问，可用 task_message 发送。对方已结束的任务不能继续收信，应通过 ask_agent 发起新的询问。只有成功回执才能说已发送或问过；queued/pending 表示已保存待送达，不能说对方已经收到或答复。传话记录保存在本次委托详情中，不等于给对方主聊天新增用户消息。",
     "用户要求停止时用 cancel_task。仅一个活动任务可直接定位；多个任务且指代不明时澄清。明确停止全部时传 all=true。",
@@ -723,6 +724,8 @@ export async function buildContext(
     remote_capabilities: remoteEnv?.capabilities,
     browser_test_origin: run.executor === "device" && run.lane === "task" && !cli && !run.automation_readonly
       ? run.routing?.browser_test_origin : undefined,
+    browser_test_authorization: run.executor === "device" && run.lane === "task" && !cli && !run.automation_readonly
+      ? run.routing?.browser_test_authorization : undefined,
     bot: { id: bot.bot_id, name: bot.name, slug: bot.slug },
     model: {
       id: model.model_id,

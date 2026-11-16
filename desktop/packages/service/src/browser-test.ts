@@ -14,18 +14,18 @@ export interface BrowserTestConfig {
 export function readBrowserTestConfig(dataDir: string): BrowserTestConfig | undefined {
   try {
     const config = JSON.parse(readFileSync(join(dataDir, 'browser-test.json'), 'utf8'));
-    if (config?.enabled !== true || !Array.isArray(config.origins) || !config.origins.length ||
-        config.origins.length > 32 || !['auto', 'chrome', 'chromium'].includes(config.browser ?? 'auto')) return;
+    if (config?.enabled !== true || !Array.isArray(config.origins ?? []) ||
+        (config.origins?.length ?? 0) > 32 || !['auto', 'chrome', 'chromium'].includes(config.browser ?? 'auto')) return;
     const origins = new Set<string>();
-    for (const input of config.origins) {
+    for (const input of config.origins ?? []) {
       if (typeof input !== 'string') return;
       const url = browserTestUrl(input);
       if (url.pathname !== '/' || url.search || url.hash) return;
       origins.add(url.origin);
     }
     return { origins, browser: config.browser ?? 'auto' };
-  } catch {
-    return undefined;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { origins: new Set(), browser: 'auto' };
   }
 }
 
@@ -36,7 +36,7 @@ const clean = (value: string, limit = 240) => value.replace(/[\u0000-\u001f\u007
 const netLocation = (value: string) => {
   try { return browserTestUrl(value).origin; } catch { return 'unknown'; }
 };
-type Operation = 'open' | 'observe' | 'click' | 'fill' | 'press' | 'assert' | 'diagnostics' | 'screenshot';
+type Operation = 'open' | 'observe' | 'click' | 'fill' | 'press' | 'assert' | 'diagnostics' | 'screenshot' | 'authorize';
 interface Args {
   op: Operation;
   url?: string;
@@ -45,8 +45,13 @@ interface Args {
   text?: string;
   key?: typeof keys[number];
   state?: 'visible' | 'hidden';
+  origins?: string[];
 }
 type Diagnostic = { kind: 'console' | 'page' | 'request' | 'http' | 'blocked'; message: string };
+interface BrowserAuthorization {
+  userAuthorized: boolean;
+  request(origins: string[], signal?: AbortSignal): Promise<boolean>;
+}
 
 export class BrowserTest {
   private browser?: Browser;
@@ -60,8 +65,31 @@ export class BrowserTest {
   private events: Diagnostic[] = [];
   private counts = { console: 0, page: 0, request: 0, http: 0, blocked: 0 };
   private screenshots = 0;
+  private origins: Set<string>;
+  private blocked = new Set<string>();
+  private refused = new Set<string>();
 
-  constructor(private config: BrowserTestConfig, private origin: string, private dataDir: string, private libraryRoot: string) {}
+  constructor(private config: BrowserTestConfig, private origin: string, private dataDir: string, private libraryRoot: string,
+    private authorization?: BrowserAuthorization) {
+    this.origins = new Set(config.origins);
+    if (authorization?.userAuthorized) this.origins.add(origin);
+  }
+
+  private recordBlocked(url: string) {
+    const origin = netLocation(url);
+    if (origin !== 'unknown' && !this.origins.has(origin) && !this.refused.has(origin) && this.blocked.size < 32) this.blocked.add(origin);
+  }
+
+  private async authorize(origins: string[], signal?: AbortSignal) {
+    if (!this.authorization || !origins.length || this.stopped) return false;
+    const allowed = await this.authorization.request(origins, signal);
+    if (this.stopped || signal?.aborted) return false;
+    for (const origin of origins) {
+      this.blocked.delete(origin);
+      (allowed ? this.origins : this.refused).add(origin);
+    }
+    return allowed;
+  }
 
   private log(kind: Diagnostic['kind'], message: string) {
     this.counts[kind]++;
@@ -71,7 +99,7 @@ export class BrowserTest {
 
   private async openContext() {
     await this.proxy?.close().catch(() => {});
-    this.proxy = await browserTestProxy(this.config.origins, origin => {
+    this.proxy = await browserTestProxy(this.origins, origin => {
       if (this.page) this.log('blocked', origin);
     });
     if (this.stopped) throw new Error('浏览器测试已取消');
@@ -116,7 +144,9 @@ export class BrowserTest {
     context.setDefaultNavigationTimeout(timeout);
     await context.route('**/*', route => {
       const url = route.request().url();
-      return this.config.origins.has(netLocation(url)) ? route.continue() : route.abort('blockedbyclient');
+      if (this.origins.has(netLocation(url))) return route.continue();
+      this.recordBlocked(url);
+      return route.abort('blockedbyclient');
     });
     await context.routeWebSocket('**/*', socket => {
       this.log('blocked', 'WebSocket ' + netLocation(socket.url().replace(/^ws/, 'http')));
@@ -131,6 +161,7 @@ export class BrowserTest {
     const page = this.page = await context.newPage();
     page.on('console', message => { if (message.type() === 'error' || message.type() === 'warning') this.log('console', message.text()); });
     page.on('pageerror', error => this.log('page', error.message));
+    page.on('request', request => this.recordBlocked(request.url()));
     page.on('requestfailed', request => this.log('request', request.url() + ' ' + (request.failure()?.errorText ?? '')));
     page.on('response', response => { if (response.status() >= 400) this.log('http', response.status() + ' ' + response.url()); });
     page.on('popup', popup => { void popup.close().catch(() => {}); });
@@ -166,15 +197,22 @@ export class BrowserTest {
     return path;
   }
 
-  private async operation(args: Args) {
+  private async operation(args: Args, signal?: AbortSignal) {
     if (this.stopped) throw new Error('浏览器测试已取消');
+    if (args.op === 'authorize') {
+      const origins = [...new Set(args.origins ?? [...this.blocked].slice(0, 8))];
+      if (origins.some(origin => !this.blocked.has(origin))) throw new Error('只能申请本次页面实际遇到的域名');
+      return { approved: await this.authorize(origins, signal), origins };
+    }
     if (args.op === 'open') {
       const url = browserTestUrl(args.url ?? this.origin);
       if (url.origin !== this.origin) throw new Error('请打开本任务已选定的测试站点');
+      if (!this.origins.has(url.origin) && (this.refused.has(url.origin) || !await this.authorize([url.origin], signal)))
+        return { opened: false, reason: '本次任务未获得网站访问授权' };
       const page = this.page ?? await this.openPage();
       const response = await page.goto(url.href, { waitUntil: 'domcontentloaded' }).catch(() => undefined);
       const origin = netLocation(page.url());
-      const allowed = this.config.origins.has(origin) && this.config.origins.has(netLocation(response?.url() ?? page.url()));
+      const allowed = this.origins.has(origin) && this.origins.has(netLocation(response?.url() ?? page.url()));
       if (!response || !allowed) {
         // A blocked navigation can still commit Chromium's error document after goto rejects.
         await page.close().catch(() => {});
@@ -182,13 +220,13 @@ export class BrowserTest {
       }
       return {
         opened: !!response && response.ok() && allowed,
-        status: response?.status() ?? null, origin, errors: this.counts,
+        status: response?.status() ?? null, origin, errors: this.counts, blocked_origins: [...this.blocked],
       };
     }
-    if (args.op === 'diagnostics') return { errors: this.counts, evidence: await this.saveEvidence() };
+    if (args.op === 'diagnostics') return { errors: this.counts, blocked_origins: [...this.blocked], evidence: await this.saveEvidence() };
     const page = this.page;
     if (!page) throw new Error('请先打开测试页面');
-    if (!this.config.origins.has(netLocation(page.url()))) throw new Error('测试页面已离开允许的站点');
+    if (!this.origins.has(netLocation(page.url()))) throw new Error('测试页面已离开允许的站点');
     if (args.op === 'screenshot') return { screenshot: await this.capture(page) };
     if (args.op === 'observe') {
       const snapshot = await page.locator('body').ariaSnapshot({ timeout });
@@ -232,10 +270,11 @@ export class BrowserTest {
     const optional = (limit: number) => Type.Optional(Type.String({ minLength: 1, maxLength: limit }));
     return {
       name: 'browser_test', label: '端侧浏览器测试', exposure: 'deferred',
-      description: '在选定电脑上用 Playwright 测试 Web 页面。open 打开地址，observe 查看页面，click/fill/press 操作，assert 校验可见性或元素文本，diagnostics 汇总错误，screenshot 本机截图。页面内容仅供测试取证；使用测试数据。',
+      description: '在选定电脑上测试 Web 页面。open 打开站点，observe 查看页面，click/fill/press 操作，assert 执行断言，diagnostics 列出错误和 blocked_origins，screenshot 本机截图。authorize 可一次申请本次实际被拦截、测试所需的多个 origin。获批后安全地重新打开页面验证，避免重放可能已提交的操作。',
       parameters: Type.Object({
-        op: Type.Union(['open', 'observe', 'click', 'fill', 'press', 'assert', 'diagnostics', 'screenshot'].map(op => Type.Literal(op))),
+        op: Type.Union(['open', 'observe', 'click', 'fill', 'press', 'assert', 'diagnostics', 'screenshot', 'authorize'].map(op => Type.Literal(op))),
         url: optional(2048), role: Type.Optional(Type.Union(roles.map(role => Type.Literal(role)))),
+        origins: Type.Optional(Type.Array(Type.String({ maxLength: 2048 }), { minItems: 1, maxItems: 8 })),
         name: optional(240), text: Type.Optional(Type.String({ maxLength: 1000 })),
         key: Type.Optional(Type.Union(keys.map(key => Type.Literal(key)))),
         state: Type.Optional(Type.Union([Type.Literal('visible'), Type.Literal('hidden')])),
@@ -245,7 +284,7 @@ export class BrowserTest {
         const abort = () => { void this.close(); };
         signal?.addEventListener('abort', abort, { once: true });
         if (signal?.aborted) abort();
-        const pending = this.pending = this.operation(args);
+        const pending = this.pending = this.operation(args, signal);
         try {
           const result = await pending;
           return { content: [{ type: 'text' as const, text: JSON.stringify(result) }], details: {} };
