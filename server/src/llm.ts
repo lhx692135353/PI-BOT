@@ -99,7 +99,7 @@ const openAiError = (reply: FastifyReply, status: number, message: string) =>
   reply.code(status).send({ error: { message, type: "pi_bot_proxy" } });
 
 export const TASK_WRAP_UP = "本任务已达到 token 预算或模型调用上限，不能再调用任何工具。请直接根据已经获得的信息给出最终结果，并说明哪些内容还没有核实。";
-/** Background tasks past a limit answer from what they already have; far past it they stop. */
+/** Check the legacy hard limit for restricted execution. Ordinary Pi tasks use reminders. */
 export function taskBudget(run: Row | undefined, s: Pick<Settings, "taskTokenBudget" | "taskModelCalls">): "ok" | "wrap_up" | "stop" {
   if (run?.lane !== "task") return "ok";
   const tokens = Number(run.tokens_used ?? 0), calls = Number(run.model_calls ?? 0);
@@ -110,6 +110,23 @@ export function taskBudget(run: Row | undefined, s: Pick<Settings, "taskTokenBud
 export function applyWrapUp(body: Row): Row {
   const input = Array.isArray(body.input) ? body.input : [{ role: "user", content: String(body.input ?? "") }];
   return { ...body, tool_choice: "none", input: [...input, { role: "user", content: TASK_WRAP_UP }] };
+}
+
+export function usageNoticeLevel(run: Row, s: Pick<Settings, "taskTokenBudget" | "taskModelCalls">) {
+  return { tokens: Math.floor(Number(run.tokens_used ?? 0) / s.taskTokenBudget), calls: Math.floor(Number(run.model_calls ?? 0) / s.taskModelCalls) };
+}
+
+async function addUsageNotice(db: Database, s: Settings, run: Row, body: Row) {
+  const { tokens, calls } = usageNoticeLevel(run, s);
+  if (tokens <= Number(run.usage_notice_tokens ?? 0) && calls <= Number(run.usage_notice_calls ?? 0)) return body;
+  const claimed = await db.tx(tx => tx.one(
+    `UPDATE bot_runs SET usage_notice_tokens=greatest(usage_notice_tokens,$2), usage_notice_calls=greatest(usage_notice_calls,$3)
+      WHERE run_id=$1 AND (usage_notice_tokens<$2 OR usage_notice_calls<$3) RETURNING run_id`,
+    [run.run_id, tokens, calls]));
+  if (!claimed) return body;
+  const note = `本轮任务累计 ${run.tokens_used} token、${run.model_calls} 次模型调用。${run.missing_usage_calls ? '部分调用未返回用量。' : ''}请检查进展，有新证据或可尝试的方法就继续。如果重复失败且没有可行方案，保存检查点并用 task_pause 向用户提具体问题。`;
+  const input = Array.isArray(body.input) ? body.input : [{ role: "user", content: String(body.input ?? "") }];
+  return { ...body, input: [...input, { role: "developer", content: note }] };
 }
 
 export async function proxyResponses(
@@ -133,10 +150,12 @@ export async function proxyResponses(
     if (!admitted) return openAiError(reply, 429, "目标检查已停止或达到本轮模型调用上限");
   }
   const key = new Vault(s.vaultFile).open(model.secret, model.model_id);
-  const budget = taskBudget(correlation?.run, s);
+  const run = correlation?.run;
+  const soft = run?.lane === "task" && !run.automation_id && !run.automation_readonly && run.execution_policy !== "device_only";
+  const budget = soft ? "ok" : taskBudget(run, s);
   if (budget === "stop") return openAiError(reply, 429, "本任务已超出 token 预算，已停止");
   const reasoning = applyConversationReasoning({
-    ...(budget === "wrap_up" ? applyWrapUp(body) : body),
+    ...(soft ? await addUsageNotice(db, s, run!, body) : budget === "wrap_up" ? applyWrapUp(body) : body),
     model: model.provider_model,
     max_output_tokens: Math.min(body.max_output_tokens ?? model.max_tokens, model.max_tokens),
     store: false,
@@ -144,6 +163,14 @@ export async function proxyResponses(
   const payload = reasoning.payload;
   const started=new Date(),generationId=correlation?.generationId??randomUUID();
   let captured:unknown=null,observedUsage:Usage|null=null,firstToken:Date|undefined,traceError:string|undefined;
+  let counted = false;
+  const countCall = async (usage: Usage | null) => {
+    if (!run?.run_id || run.lane !== "task" || counted) return;
+    counted = true;
+    const tokens = Math.max(0, Math.round(usage?.input ?? 0)) + Math.max(0, Math.round(usage?.output ?? 0));
+    await db.tx(tx => tx.rows("UPDATE bot_runs SET model_calls=model_calls+1, tokens_used=tokens_used+$2, missing_usage_calls=missing_usage_calls+$3 WHERE run_id=$1",
+      [run.run_id, tokens, usage ? 0 : 1])).catch(() => {});
+  };
   try {
   let upstream: Response;
   try {
@@ -156,11 +183,13 @@ export async function proxyResponses(
     });
   } catch {
     traceError="无法连接模型服务";
+    await countCall(null);
     return openAiError(reply, 502, "无法连接模型服务");
   }
   if (!upstream.ok || !upstream.body) {
     traceError=`模型服务 HTTP ${upstream.status}`;
     await upstream.body?.cancel().catch(() => {});
+    await countCall(null);
     await recordUsage(db, claims, model.model_id, null);
     // Provider bodies can echo request details; only the status is surfaced.
     return openAiError(
@@ -180,6 +209,7 @@ export async function proxyResponses(
       /* non-JSON bodies are passed through unchanged */
     }
     observedUsage=usage;
+    await countCall(usage);
     await recordUsage(db, claims, model.model_id, usage);
     return reply.code(200).header("content-type", type).send(text);
   }
@@ -195,6 +225,7 @@ export async function proxyResponses(
   try {
     for await (const chunk of upstream.body) {
       sse.push(decoder.decode(chunk, { stream: true }));
+      if (sse.terminal && sse.usage) await countCall(sse.usage);
       if (!reply.raw.write(chunk))
         await new Promise((r) => reply.raw.once("drain", r));
     }
@@ -204,15 +235,14 @@ export async function proxyResponses(
   } finally {
     sse.push(decoder.decode());
     sse.end();
+    await countCall(sse.usage);
     reply.raw.end();
     observedUsage=sse.usage;captured=sse.output;firstToken=sse.firstToken;traceError??=sse.error;
     if(!sse.terminal)traceError??="模型流未完成";
     await recordUsage(db, claims, model.model_id, sse.usage);
   }
   } finally {
-    if (correlation?.run.lane === "task")
-      await db.tx(tx => tx.rows("UPDATE bot_runs SET model_calls=model_calls+1, tokens_used=tokens_used+$2 WHERE run_id=$1",
-        [correlation!.run.run_id, Math.round((observedUsage?.input ?? 0) + (observedUsage?.output ?? 0))])).catch(() => {});
+    await countCall(observedUsage);
     if(correlation) await recordGeneration(db,s,correlation.run,{id:generationId,parentTool:correlation.parentTool,started,firstToken,input:body.input,output:captured,usage:observedUsage,error:traceError,model,secrets:[key],reasoning:reasoningTelemetry(payload,reasoning.source)}).catch(()=>{});
   }
 }

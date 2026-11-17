@@ -322,6 +322,10 @@ export async function resumeTask(
     operation_target:old!.operation_target === "pending" ? undefined : old!.operation_target,
     requirements:old!.routing?.requirements,
     resources:old!.routing?.resources,
+    coding:old!.routing?.coding,
+    electron_test:old!.routing?.electron_test,
+    browser_test_origin:old!.routing?.browser_test_origin,
+    browser_test_visible:old!.routing?.browser_test_visible,
   },settings);
   return resumed;
 }

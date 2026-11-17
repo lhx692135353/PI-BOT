@@ -15,6 +15,7 @@ const picture = { name: 'pixel.png', mime_type: 'image/png', data: 'iVBORw0KGgoA
 const text = (c: any): string => (Array.isArray(c) ? c.map((p) => p.text ?? "").join("") : String(c ?? ""));
 const requests: any[] = [];
 const checkpoints: any[] = [];
+const pauseRequests: any[] = [];
 let server: ReturnType<typeof createServer>, url: string, dir: string;
 
 test("a goal review exposes its finish and checkpoint tools without skill management when read only", async () => {
@@ -44,6 +45,11 @@ before(async () => {
       res.writeHead(200, { "content-type": "application/json" });
       return void res.end(JSON.stringify({ goals: [] }));
     }
+    if (req.url === "/agent/task-pause") {
+      pauseRequests.push(json);
+      res.writeHead(200, { "content-type": "application/json" });
+      return void res.end(JSON.stringify({ paused: true }));
+    }
     if (req.url === "/agent/checkpoint") {
       checkpoints.push(json);
       res.writeHead(200, { "content-type": "application/json" });
@@ -60,6 +66,31 @@ before(async () => {
     const user = latestUserText(json.input);
     const rounds = realToolOutputs(json.input).length;
     const stream = new ResponseStream(res, json.model);
+    if (user === "重复操作后暂停") {
+      if (rounds < 3) stream.tool("lookup", { query: "same" }, `lookup_${rounds}`);
+      else if (rounds === 3) stream.tool("task_pause", { question: "需要用哪个环境？", progress: "已核对现有配置", next: "等待环境名称" }, "pause_1");
+      else stream.text("不应再调用模型");
+      return void stream.end();
+    }
+    if (user === "pstack 完整开发") {
+      const steps = [
+        ["write_file", { path: "work.ts" }],
+        ["pstack", { step: "begin", mode: "full", evidence: "核对运行结果" }],
+        ["write_file", { path: "work.ts" }],
+        ["pstack", { step: "verify", evidence: "已在隔离测试环境验证" }],
+        ["pstack", { step: "finish", evidence: "审查前尝试收尾" }],
+        ["pstack", { step: "review", evidence: "核对 work.ts" }],
+        ["pstack", { step: "finish", evidence: "测试与审查通过" }],
+      ] as const;
+      const step = steps[rounds];
+      if (step) stream.tool(step[0], step[1], `pstack_${rounds}`);
+      else stream.text("开发完成");
+      return void stream.end();
+    }
+    if (user === "核对 work.ts") {
+      stream.text("已检查，未发现问题");
+      return void stream.end();
+    }
     if (user === "思考耗尽") {
       stream.reasoning("先分析需求，再比较方案……");
       return void stream.truncate();
@@ -421,4 +452,51 @@ test("summarize prefers the most telling argument and truncates", () => {
 test("redactor ignores short secrets", () => {
   const r = redactor(["abc", "long-secret"]);
   assert.equal(r("abc long-secret"), "abc [已隐藏凭据]");
+});
+
+test("ordinary Pi task detects repeated tool results and stops after persisting the pause", async () => {
+  const start = requests.length;
+  const agent = await createBotAgent({
+    model: { id: "supervision", name: "测试", baseUrl: url, modelId: "test", contextWindow: 32_000, maxTokens: 1_000 },
+    apiKey: SECRET, cwd: dir, agentDir: join(dir, "supervision"), systemPrompt: "运行测试", history: [],
+    runId: "run-pause", taskWorkflow: { enabled: false, api: new URL(url).origin, token: () => SECRET },
+    tools: [{
+      name: "lookup", label: "查询", description: "查询", parameters: Type.Object({ query: Type.String() }),
+      execute: async () => ({ content: [{ type: "text", text: "结果相同" }], details: {} }),
+    }],
+  });
+  try {
+    assert.match(await agent.prompt("重复操作后暂停", () => {}), /任务已暂停.*需要用哪个环境/s);
+    assert.equal(pauseRequests.at(-1).run_id, "run-pause");
+    assert.equal(pauseRequests.at(-1).progress, "已核对现有配置");
+    assert.equal(requests.length - start, 4);
+    assert.match(JSON.stringify(realToolOutputs(requests.at(-1).body.input)), /最近六次操作中至少三次/);
+  } finally { agent.dispose(); }
+});
+
+test("pstack gates writes and the full mode requires an independent read-only Pi review", async () => {
+  const start = requests.length;
+  let writes = 0;
+  const agent = await createBotAgent({
+    model: { id: "pstack", name: "测试", baseUrl: url, modelId: "test", contextWindow: 32_000, maxTokens: 1_000 },
+    apiKey: SECRET, cwd: dir, agentDir: join(dir, "pstack"), systemPrompt: "运行测试", history: [],
+    runId: "run-review", taskWorkflow: { enabled: true, coding: true, api: new URL(url).origin, token: () => SECRET },
+    tools: [{
+      name: "write_file", label: "写代码", description: "编辑测试文件", parameters: Type.Object({ path: Type.String() }),
+      execute: async () => { writes++; return { content: [{ type: "text", text: "已写入" }], details: {} }; },
+    }, {
+      name: "read_file", label: "读代码", description: "读取测试文件", parameters: Type.Object({ path: Type.String() }),
+      execute: async () => ({ content: [{ type: "text", text: "文件内容" }], details: {} }),
+    }],
+  });
+  try {
+    assert.equal(await agent.prompt("pstack 完整开发", () => {}), "开发完成");
+    assert.equal(writes, 1);
+    const observed = requests.slice(start).map(item => item.body);
+    const review = observed.find(body => latestUserText(body.input) === "核对 work.ts");
+    assert.ok(review.tools.some((tool: any) => tool.name === "read_file"));
+    assert.ok(!review.tools.some((tool: any) => ["write_file", "pstack", "task_pause"].includes(tool.name)));
+    assert.match(JSON.stringify(observed), /请先用 pstack 的 begin/);
+    assert.match(JSON.stringify(observed), /完整开发流程需要独立只读审查/);
+  } finally { agent.dispose(); }
 });

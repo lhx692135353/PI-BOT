@@ -21,7 +21,13 @@ const running = await new Promise(resolve => {
   s.on('data',data=>{buffer+=data;const i=buffer.indexOf('\n');if(i>=0){try{finish(JSON.parse(buffer.slice(0,i)).ready===true);}catch{finish(false);}}});
   s.on('error',()=>finish(false));
 });
-const service = running ? null : run(node, ['packages/service/dist/server.mjs'], { env: { ...env, PI_BOT_PARENT_LEASE: '1' }, stdio: ['pipe', 'inherit', 'inherit'] });
+const service = running ? null : run(node, ['packages/service/dist/server.mjs'], {
+  env: {
+    ...env, PI_BOT_PARENT_LEASE: '1', PI_BOT_DESKTOP_EXECUTABLE: electron, PI_BOT_DESKTOP_ENTRY: resolve('apps/desktop'),
+    PI_BOT_ELECTRON_TEST_SERVICE: resolve('packages/service/dist/server.mjs'), PI_BOT_ELECTRON_TEST_NODE: node,
+  },
+  stdio: ['pipe', 'inherit', 'inherit'],
+});
 service?.stdin.on('error', () => {});
 // The app is already built. Resolve Electron through Node so nested workspace
 // installs work even when Forge cannot find their node_modules directory.

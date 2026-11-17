@@ -78,7 +78,14 @@ export class Application {
     const generation = ++this.connectionGeneration;
     this.account = account;
     this.sign = signer(account.deviceId, privateKey);
-    const features = () => readBrowserTestConfig(this.o.dataDir) ? ['browser-test', 'browser-test-task-v1', 'browser-test-handoff-v1'] : [];
+    const features = () => {
+      const graphical = process.platform !== 'linux' || process.env.DISPLAY || process.env.WAYLAND_DISPLAY;
+      return [
+        ...(graphical ? ['electron-test-v1'] : []),
+        ...(graphical && process.env.PI_BOT_DESKTOP_EXECUTABLE ? ['pibot-electron-test-v1'] : []),
+        ...(readBrowserTestConfig(this.o.dataDir) ? ['browser-test', 'browser-test-task-v1', 'browser-test-handoff-v1'] : []),
+      ];
+    };
     this.executor = new Executor({
       libraryRoot: this.o.libraryRoot,
       agentDir: agentDirFor(this.o.dataDir),
@@ -228,6 +235,8 @@ export class Application {
       case 'phoneFrame': return this.cloud('POST', `/devices/${input.deviceId}/phone/frame`, {sessionId:input.sessionId});
       case 'phoneInput': return this.cloud('POST', `/devices/${input.deviceId}/phone/input`, {sessionId:input.sessionId,event:input.event});
       case 'phoneRelease': return this.cloud('POST', `/devices/${input.deviceId}/phone/release`, {sessionId:input.sessionId});
+      case 'preferences': return this.cloud('GET', '/me/preferences');
+      case 'setPreferences': return this.cloud('PATCH', '/me/preferences', input);
       case 'documentCapabilities': return this.cloud('GET','/documents/capabilities');
       case 'documentUploadBegin': return this.cloud('POST',`/bots/${input.botId}/documents/uploads`,{request_id:input.request_id,name:input.name,size:input.size});
       case 'documentUploadChunk': return this.cloud('POST',`/documents/uploads/${input.id}/chunks`,{part:input.part,data:input.data});

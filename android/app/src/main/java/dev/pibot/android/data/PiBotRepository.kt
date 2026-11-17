@@ -238,6 +238,10 @@ class PiBotRepository(
         _cloudComputer.value = it.cloudComputer
     }
 
+    suspend fun preferences(): DevelopmentPreferences = authed { u, t -> api.preferences(u, t) }
+
+    suspend fun setPreferences(enabled: Boolean): DevelopmentPreferences = authed { u, t -> api.setPreferences(u, t, enabled) }
+
     suspend fun revokeDevice(id: String) { authed { u,t -> api.revokeDevice(u,t,id) }; refreshMe() }
 
     suspend fun refreshBot(id: String) {

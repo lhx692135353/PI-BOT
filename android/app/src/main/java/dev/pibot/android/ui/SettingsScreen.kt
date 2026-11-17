@@ -22,6 +22,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.Switch
+import androidx.compose.ui.Alignment
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -65,7 +67,12 @@ fun SettingsScreen(repository: PiBotRepository, onBack: () -> Unit, onPhone: (St
     var removing by remember { mutableStateOf<Device?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var changing by remember { mutableStateOf(false) }
+    var pstack by remember { mutableStateOf<Boolean?>(null) }
+    var savingPstack by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { runCatching { repository.refreshMe() }.onFailure { error = errorText(it) } }
+    LaunchedEffect(repository) {
+        runCatching { repository.preferences() }.onSuccess { pstack = it.pstackEnabled }.onFailure { error = errorText(it) }
+    }
 
     Scaffold(
         topBar = {
@@ -82,6 +89,19 @@ fun SettingsScreen(repository: PiBotRepository, onBack: () -> Unit, onPhone: (St
                 Item("用户", session?.user?.let { it.displayName.ifBlank { it.username } } ?: "")
                 Item("服务器", session?.serverUrl ?: "")
                 Item("实时连接", if (live) "已连接" else "未连接", last = true)
+            }
+            Group("开发") {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Pi 写代码时使用 pstack", modifier = Modifier.weight(1f))
+                    Switch(checked = pstack ?: false, enabled = pstack != null && !savingPstack, onCheckedChange = { enabled ->
+                        savingPstack = true
+                        scope.launch {
+                            try { pstack = repository.setPreferences(enabled).pstackEnabled }
+                            catch (e: Exception) { error = errorText(e) }
+                            finally { savingPstack = false }
+                        }
+                    })
+                }
             }
             Group("通知") {
                 Item("推送状态", pushStatus, last = true)

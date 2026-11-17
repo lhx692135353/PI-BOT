@@ -51,14 +51,17 @@ async function ensureUpdatesSupported() {
 }
 const DEFAULT_SERVER_URL = 'http://127.0.0.1:8000';
 async function startBundledService() {
-  if (!app.isPackaged || serviceProcess) return;
+  const devService = app.isPackaged ? undefined : process.env.PI_BOT_ELECTRON_TEST_SERVICE;
+  const devNode = process.env.PI_BOT_ELECTRON_TEST_NODE;
+  if ((!app.isPackaged && (!devService || !devNode)) || serviceProcess) return;
   if (await serviceRunning()) return;
-  const root = join(process.resourcesPath, 'runtime');
-  serviceProcess = spawn(join(root, 'bin', process.platform === 'win32' ? 'node.exe' : 'node'), [join(root, 'server.mjs')], {
+  const root = devService ? dirname(devService) : join(process.resourcesPath, 'runtime');
+  const node = (devService && devNode) || join(root, 'bin', process.platform === 'win32' ? 'node.exe' : 'node');
+  serviceProcess = spawn(node, [devService ?? join(root, 'server.mjs')], {
     cwd: root,
     detached: false,
     windowsHide: true,
-    env: { ...process.env, PI_BOT_PARENT_LEASE: '1', ...(process.platform === 'darwin' ? { PI_BOT_KEYCHAIN_HELPER: join(root, 'keychain') } : {}) },
+    env: { ...process.env, PI_BOT_PARENT_LEASE: '1', PI_BOT_DESKTOP_EXECUTABLE: process.execPath, ...(process.platform === 'darwin' && app.isPackaged ? { PI_BOT_KEYCHAIN_HELPER: join(root, 'keychain') } : {}) },
     stdio: ['pipe', 'ignore', 'pipe'],
   });
   serviceProcess.stdin?.on('error', () => {});

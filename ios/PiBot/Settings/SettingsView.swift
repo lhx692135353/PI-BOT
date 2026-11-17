@@ -7,6 +7,8 @@ struct SettingsView: View {
     @State private var removing: Device?
     @State private var error: String?
     @State private var changing = false
+    @State private var pstack: Bool?
+    @State private var savingPstack = false
 
     private var version: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "" }
 
@@ -17,6 +19,17 @@ struct SettingsView: View {
                     LabeledContent("用户", value: store.session?.user.shownName ?? "")
                     LabeledContent("服务器", value: store.session?.serverUrl ?? "")
                     LabeledContent("实时连接", value: store.live ? "已连接" : "未连接")
+                }
+                Section("开发") {
+                    Toggle("Pi 写代码时使用 pstack", isOn: Binding(get: { pstack ?? false }, set: { enabled in
+                        savingPstack = true
+                        Task {
+                            defer { savingPstack = false }
+                            do { pstack = try await store.setPreferences(enabled).pstackEnabled }
+                            catch is CancellationError {}
+                            catch { self.error = errorText(error) }
+                        }
+                    })).disabled(pstack == nil || savingPstack)
                 }
                 Section {
                     let active = store.devices.filter { $0.revokedAt == nil }.uniqued()
@@ -74,6 +87,9 @@ struct SettingsView: View {
                 Text("文件会保留；新任务会选择其他可用机器。依赖该电脑文件的任务将暂时无法执行。")
             }
             .sheet(isPresented: $changing) { PasswordSheet() }
+        }
+        .task {
+            do { pstack = try await store.preferences().pstackEnabled } catch is CancellationError {} catch { self.error = errorText(error) }
         }
         .task {
             do { try await store.refreshMe() } catch is CancellationError {} catch { self.error = errorText(error) }

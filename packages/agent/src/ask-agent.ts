@@ -5,14 +5,15 @@ import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 
 interface AgentTask {
   id: string;
-  status: "queued" | "running" | "completed" | "failed" | "cancelled";
+  status: "queued" | "running" | "completed" | "failed" | "cancelled" | "paused";
+  pause_question?: string | null;
   mode: "wait" | "report";
   agent: { id: string; name: string };
   result: string | null;
   attachments?:unknown[];
   error: string | null;
 }
-const TERMINAL = new Set(["completed", "failed", "cancelled"]);
+const TERMINAL = new Set(["completed", "failed", "cancelled", "paused"]);
 const RESULT_LIMIT = 20000;
 
 export interface AskAgentOptions {
@@ -55,6 +56,7 @@ export function askAgentTool(baseUrl: string, token: () => string, runId: string
       "把问题或任务交给同一用户的另一个智能体。用 agent_directory 确认职责和知识主题，agent 优先填稳定 ID，也接受名字；task 要自包含（目标、已知信息、期望输出），对方看不到你的对话，会使用自己的记忆。" + routingDescription + "wait=true 等结果；wait=false 完成后回报。queued 只代表请求已保存排队，不能说对方已收到或已回答；可用返回的任务 ID 查询状态。要求对方给出来源、时间和不确定性，没有依据时说明不知道。",
     parameters: Type.Object({
       agent: Type.String({ minLength: 1, maxLength: 100, description: "目标智能体稳定 ID（优先）或名字，从 agent_directory 获取" }),
+      coding: Type.Optional(Type.Boolean({ description: "任务需要修改或生成项目代码时填 true。" })),
       task: Type.String({ minLength: 1, maxLength: 8000, description: "自包含的任务描述" }),
       title: Type.Optional(Type.String({ minLength: 1, maxLength: 80, description: "用户能看懂的简短任务名称，通常 10–20 字，例如检查显存占用；不填内部代号、命令或参数" })),
       wait: Type.Optional(Type.Boolean({ description: "是否等待结果，默认 true" })),
@@ -62,7 +64,7 @@ export function askAgentTool(baseUrl: string, token: () => string, runId: string
     }),
     execute: async (_id, args: any, signal) => {
       const wait = options.conversation ? false : args.wait !== false;
-      let task = await call("POST", "/agent/tasks", { run_id: runId, agent: args.agent, task: args.task, title: args.title, wait, execution: args.execution, device_id:args.device_id, requirements:args.requirements, resources:args.resources, request_id: _id }, signal);
+      let task = await call("POST", "/agent/tasks", { run_id: runId, agent: args.agent, task: args.task, coding: args.coding, title: args.title, wait, execution: args.execution, device_id:args.device_id, requirements:args.requirements, resources:args.resources, request_id: _id }, signal);
       const name = task.agent.name || String(args.agent);
       checkFailure(task);
       if (!wait && !TERMINAL.has(task.status)) return text(`已转交给「${name}」。任务 ID：${task.id}；${task.status === "queued" ? "请求已保存，正在排队，尚不能确认对方已收到。" : "对方正在处理。"}对方完成后你会收到回报。`, task);
@@ -83,6 +85,8 @@ export function askAgentTool(baseUrl: string, token: () => string, runId: string
         task = await call("GET", `/agent/tasks/${task.id}?wait=${poll}`, undefined, signal, (poll + 15) * 1000);
       }
       checkFailure(task);
+      if (task.status === "paused")
+        return text(`「${name}」已暂停委托任务 ${task.id} 等待用户决定：${task.pause_question ?? ""}。用户答复后用 resume_task 续接。\n${task.result ?? ""}`, task);
       const result = (task.result?.trim() || "（对方没有返回文字结果）")+(task.attachments?.length ? "\n报告文件引用："+JSON.stringify(task.attachments) : "");
       return text(`「${name}」的结果：\n${result.length > RESULT_LIMIT ? `${result.slice(0, RESULT_LIMIT)}\n…（结果过长，已截断）` : result}`, task);
     },

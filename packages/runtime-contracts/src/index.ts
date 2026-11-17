@@ -120,6 +120,9 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolDescriptor>> =
     write_file: tool("写入文件", "write"),
     edit_file: tool("修改文件", "write"),
     run_command: tool("运行命令", "write"),
+    electron_test: tool("测试 Electron 应用", "control"),
+    pstack: tool("执行 pstack 流程", "control"),
+    task_pause: tool("暂停并询问", "control", "internal"),
     request_outside_access: tool(
       "申请文件访问",
       "control",

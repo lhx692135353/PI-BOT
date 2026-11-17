@@ -169,3 +169,63 @@ test("one-shot failures retain safe timeout/network diagnostics and omit invalid
     globalThis.fetch = nativeFetch;
   }
 });
+
+test("ordinary tasks get one reminder when each threshold is crossed and can run beyond the old limit", async () => {
+  const requests: any[] = [];
+  const provider = createServer(async (req, res) => {
+    let input = "";
+    for await (const chunk of req) input += chunk;
+    requests.push(JSON.parse(input));
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ status: "completed", usage: { input_tokens: 1000, output_tokens: 0 } }));
+  });
+  await new Promise<void>(resolve => provider.listen(0, "127.0.0.1", resolve));
+  const dir = tempDir();
+  const s = settings({ PI_BOT_DATABASE_URL: "unused", PI_BOT_JWT_SECRET: "j".repeat(40), PI_BOT_VAULT_FILE: vaultFile(dir.path) });
+  const run = { run_id: "ordinary", lane: "task", tokens_used: 299_000, model_calls: 29, usage_notice_tokens: 0, usage_notice_calls: 0, missing_usage_calls: 1 };
+  const db = { tx: async (fn: any) => fn({
+    one: async (_sql: string, [, tokens, calls]: number[]) => {
+      if (tokens <= run.usage_notice_tokens && calls <= run.usage_notice_calls) return undefined;
+      run.usage_notice_tokens = Math.max(tokens, run.usage_notice_tokens);
+      run.usage_notice_calls = Math.max(calls, run.usage_notice_calls);
+      return { run_id: run.run_id };
+    },
+    rows: async (_sql: string, [, tokens, missing]: number[]) => {
+      run.tokens_used += tokens;
+      run.model_calls++;
+      run.missing_usage_calls += missing;
+      return [];
+    },
+    insert: async () => ({}),
+  }) } as unknown as Database;
+  const app = Fastify();
+  const model = { model_id: "model", provider_model: "test", max_tokens: 1000,
+    base_url: `http://127.0.0.1:${(provider.address() as any).port}/v1`, secret: new Vault(s.vaultFile).seal("sk-test", "model") };
+  app.post<{ Body: Record<string, unknown> }>("/", (req, reply) =>
+    proxyResponses(db, s, { sub: "user", src: "cloud" }, model, req.body, reply, new AbortController().signal, { run: { ...run } }));
+  const call = async () => {
+    const result = await app.inject({ method: "POST", url: "/", payload: { input: "继续检查", tools: [{ name: "read_file", type: "function" }] } });
+    assert.equal(result.statusCode, 200);
+    assert.notEqual(requests.at(-1).tool_choice, "none");
+    return requests.at(-1).input;
+  };
+  try {
+    assert.equal(await call(), "继续检查");
+    assert.equal(run.tokens_used, 300_000);
+    const threshold = await call();
+    assert.equal(threshold.filter((item: any) => item.role === "developer").length, 1);
+    assert.match(threshold.at(-1).content, /300000 token、30 次.*部分调用未返回用量/);
+    assert.equal(await call(), "继续检查");
+    run.tokens_used = 900_000;
+    run.model_calls = 50;
+    assert.match((await call()).at(-1).content, /900000 token、50 次/);
+    assert.equal(await call(), "继续检查");
+    run.model_calls = 60;
+    assert.match((await call()).at(-1).content, /902000 token、60 次/);
+  } finally {
+    await app.close();
+    provider.closeAllConnections();
+    await new Promise<void>(resolve => provider.close(() => resolve()));
+    dir.cleanup();
+  }
+});

@@ -83,9 +83,20 @@ function statusLine(bot: Bot, mood: Mood, now: number) {
 function Settings({ state, cloud, onClose, onOpenPhone }: { state: AccountState; cloud: CloudComputer | null; onClose(): void; onOpenPhone(device: Device): void }) {
   const [devices,setDevices] = useState<Device[]>([]);
   const [error,setError] = useState('');
+  const [pstack, setPstack] = useState<boolean | null>(null);
+  const [savingPstack, setSavingPstack] = useState(false);
+  const savePstack = async (enabled: boolean) => {
+    setSavingPstack(true);
+    try {
+      const next = await call<{ pstack_enabled: boolean }>('setPreferences', { pstack_enabled: enabled });
+      setPstack(next.pstack_enabled);
+    } catch (e) { setError(errorText(e)); }
+    finally { setSavingPstack(false); }
+  };
   const refresh = () => call<Device[]>('devices').then(setDevices).catch(e => setError(errorText(e)));
   useEffect(() => {
     void refresh();
+    void call<{ pstack_enabled: boolean }>('preferences').then(prefs => setPstack(prefs.pstack_enabled)).catch(e => setError(errorText(e)));
     return bridge.subscribe(event => { if (event.type === 'bots' || event.type === 'account') void refresh(); });
   },[]);
   const revoke = async (device: Device) => {
@@ -105,6 +116,9 @@ function Settings({ state, cloud, onClose, onOpenPhone }: { state: AccountState;
             <dt>资料库</dt><dd className="mono">{state.libraryRoot}</dd>
           </dl>
           <p className="muted small">对话由云端统一处理；任务默认在云端电脑上执行，需要这台电脑上的文件或应用时才用本机。资料库以云端电脑为准，本机资料库里生成的文件会同步一份到云端；资料库以外的本地文件只在本机处理，访问前仍需授权。</p>
+          <h3>开发</h3>
+          <label><input type="checkbox" checked={pstack ?? false} disabled={pstack === null || savingPstack}
+            onChange={event => void savePstack(event.currentTarget.checked)} /> Pi 写代码时使用 pstack</label>
           <ClientUpdates />
           <SavedAuthorizations />
           <h3>执行电脑</h3>

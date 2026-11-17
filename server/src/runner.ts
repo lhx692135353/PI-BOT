@@ -32,6 +32,8 @@ const requestSchema = z.object({
     lane: z.enum(["conversation", "task"]).default("task"),
     execution_policy: z.enum(["any", "device_only"]).default("any"),
     automation_readonly: z.boolean().default(false),
+    pstack_enabled: z.boolean().optional(),
+    coding: z.boolean().optional(),
     deadline_at: z.string().optional(),
     automation: z.unknown().optional(),
     instructions: z.array(z.object({ id: z.string().uuid(), text: z.string().max(8000) })).default([]),
@@ -152,6 +154,8 @@ export async function createRunner(options: { token: string; dir: string; factor
           capabilities:p.run.model.capabilities, maxTokens: p.run.model.max_tokens,
         },
         readonly:p.run.automation_readonly,
+        taskWorkflow: p.run.lane === "task" && !p.run.automation && !p.run.automation_readonly && p.run.execution_policy !== "device_only"
+          ? { enabled: !!p.run.pstack_enabled, coding: p.run.coding, api, token: () => p.token } : undefined,
         apiKey: p.token,
         cwd,
         agentDir: join(options.dir, "pi", "bots", p.run.bot.id),

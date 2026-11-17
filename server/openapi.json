@@ -1760,7 +1760,9 @@
                         "preflight-v1",
                         "browser-test",
                         "browser-test-task-v1",
-                        "browser-test-handoff-v1"
+                        "browser-test-handoff-v1",
+                        "electron-test-v1",
+                        "pibot-electron-test-v1"
                       ]
                     }
                   },
@@ -1791,6 +1793,50 @@
                     "maxLength": 2048
                   },
                   "browser_test_visible": {
+                    "type": "boolean"
+                  },
+                  "electron_test": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "app": {
+                            "type": "string",
+                            "const": "pibot"
+                          }
+                        },
+                        "required": [
+                          "app"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "app": {
+                            "type": "string",
+                            "const": "electron"
+                          },
+                          "executable": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 2000
+                          },
+                          "entry": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 2000
+                          }
+                        },
+                        "required": [
+                          "app",
+                          "executable"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "coding": {
                     "type": "boolean"
                   },
                   "agent": {
@@ -2082,6 +2128,72 @@
             "DeviceSignature": []
           }
         ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "{ detail }"
+          }
+        }
+      }
+    },
+    "/me/preferences": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "读取个人开发设置",
+        "security": [
+          {
+            "UserBearer": []
+          },
+          {
+            "DeviceSignature": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "{ detail }"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "更新个人开发设置",
+        "security": [
+          {
+            "UserBearer": []
+          },
+          {
+            "DeviceSignature": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "pstack_enabled": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "pstack_enabled"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "OK"

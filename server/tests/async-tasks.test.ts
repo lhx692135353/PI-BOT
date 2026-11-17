@@ -344,3 +344,53 @@ test("multiple workers share the Bot capacity limit and queued user turns preced
     for (const r of [...runs.tasks, runs.report]) await finishRun(tx, r.run_id, "completed", null);
   });
 });
+
+test("a paused Pi task is resumable with its original account workflow choice and checkpoint", { skip }, async () => {
+  const user = (await api("/me")).data.user;
+  assert.deepEqual((await api("/me/preferences")).data, { pstack_enabled: false });
+  const toggle = (enabled: boolean) => fetch(`${base}/me/preferences`, {
+    method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ pstack_enabled: enabled }),
+  });
+  assert.equal((await toggle(true)).status, 200);
+  const dedicated = (await api("/bots", { name: "pause coding", persona: "" })).data.id;
+  const parent = await db.tx(async tx => {
+    const r = await insertRun(tx, { userId: user.id, botId: dedicated, requestId: randomUUID(), text: "修复代码", computer: null });
+    assert.ok(await claimExecution(tx, r.run_id, s, randomUUID()));
+    return r;
+  });
+  const llm = await issueLlmToken({ sub: user.id, src: "cloud", bot: dedicated }, s);
+  const body = { run_id: parent.run_id, kind: "background", execution: "cloud", coding: true, wait: false, task: "修复代码" };
+  const started = await api("/agent/tasks", body, llm);
+  assert.equal(started.status, 200);
+  const oldId = started.data.id;
+  assert.equal(started.data.routing.pstack_enabled, true);
+  const child = await db.tx(async tx => {
+    const task = await tx.get("agent_tasks", oldId);
+    assert.ok(await claimExecution(tx, task.child_run_id, s, randomUUID()));
+    await tx.rows("UPDATE bot_runs SET model_calls=32,tokens_used=305000,missing_usage_calls=1 WHERE run_id=$1", [task.child_run_id]);
+    return task.child_run_id;
+  });
+  const pause = { run_id: child, request_id: "pause-1", question: "用哪个环境？", progress: "已排查启动逻辑", next: "在指定环境验证" };
+  assert.equal((await api("/agent/task-pause", { ...pause, run_id: parent.run_id }, llm)).status, 422);
+  assert.equal((await api("/agent/task-pause", pause, llm)).status, 200);
+  assert.equal((await api("/agent/task-pause", pause, llm)).status, 200);
+  assert.equal((await api("/agent/task-pause", { ...pause, request_id: "pause-2" }, llm)).status, 409);
+  await db.tx(tx => finishRun(tx, child, "completed", null, "任务已暂停。"));
+  const saved = (await api(`/agent/tasks/${oldId}?wait=30`, undefined, llm)).data;
+  assert.equal(saved.status, "paused");
+  assert.equal(saved.pause_question, pause.question);
+  assert.deepEqual(saved.checkpoint.completed, [pause.progress]);
+  assert.deepEqual(saved.usage, { tokens: 305000, calls: 32, missing_usage_calls: 1 });
+  assert.equal((await toggle(false)).status, 200);
+  const resumed = await api("/agent/tasks/resume", { run_id: parent.run_id, request_id: "resume-1", task_id: oldId, text: "用 staging 环境" }, llm);
+  assert.equal(resumed.status, 200, JSON.stringify(resumed.data));
+  assert.equal(resumed.data.resumed_from, oldId);
+  assert.equal(resumed.data.routing.pstack_enabled, true);
+  assert.equal(resumed.data.routing.coding, true);
+  const resumedRow = await db.tx(tx => tx.get("agent_tasks", resumed.data.id));
+  assert.match(resumedRow.task, /已排查启动逻辑/);
+  assert.match(resumedRow.task, /用 staging 环境/);
+  const fresh = await api("/agent/tasks", { ...body, task: "另一个修复" }, llm);
+  assert.equal(fresh.data.routing.pstack_enabled, false);
+});

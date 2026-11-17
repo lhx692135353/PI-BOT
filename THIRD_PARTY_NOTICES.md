@@ -24,7 +24,13 @@
 - `@novnc/novnc`：npm 锁定版本 1.7.0；来源 <https://github.com/novnc/noVNC>。核心库采用 MPL-2.0，具体组件遵循包内 LICENSE／AUTHORS；服务端按原文件提供 core／vendor JavaScript，未修改依赖源码。发布镜像保留 npm 包中的许可文件。
 - `playwright`：虚机组件锁定版本 1.58.2，Apache-2.0；来源 <https://github.com/microsoft/playwright>。浏览器二进制及系统组件保留各自许可证，由虚机安装脚本安装；未将它们作为本项目原创代码重新许可。
 
-## 桌面端 Web 测试依赖
+## pstack
+
+- 上游：<https://github.com/michael-denyer/pstack-claude/tree/a12b04786023e762f12f5de7bb5fafb8c23f8c36>
+- 许可证：MIT，完整文本见 [pstack-LICENSE](packages/agent/src/pstack-LICENSE)。
+- 修改说明：在 Pi Bot 内实现小修、完整开发、验证和只读审查的流程，复用 Pi Bot 的执行工具、模型代理和权限。
+
+## 桌面端浏览器和 Electron 测试依赖
 
 - `playwright` 和 `playwright-core`：桌面运行时锁定版本 1.65.1，Apache-2.0；来源 <https://github.com/microsoft/playwright>。打包保留依赖的许可文件。浏览器由用户安装，遵循各自的许可证。
 

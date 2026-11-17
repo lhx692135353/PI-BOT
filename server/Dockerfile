@@ -20,6 +20,7 @@ ENV NODE_ENV=production
 WORKDIR /app
 COPY LICENSE NOTICE THIRD_PARTY_NOTICES.md ./
 COPY packages/agent/src/hermes-memory/LICENSE ./licenses/pi-hermes-memory-LICENSE
+COPY packages/agent/src/pstack-LICENSE ./licenses/pstack-LICENSE
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/server/dist ./server/dist
 COPY --from=build /app/server/remote-guest/desktop.html ./server/remote-guest/desktop.html

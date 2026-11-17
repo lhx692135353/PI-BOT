@@ -28,6 +28,7 @@ import { isInternalTool, SKILL_TOOLS, skillsExtension, type SkillOptions } from 
 import { memoryExtension, MEMORY_TOOLS, type MemoryOptions } from "./hermes-memory/extension.js";
 import { observationExtension, type Observation } from "./observations.js";
 import { contextBudgetExtension } from "./context-budget.js";
+import { reviewTools, superviseTask } from "./task-workflow.js";
 export type { Observation } from "./observations.js";
 export { textTokens, clipText } from "./context-budget.js";
 export {
@@ -81,6 +82,7 @@ export interface BotAgentOptions {
   redactSecrets?: string[];
   onTool?: (activity: ToolActivity) => void;
   onManifest?: (tools: string[]) => void;
+  taskWorkflow?: { enabled: boolean; coding?: boolean; api: string; token: () => string };
   onAction?: (activity: ToolActivity) => void;
   onReply?: (reply: ReplyEvent) => void | Promise<void>;
 
@@ -283,7 +285,28 @@ export const createBotAgent: AgentFactory = async (o) => {
   const replies: ReplyEvent[] = [];
   const replyClock = { started: 0 };
   const redact = redactor([o.apiKey, ...(o.redactSecrets ?? [])]);
-  const tools = [...o.tools, ...(o.onReply ? [replyTool(async reply => {
+  const supervision = o.taskWorkflow && o.runId && !o.readonly ? superviseTask({
+    ...o.taskWorkflow,
+    runId: o.runId,
+    review: async (request, signal) => {
+      const reviewer = await createBotAgent({
+        ...o, apiKey: o.taskWorkflow!.token(), taskWorkflow: undefined, readonly: true, skills: undefined, memory: undefined,
+        onReply: undefined, onAction: undefined, onTool: undefined, onProgress: undefined, onManifest: undefined,
+        history: [], tools: o.tools.filter(tool => reviewTools.has(tool.name)),
+        systemPrompt: "独立只读审查。核对代码、回归风险及验证证据。只报告有依据的发现与限制。",
+      });
+      const abort = () => { void reviewer.abort(); };
+      signal?.addEventListener("abort", abort, { once: true });
+      try {
+        signal?.throwIfAborted();
+        return await reviewer.prompt(request, () => {});
+      } finally {
+        signal?.removeEventListener("abort", abort);
+        reviewer.dispose();
+      }
+    },
+  }, o.tools) : undefined;
+  const tools = [...(supervision?.tools ?? o.tools), ...(o.onReply ? [replyTool(async reply => {
     const safe = { ...reply, text: redact(reply.text), elapsed_ms: Math.max(0, Math.round(performance.now() - replyClock.started)) };
     if (replies.some(r => r.id === safe.id)) return;
     await o.onReply!(safe);
@@ -344,7 +367,7 @@ export const createBotAgent: AgentFactory = async (o) => {
     cwd: o.cwd, agentDir: o.agentDir, settingsManager, systemPrompt: o.systemPrompt,
     noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true,
     appendSystemPromptOverride: () => [],
-    extensionFactories: [{name:"report-context",factory:reportContextExtension},{name:"context-budget",factory:contextBudgetExtension()},...(o.skills ? [{ name: "bot-skills", factory: skillsExtension(o.skills) }] : []),...(o.memory?[{name:"bot-memory",factory:memoryExtension(o.memory)}]:[]),...(o.runId?[{name:"bot-observation",factory:observationExtension(o.runId,o.onObservation)}]:[]),{name:"codemode",factory:createCodemodeExtension({mode:"on",models:false,inlineBudget:0})},{name:"tool-search",factory:createToolSearchExtension()}],
+    extensionFactories: [{name:"report-context",factory:reportContextExtension},{name:"context-budget",factory:contextBudgetExtension()},...(supervision?[{name:"task-supervision",factory:supervision.extension}]:[]),...(o.skills ? [{ name: "bot-skills", factory: skillsExtension(o.skills) }] : []),...(o.memory?[{name:"bot-memory",factory:memoryExtension(o.memory)}]:[]),...(o.runId?[{name:"bot-observation",factory:observationExtension(o.runId,o.onObservation)}]:[]),{name:"codemode",factory:createCodemodeExtension({mode:"on",models:false,inlineBudget:0})},{name:"tool-search",factory:createToolSearchExtension()}],
   });
   await resourceLoader.reload();
   if (resourceLoader.getExtensions().errors.length) throw new Error("内部能力插件加载失败");
@@ -375,7 +398,7 @@ export const createBotAgent: AgentFactory = async (o) => {
     throw new Error("工具隔离校验失败");
   }
   o.onManifest?.(active);
-  return new PiAgent(
+  const agent = new PiAgent(
     session,
     runtime,
     provider,
@@ -387,6 +410,25 @@ export const createBotAgent: AgentFactory = async (o) => {
     replies,
     replyClock,
   );
+  if (supervision) {
+    const prompt = agent.prompt.bind(agent);
+    agent.prompt = async (input, onText, images) => {
+      try {
+        let text = await prompt(input, onText, images);
+        if (!supervision.paused() && supervision.incomplete()) {
+          text = await prompt("本次开发流程尚未完成。请完成可行的验证及审查，并调用 pstack finish。遇到实际阻塞请调用 task_pause。", onText);
+        }
+        const paused = supervision.paused();
+        if (paused) return redact(paused);
+        return supervision.incomplete() ? `开发流程尚未完成。\n${text}` : text;
+      } catch (error) {
+        const paused = supervision.paused();
+        if (paused) return redact(paused);
+        throw error;
+      }
+    };
+  }
+  return agent;
 };
 
 export {remoteTools} from "./remote.js";

@@ -45,6 +45,9 @@ data class ComputerStatus(val online: Boolean = false, val device: Device? = nul
 data class CloudComputer(val target: String? = null, val label: String = "云端电脑", val online: Boolean = false)
 
 @Serializable
+data class DevelopmentPreferences(@SerialName("pstack_enabled") val pstackEnabled: Boolean)
+
+@Serializable
 data class Me(
     val user: User,
     val computer: ComputerStatus = ComputerStatus(),
@@ -297,6 +300,11 @@ class PiBotApi(private val http: OkHttpClient, private val json: Json = API_JSON
         call(url, "POST", "/auth/password", token, PasswordBody(old, new))
 
     fun me(url: ServerUrl, token: String): Me = call(url, "GET", "/me", token)
+
+    fun preferences(url: ServerUrl, token: String): DevelopmentPreferences = call(url, "GET", "/me/preferences", token)
+
+    fun setPreferences(url: ServerUrl, token: String, enabled: Boolean): DevelopmentPreferences =
+        call(url, "PATCH", "/me/preferences", token, DevelopmentPreferences(enabled))
 
     fun devices(url: ServerUrl, token: String): List<Device> = call(url, "GET", "/devices", token)
 

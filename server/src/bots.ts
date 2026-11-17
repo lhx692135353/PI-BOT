@@ -152,7 +152,7 @@ export const approvalOut = (a: Row) => ({
   reason: a.detail.reason,
   access: a.detail.access ?? 'legacy',
   scope: a.kind === 'browser_access' ? `${a.detail.target_label} · ${a.detail.handoff ? '请在独立测试窗口操作，完成后回聊天继续' : '仅本次任务可访问以上站点'}` : scopeText(a.detail.authorization_scope),
-  can_remember: canRemember(a.detail.authorization_scope),
+  can_remember: !a.detail.single_use && canRemember(a.detail.authorization_scope),
   status:
     a.status === "pending" && new Date(a.expires_at) < new Date()
       ? "expired"
@@ -488,6 +488,9 @@ export interface RunContext {
   browser_test_authorization?: "user" | "prompt";
   browser_test_handoff?: boolean;
   browser_test_visible?: boolean;
+  electron_test?: import("./targets.js").Routing["electron_test"];
+  pstack_enabled?: boolean;
+  coding?: boolean;
   bot: { id: string; name: string; slug: string };
   model: { id: string; name: string; context_window: number; max_tokens: number; capabilities?: Partial<ModelCapabilities> };
   system: string;
@@ -599,8 +602,10 @@ export function systemPrompt(
     "start_task 默认 execution=auto，每个新任务优先在云端电脑执行；需要用户电脑上的文件、应用或用户明确指定电脑时用 execution=device 并填 device_id；纯联网搜索或不依赖本地文件的云端处理可指定 execution=cloud。start_task 的 task 必须自包含但精简：保留用户目标、必要上下文、已有条件、文件位置、约束和期望输出。用文件引用代替复制历史全文，不附详细执行计划或重复首句；不要为精简而省略关键条件。避免重复创建已有任务。",
     "查询任务用 task_status，结果仅代表记录的活动和更新时间；查询外部训练、部署的最新状态时，另建一个简短的核查任务，不要把缓存当作刚查到的外部进度。",
     "本机开发站或指定测试站的 Web 功能测试用 start_task 的 browser_test_origin（HTTP(S) 协议、主机和端口），在 task 保留待测页及目标。用户本轮明确提供的 URL 授权该站点一次，其他站点由桌面任务发起审批。用户指定电脑或明确继续同一台电脑上的测试时填 device_id；项目所在设备用 resources.target；其余情况省略设备，由服务端选机。目标不明或选机有歧义时在聊天里核实。",
+    "用户要求改代码、修 bug 或实现功能时，为 start_task 或 ask_agent 设置 coding=true。用户答复某个暂停任务的问题时，先用 task_status 确认对应任务，再用 resume_task 续接并传入用户答复。",
+    "用户要求测试独立的 Electron 测试实例时，用 start_task 的 electron_test。测试 Pi Bot 本身传 app=pibot。其他 Electron 应用传 app=electron 并提供本机可执行文件（开发项目还可提供入口）。保留已知项目设备或用户指定的电脑，其他情况留给服务端选择。对本机可执行文件不明的情况请在聊天中核实。",
     "已知 Web 测试需要用户扫码、登录，或用户明确要求全程观看时，设置 start_task 的 browser_test_visible=true 并在任务里保留要求。其他浏览器测试默认后台运行。",
-    "用户补充或改变已有任务要求时，用 task_message 发给准确的任务。工具会说明是已传达、排队或已结束；已结束则结合原结果用 start_task 创建后续任务。",
+    "用户补充或改变已有任务要求时，用 task_message 发给准确的任务。工具会说明是已传达、排队或已结束；已结束的普通任务可创建后续任务；正在等待用户答复的任务用 resume_task 续接。",
     "用户要求询问、转告其他智能体时必须实际调用 ask_agent；若是已有活动委托的追问，可用 task_message 发送。对方已结束的任务不能继续收信，应通过 ask_agent 发起新的询问。只有成功回执才能说已发送或问过；queued/pending 表示已保存待送达，不能说对方已经收到或答复。传话记录保存在本次委托详情中，不等于给对方主聊天新增用户消息。",
     "用户要求停止时用 cancel_task。仅一个活动任务可直接定位；多个任务且指代不明时澄清。明确停止全部时传 all=true。",
     "用户新消息优先。任务回报按最新要求整理后告诉用户，不要重新执行同一任务。其他智能体的委托只能用 ask_agent(wait=false)，不得同步等待。",
@@ -703,9 +708,9 @@ export async function buildContext(
   if(fileIndex.length) system += "\n相关附件（正文未载入；document_read 读取文本或调用内置解析器，file_bytes 获取原始字节，file_fetch 保存到当前执行环境供其他工具处理。根据文件内容、元数据和可用工具选择方法；二进制需要解析器）："+JSON.stringify(fileIndex);
   if (truncated || covered < rows.length) system+="\n（部分早期对话超出窗口，需要时用 history_search 检索，不代表没有历史。）";
   if (run.origin === "agent" && from && from.bot_id !== bot.bot_id)
-    text = `你收到来自智能体「${from.name}」的委托，它正在为用户处理一项任务：\n\n${text}\n\n请直接完成并给出自包含的结果，「${from.name}」会把它转述给用户。缺少必要信息时直接说明缺什么，不要向用户提问。`;
+    text = `你收到来自智能体「${from.name}」的委托，它正在为用户处理一项任务：\n\n${text}\n\n请直接完成并给出自包含的结果，「${from.name}」会把它转述给用户。缺少必要信息而无法推进时，用 task_pause 保存进度，请委托方转达待确认问题。`;
   else   if (run.origin === "report")
-    text = `这是你之前委托给「${from?.name ?? bot.name}」的任务的回报。请据此把结果整理后告诉用户，不要再次委托同一任务：\n\n${text}`;
+    text = `这是你之前委托给「${from?.name ?? bot.name}」的任务的回报。把结果整理后告诉用户，保留已提供的用量数字。如果任务暂停，转达具体问题，等待用户答复后续接：\n\n${text}`;
   const cli = isCliRuntime(bot.runtime) ? {
     runtime: bot.runtime as CliRuntime,
     profile: String(bot.cli_profile ?? ""),
@@ -730,6 +735,9 @@ export async function buildContext(
     browser_test_authorization: run.executor === "device" && run.lane === "task" && !cli && !run.automation_readonly
       ? run.routing?.browser_test_authorization : undefined,
     browser_test_visible: run.routing?.browser_test_visible === true || undefined,
+    electron_test: run.executor === "device" && run.lane === "task" && !cli && !run.automation_readonly ? run.routing?.electron_test : undefined,
+    pstack_enabled: run.routing?.pstack_enabled === true || undefined,
+    coding: run.routing?.coding === true || undefined,
     bot: { id: bot.bot_id, name: bot.name, slug: bot.slug },
     model: {
       id: model.model_id,

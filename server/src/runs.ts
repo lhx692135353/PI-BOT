@@ -105,6 +105,16 @@ const runEvent = z.discriminatedUnion("kind", [
     origin: z.string().max(2048),
   }),
   z.object({
+    kind: z.literal("electron_launch"),
+    request_id: z.string().max(80),
+    path: z.string().min(1).max(4000),
+    reason: z.string().max(4000),
+  }),
+  z.object({
+    kind: z.literal("electron_login"),
+    request_id: z.string().max(80),
+  }),
+  z.object({
     kind: z.literal("done"),
     state: z.enum(["completed", "failed", "cancelled"]),
     error: z.string().max(500).nullish(),
@@ -195,9 +205,18 @@ export async function handleRunEvent(
       return null;
     }
     if (run.automation_readonly || run.cancel_requested) return null;
-    const browser = e.kind === "browser_approval" || e.kind === "browser_login";
+    const browser = e.kind === "browser_approval" || e.kind === "browser_login" || e.kind === "electron_login";
     let detail: Row;
-    if (browser) {
+    if (e.kind === "electron_login") {
+      if (run.lane !== "task" || !run.routing?.electron_test || !conn.capabilities?.includes("electron-test-v1")) return null;
+      const device = await tx.get("devices", run.device_id);
+      detail = { path: "Electron 应用测试窗口", origins: [], access: "browser", target_label: device?.label ?? "执行电脑",
+        handoff: true, reason: "请在执行电脑的独立应用窗口完成操作，完成后回聊天继续。" };
+    } else if (e.kind === "electron_launch") {
+      if (run.lane !== "task" || !run.routing?.electron_test || !conn.capabilities?.includes("electron-test-v1")) return null;
+      detail = { path: e.path, reason: e.reason, access: "execute", single_use: true,
+        authorization_scope: await approvalScope(tx, run, e.path, "execute", "file") };
+    } else if (browser) {
       if (!run.routing?.browser_test_authorization || run.lane !== "task") return null;
       const handoff = e.kind === "browser_login";
       if (handoff && !conn.capabilities?.includes("browser-test-handoff-v1")) return null;
@@ -334,6 +353,7 @@ export async function decideApproval(
   if (a!.status !== "pending" || new Date(a!.expires_at) < new Date())
     fail(409, "审批已失效");
   if (!run || run.cancel_requested || !['running','waiting_approval'].includes(run.status)) return fail(409,'任务已结束，审批已失效');
+  if (a!.detail.single_use && decision === 'approve_always') fail(422, '应用启动权限仅适用于本次任务');
   if (a!.kind === 'browser_access') {
     if (decision === 'approve_always') fail(422, '浏览器访问权限仅适用于本次任务');
     for (const origin of a!.detail.handoff ? [] : a!.detail.origins) await tx.insert('authorization_logs', {

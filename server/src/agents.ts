@@ -1,7 +1,7 @@
 import { artifactOut, publishedRunArtifacts, copyPublishedRunArtifacts } from "./reports.js";
 import { internalTool, TERMINAL_RUN_STATES } from "@pi-bot/runtime-contracts";
 import { taskMessage } from "./task-conversation.js";
-import {browserTestRouting,taskRouting,resolveTaskTarget,RemotePreparationRequired,type Routing} from "./targets.js";
+import {browserTestRouting,electronTestRouting,taskRouting,resolveTaskTarget,RemotePreparationRequired,type Routing} from "./targets.js";
 import { randomUUID } from "node:crypto";
 import { fail, type Database, type Row, type Tx } from "./db.js";
 import type { Settings } from "./config.js";
@@ -22,7 +22,7 @@ export interface VoiceAnnouncer {
 
 export const agentTaskOut = (t: Row) => ({
   id: t.task_id,
-  status: t.run_status ?? t.status,
+  status: t.pause_question && ["completed", "failed"].includes(t.run_status ?? t.status) ? "paused" : t.run_status ?? t.status,
   execution: t.operation_target === "pending" ? "auto" : t.execution,
   device_id: t.device_id,
   operation_target:t.operation_target,
@@ -36,6 +36,8 @@ export const agentTaskOut = (t: Row) => ({
   agent: { id: t.target_bot_id, name: t.bot_name ?? "" },
   attachments:t.attachments??[],
   result: (t.run_status ?? t.status) === "completed" ? (t.run_result ?? t.result) : null,
+  pause_question: t.pause_question ?? null,
+  usage: t.model_calls == null ? null : { tokens: Number(t.tokens_used), calls: Number(t.model_calls), missing_usage_calls: Number(t.missing_usage_calls) },
   checkpoint: t.checkpoint,
   checkpoint_version: t.checkpoint_version,
   resumed_from: t.resumed_from,
@@ -62,7 +64,7 @@ export async function callerRun(tx: Tx, userId: string, claims: LlmClaims, runId
 async function ownTask(tx: Tx, userId: string, claims: LlmClaims, taskId: string, lock = false): Promise<Row> {
   if (!claims.bot) fail(403, "令牌未绑定智能体");
   const t = await tx.one(
-    `SELECT t.*, b.name AS bot_name, r.status AS run_status, r.error AS run_error, m.content AS run_result, m.progress, m.tools, m.updated_at AS activity_at
+    `SELECT t.*, b.name AS bot_name, r.status AS run_status, r.error AS run_error, r.tokens_used, r.model_calls, r.missing_usage_calls, m.content AS run_result, m.progress, m.tools, m.updated_at AS activity_at
      FROM agent_tasks t JOIN bots b ON b.bot_id=t.target_bot_id
      LEFT JOIN bot_runs r ON r.run_id=t.child_run_id
      LEFT JOIN bot_messages m ON m.message_id=r.assistant_message_id
@@ -108,7 +110,7 @@ export async function createTask(
   hub: Hub,
   userId: string,
   claims: LlmClaims,
-  body: { run_id: string; agent?: string; task: string; wait: boolean; kind?: "background" | "delegation"; title?: string; request_id?: string;resumed_from?:string; execution?: "auto" | "device" | "cloud" | "remote"; device_id?:string; operation_target?:string; requirements?:string[]; resources?:Routing["resources"]; browser_test_origin?: string; browser_test_visible?: boolean },
+  body: { run_id: string; agent?: string; task: string; wait: boolean; kind?: "background" | "delegation"; title?: string; request_id?: string;resumed_from?:string; execution?: "auto" | "device" | "cloud" | "remote"; device_id?:string; operation_target?:string; requirements?:string[]; resources?:Routing["resources"]; browser_test_origin?: string; browser_test_visible?: boolean; electron_test?: Routing["electron_test"]; coding?: boolean },
   settings?:Settings,
 ) {
   const parent = await callerRun(tx, userId, claims, body.run_id);
@@ -134,9 +136,17 @@ export async function createTask(
   if (body.browser_test_origin !== undefined && (kind !== "background" || isCliRuntime(target.runtime)))
     fail(422, "浏览器测试需要由 Pi 智能体安排为端侧后台任务");
   if (body.browser_test_visible && body.browser_test_origin === undefined) fail(422, "显示测试窗口需要指定测试站点");
+  if (body.electron_test && (body.browser_test_origin || kind !== "background" || isCliRuntime(target.runtime)))
+    fail(422, "Electron 测试需要由 Pi 智能体安排为独立端侧任务");
   const routing = body.browser_test_origin !== undefined
     ? await browserTestRouting(tx, settings, hub, userId, parent, { ...body, browser_test_origin: body.browser_test_origin })
+    : body.electron_test ? await electronTestRouting(tx, hub, userId, parent, { ...body, electron_test: body.electron_test })
     : await taskRouting(tx,userId,parent,body);
+  if (!isCliRuntime(target.runtime)) {
+    const original = body.resumed_from ? await tx.one("SELECT routing FROM agent_tasks WHERE task_id=$1 AND user_id=$2", [body.resumed_from,userId]) : null;
+    routing.pstack_enabled = original ? original.routing?.pstack_enabled === true : (await tx.get("users", userId))?.pstack_enabled === true;
+    routing.coding = body.coding === true;
+  }
   // Explicit destinations fail immediately when unavailable. Automatic work is resolved at dispatch.
   let location = {execution:"cloud",device_id:null as string | null,operation_target:"pending"};
   if (routing.execution !== "auto" || body.operation_target) {
@@ -252,7 +262,7 @@ export async function readTask(tx: Tx, userId: string, claims: LlmClaims, taskId
 
 export async function listTasks(tx: Tx, userId: string, claims: LlmClaims, runId: string) {
   await callerRun(tx, userId, claims, runId);
-  const rows = await tx.rows(`SELECT t.*, b.name AS bot_name, r.status AS run_status, r.error AS run_error, m.content AS run_result, m.progress, m.tools, m.updated_at AS activity_at
+  const rows = await tx.rows(`SELECT t.*, b.name AS bot_name, r.status AS run_status, r.error AS run_error, r.tokens_used, r.model_calls, r.missing_usage_calls, m.content AS run_result, m.progress, m.tools, m.updated_at AS activity_at
     FROM agent_tasks t JOIN bots b ON b.bot_id=t.target_bot_id
     LEFT JOIN bot_runs r ON r.run_id=t.child_run_id
     LEFT JOIN bot_messages m ON m.message_id=r.assistant_message_id
@@ -319,8 +329,11 @@ export async function reportLater(tx: Tx, userId: string, claims: LlmClaims, tas
 
 function reportText(t: Row) {
   const task = (t.task.length > 500 ? `${t.task.slice(0, 499)}…` : t.task)+(t.operation_target&&t.operation_target!=="legacy"?`\n执行环境：${t.operation_target}`:"");
+  const usage = !(t.usage_notice_tokens || t.usage_notice_calls) ? "" : `\n\n已用 ${t.tokens_used} token，调用模型 ${t.model_calls} 次${t.missing_usage_calls ? `（${t.missing_usage_calls} 次未返回 token 用量）` : ""}。`;
+  if (t.pause_question && t.status !== "cancelled")
+    return `「${t.bot_name}」已暂停并保存任务进展。请原样向用户提出这个问题，用户回复后用 resume_task 续接。\n任务 ID：${t.task_id}\n待确认：${t.pause_question}\n进展：${String(t.result ?? "").slice(0, 12000)}${usage}`;
   if (t.status === "completed")
-    return `「${t.bot_name}」完成了你委托的任务。\n\n任务：${task}\n\n结果：\n${String(t.result || "（没有文字结果）").slice(0, 20000)}`;
+    return `「${t.bot_name}」完成了你委托的任务。\n\n任务：${task}\n\n结果：\n${String(t.result || "（没有文字结果）").slice(0, 20000)}${usage}`;
   if (t.status === "failed") return `「${t.bot_name}」没能完成你委托的任务：${t.error ?? "运行失败"}\n\n任务：${task}`;
   return `「${t.bot_name}」的任务已被取消。\n\n任务：${task}`;
 }
@@ -472,7 +485,8 @@ export class AgentDispatcher {
       try {
         const run = await this.db.tx(async (tx) => {
           const t = await tx.one(
-            `SELECT t.*, b.name AS bot_name FROM agent_tasks t JOIN bots b ON b.bot_id=t.target_bot_id
+            `SELECT t.*, b.name AS bot_name, r.tokens_used, r.model_calls, r.missing_usage_calls, r.usage_notice_tokens, r.usage_notice_calls
+             FROM agent_tasks t JOIN bots b ON b.bot_id=t.target_bot_id LEFT JOIN bot_runs r ON r.run_id=t.child_run_id
              WHERE t.task_id=$1 AND t.delivered_at IS NULL FOR NO KEY UPDATE OF t SKIP LOCKED`,
             [task_id],
           );

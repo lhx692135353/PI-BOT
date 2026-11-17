@@ -260,6 +260,28 @@ export const routes: Route[] = [
   {method:"POST",path:"/agent/checkpoint",auth:"llm",tag:"agents",summary:"保存当前任务检查点",internal:true,
     body:z.object({run_id:uuid,checkpoint:checkpointSchema,expected_version:z.number().int().min(0)}).strict(),
     handler:async({tx,user,llm,body})=>checkpoint(tx,user.user_id,llm!,body.run_id,body.checkpoint,body.expected_version)},
+  { method: "POST", path: "/agent/task-pause", auth: "llm", tag: "agents", summary: "保存任务待答问题", internal: true,
+    body: z.object({ run_id: uuid, request_id: z.string().min(1).max(200), question: z.string().min(1).max(1000), progress: z.string().min(1).max(4000), next: z.string().min(1).max(2000) }).strict(),
+    handler: async ({ tx, user, llm, body }) => {
+      const run = await callerRun(tx, user.user_id, llm!, body.run_id);
+      if (run.lane !== "task" || !run.task_id || run.automation_id || run.automation_readonly || run.execution_policy === "device_only" || run.cancel_requested) return fail(422, "当前任务不能等待用户答复");
+      const task = await tx.one(`UPDATE agent_tasks SET pause_question=$2,
+        checkpoint=coalesce(checkpoint,'{}'::jsonb) || jsonb_build_object(
+          'completed', coalesce(checkpoint->'completed','[]'::jsonb) || jsonb_build_array($3::text),
+          'blockers', coalesce(checkpoint->'blockers','[]'::jsonb) || jsonb_build_array($2::text),
+          'next_steps', jsonb_build_array($4::text), 'run_id', $5::uuid, 'pause_request_id', $6::text),
+        checkpoint_version=checkpoint_version+1, updated_at=now()
+        WHERE task_id=$1 AND child_run_id=$5 AND pause_question IS NULL RETURNING task_id`,
+        [run.task_id, body.question, body.progress, body.next, run.run_id, body.request_id]);
+      if (!task) {
+        const saved = await tx.get("agent_tasks", run.task_id);
+        if (saved?.checkpoint?.pause_request_id !== body.request_id) return fail(409, "任务已保存其他暂停点");
+        return { paused: true };
+      }
+      await tx.notify({ user_id: user.user_id, bot_id: run.bot_id });
+      return { paused: true };
+    },
+  },
   {method:"POST",path:"/agent/tasks/resume",auth:"llm",tag:"agents",summary:"用户要求后续接已结束任务",internal:true,
     body:z.object({run_id:uuid,task_id:uuid,request_id:z.string().min(1).max(200),text:z.string().max(8000).optional()}).strict(),
     handler:async({tx,db,s,hub,user,llm,body,after})=>{const r=await resumeTask(tx,hub,user.user_id,llm!,body,s);if(r.run?.executor==="device") after(()=>dispatchDevice(db,s,hub,r.run!.run_id));return r.task;}},
@@ -314,6 +336,11 @@ export const routes: Route[] = [
       ...routingFields,
       browser_test_origin: z.string().trim().max(2048).optional(),
       browser_test_visible: z.boolean().optional(),
+      electron_test: z.discriminatedUnion("app", [
+        z.object({ app: z.literal("pibot") }).strict(),
+        z.object({ app: z.literal("electron"), executable: z.string().trim().min(1).max(2000), entry: z.string().trim().min(1).max(2000).optional() }).strict(),
+      ]).optional(),
+      coding: z.boolean().optional(),
       agent: z.string().trim().min(1).max(100).optional(),
       kind: z.enum(["background", "delegation"]).default("delegation"),
       title: z.string().trim().min(1).max(80).optional(),
@@ -368,7 +395,7 @@ export const routes: Route[] = [
             if (query.run_id) await callerRun(tx, user.user_id, llm!, query.run_id);
             return readTask(tx, user.user_id, llm!, params.id, s, query.wait > 0);
           });
-          if (TERMINAL.includes(task.status) || Date.now() >= deadline || closed) return task;
+          if (task.status === "paused" || TERMINAL.includes(task.status) || Date.now() >= deadline || closed) return task;
           await new Promise((r) => setTimeout(r, 500));
         }
       } finally {
@@ -415,6 +442,15 @@ export const routes: Route[] = [
     method: "GET", path: "/me", auth: "actor", tag: "auth", summary: "当前用户与电脑在线状态",
     handler: async ({ tx, hub, s, user }) => ({ user: userOut(user), computer: await computerStatus(tx, hub, user.user_id), devices: await deviceList(tx, hub, user.user_id), cloud_computer: await cloudComputer(tx, s, user.user_id) }),
   },
+  { method: "GET", path: "/me/preferences", auth: "actor", tag: "auth", summary: "读取个人开发设置",
+    handler: async ({ user }) => ({ pstack_enabled: user.pstack_enabled === true }) },
+  { method: "PATCH", path: "/me/preferences", auth: "actor", tag: "auth", summary: "更新个人开发设置",
+    body: z.object({ pstack_enabled: z.boolean() }).strict(),
+    handler: async ({ tx, user, hub, body, after }) => {
+      await tx.update("users", user.user_id, { pstack_enabled: body.pstack_enabled });
+      after(() => hub.publish(user.user_id, { type: "bots" }));
+      return body;
+    } },
   {
     method: "POST", path: "/devices/register", auth: "user", tag: "device", summary: "注册或更新当前用户的一台执行电脑",
     body: z.object({ public_key: z.string(), label: z.string().trim().min(1).max(80), platform: z.enum(["darwin","linux","win32"]).default("darwin") }),

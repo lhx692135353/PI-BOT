@@ -4,7 +4,7 @@ import { fail, HttpError, type Tx, type Row } from "./db.js";
 import type { Settings } from "./config.js";
 import type { Hub } from "./hub.js";
 
-export const CAPABILITIES = ["files", "shell", "browser", "desktop", "phone", "always-on-v1", "preflight-v1", "browser-test", "browser-test-task-v1", "browser-test-handoff-v1"] as const;
+export const CAPABILITIES = ["files", "shell", "browser", "desktop", "phone", "always-on-v1", "preflight-v1", "browser-test", "browser-test-task-v1", "browser-test-handoff-v1", "electron-test-v1", "pibot-electron-test-v1"] as const;
 export const resourceSchema = z.object({
   target: z.string().regex(/^(device|remote):[0-9a-f-]{36}$/).refine(value => z.string().uuid().safeParse(value.slice(7)).success,"资源机器 ID 无效"),
   path: z.string().min(1).max(2000).optional(),
@@ -22,6 +22,9 @@ export interface Routing {
   browser_test_origin?: string;
   browser_test_authorization?: "user" | "prompt";
   browser_test_visible?: boolean;
+  electron_test?: { app: "pibot" | "electron"; executable?: string; entry?: string };
+  pstack_enabled?: boolean;
+  coding?: boolean;
   requirements: string[];
   resources: { target: string; path?: string }[];
 }
@@ -98,6 +101,32 @@ export async function browserTestRouting(tx: Tx, s: Settings | undefined, hub: H
   return fail(409, "没有可运行此浏览器测试的在线电脑，请检查连接或更新桌面端");
 }
 
+export async function electronTestRouting(tx: Tx, hub: Hub, userId: string, source: Row,
+  input: Partial<Routing> & { electron_test: NonNullable<Routing["electron_test"]> }): Promise<Routing> {
+  if (input.execution === "cloud" || input.execution === "remote") fail(422, "Electron 测试需要使用用户电脑");
+  const routing = await taskRouting(tx, userId, source, { ...input, execution: "auto" });
+  const targets = [...new Set(routing.resources.map(resource => resource.target))];
+  if (targets.length > 1 || targets.some(target => !targetDevice(target))) fail(422, "请确认应用所在的用户电脑");
+  const project = targetDevice(targets[0]);
+  if (project && input.device_id && project !== input.device_id) fail(422, "指定电脑与项目所在电脑不同");
+  const required = [...new Set([...(input.requirements ?? []), "electron-test-v1",
+    ...(input.electron_test.app === "pibot" ? ["pibot-electron-test-v1"] : [])])].sort();
+  const pinned = input.device_id ?? project;
+  const result = { ...routing, execution: "device" as const, requirements: required, electron_test: input.electron_test };
+  if (pinned) return { ...result, device_id: pinned };
+  const devices = await tx.rows("SELECT device_id,label FROM devices WHERE user_id=$1 AND revoked_at IS NULL ORDER BY label,device_id", [userId]);
+  const candidates = devices.filter(device => {
+    const conn = hub.device(userId, device.device_id);
+    return conn && required.every(capability => conn.capabilities?.includes(capability));
+  });
+  const current = candidates.find(device => device.device_id === source.source_device_id);
+  if (current) return { ...result, device_id: current.device_id };
+  if (candidates.length === 1 && !(source.source_device_id && input.electron_test.app === "electron"))
+    return { ...result, device_id: candidates[0].device_id };
+  if (candidates.length) fail(409, `请在聊天中确认应用在哪台电脑。可用电脑：${candidates.slice(0, 4).map(device => device.label).join("、")}`);
+  return fail(409, "没有提供 Electron 测试能力的在线电脑，请检查桌面端连接和版本");
+}
+
 export async function taskRouting(tx: Tx, userId: string, source: Row, input: Partial<Routing> = {}): Promise<Routing> {
   const execution = input.execution ?? (input.device_id ? "device" : "auto");
   if (input.device_id && !["auto", "device"].includes(execution)) fail(422, "电脑与云端目标不能同时指定");
@@ -131,6 +160,9 @@ export async function resolveTaskTarget(tx: Tx, s: Settings | undefined, hub: Hu
   if ((routing.browser_test_origin || required.includes("browser-test")) &&
       (!routing.browser_test_origin || routing.execution !== "device" || !routing.device_id))
     fail(422, "浏览器测试需要站点 origin 和已选定的用户电脑");
+  if ((routing.electron_test || required.includes("electron-test-v1")) &&
+      (!routing.electron_test || routing.execution !== "device" || !routing.device_id))
+    fail(422, "Electron 测试需要指定应用和用户电脑");
   const targets = new Set(resources.map(r => r.target));
   if (targets.size > 1) fail(422, "一个任务需要多台机器的资源，请先拆分任务或明确传输所需文件");
   const permits = (target: string) => !targets.size || targets.has(target);

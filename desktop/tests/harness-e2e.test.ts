@@ -4,6 +4,7 @@ import { isRealToolResult, latestUserText, realToolOutputs, ResponseStream } fro
 import test, { after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
+import { createRequire } from 'node:module';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -23,6 +24,7 @@ const skip = !TEST_DB && '需要 PI_BOT_TEST_DATABASE_URL';
 const browserMode = process.env.PI_BOT_TEST_BROWSER;
 const browserSkip = skip || (!['chrome', 'chromium', 'auto'].includes(browserMode ?? '') && '需要 PI_BOT_TEST_BROWSER=chrome 或 chromium');
 const handoffSkip = browserSkip || (process.env.PI_BOT_TEST_BROWSER_HANDOFF !== '1' && '需要 PI_BOT_TEST_BROWSER_HANDOFF=1');
+const electronSkip = skip || (process.platform === 'linux' && !process.env.DISPLAY && '需要桌面显示或 Xvfb');
 const BROWSER_PRIVATE_LOG = 'LOCAL-ONLY-BROWSER-DIAGNOSTIC';
 
 async function browserPages() {
@@ -81,7 +83,29 @@ async function scriptedProvider(outside: string, browserOrigin?: string, depende
     let reply: { text?: string; tool?: { name: string; args: object } };
     const goalId = user.match(/"id":"([0-9a-f-]{36})"/)?.[1];
     const originalUser = latestUserText(messages);
-    if (user === `测试网页注册流程 ${browserOrigin}/register`) {
+    if (user === '测一下 Electron 测试应用') {
+      const executable = createRequire(new URL('../package.json', import.meta.url))('electron');
+      reply = toolDone ? { text: '已安排应用测试。' } : { tool: { name: 'start_task', args: {
+        electron_test: { app: 'electron', executable, entry: join(dir, 'fixture.cjs') }, title: '应用测试', task: '执行 Electron 测试',
+      } } };
+    } else if (user === '执行 Electron 测试') {
+      assert.ok(!json.tools.some((tool: any) => ['run_command', 'browser_test'].includes(tool.name)));
+      const steps = [
+        { action: 'open' }, { action: 'assert', selector: 'h1', value: 'Fixture app' },
+        { action: 'login' }, { action: 'screenshot' },
+      ];
+      if (!results.length) {
+        assert.ok(!json.tools.some((tool: any) => tool.name === 'electron_test'));
+        reply = { tool: { name: 'tool_search', args: { query: 'electron_test' } } };
+      } else {
+        assert.match(results[0], /electron_test/);
+        assert.ok(json.tools.some((tool: any) => tool.name === 'electron_test'));
+        const args = steps[results.length - 1];
+        reply = args ? { tool: { name: 'electron_test', args } } : {
+          text: results.at(-1)?.includes('screenshot-1.png') ? '已完成应用交接并截图。' : '应用测试出错。',
+        };
+      }
+    } else if (user === `测试网页注册流程 ${browserOrigin}/register`) {
       assert.ok(!json.tools.some((tool: any) => tool.name === 'browser_test'));
       reply = toolDone ? { text: '已安排网页测试。' } :
         { tool: { name: 'start_task', args: { browser_test_origin: browserOrigin, title: '网页注册测试', task: '验证浏览器注册流程' } } };
@@ -344,6 +368,43 @@ test('a visible browser waits for the chat login confirmation before resuming', 
     const page = await app.call('messages', { botId: bot.id }) as MessagePage;
     return page.messages.find(message => message.status === 'completed' && /已接回测试窗口/.test(message.content));
   }, 15000);
+});
+
+test('a chat task discovers Electron on the desktop and requires one-time launch and login approvals', { skip: electronSkip }, async () => {
+  await connectBrowserHarness();
+  assert.deepEqual(await app.call('preferences', {}), { pstack_enabled: false });
+  assert.deepEqual(await app.call('setPreferences', { pstack_enabled: true }), { pstack_enabled: true });
+  await app.call('setPreferences', { pstack_enabled: false });
+  writeFileSync(join(dir, 'fixture.cjs'), `
+    const { app, BrowserWindow } = require('electron');
+    app.whenReady().then(() => {
+      const window = new BrowserWindow({ width: 500, height: 400 });
+      void window.loadURL('data:text/html,<h1>Fixture app</h1>');
+    });
+  `);
+  const bot = await app.call('botCreate', { name: 'Electron Tester', persona: '', avatar: { shape: 'bean', color: 'mint', scheme: 'light' } }) as Bot;
+  await app.call('send', { botId: bot.id, text: '测一下 Electron 测试应用' });
+  const pending = (kind: string) => eventually(async () => {
+    const { bots } = await app.call('bots', {}) as { bots: Bot[] };
+    return bots.find(record => record.id === bot.id)?.pending_approvals.find(item => item.kind === kind);
+  }, 25000);
+  const launch = await pending('outside_access');
+  assert.equal(launch.can_remember, false);
+  assert.equal(launch.access, 'execute');
+  assert.match(launch.reason, /fixture.cjs/);
+  await assert.rejects(app.call('decide', { approvalId: launch.id, decision: 'approve_always' }), /仅适用于本次任务/);
+  await app.call('decide', { approvalId: launch.id, decision: 'approve' });
+  const handoff = await pending('browser_login');
+  assert.equal(handoff.path, 'Electron 应用测试窗口');
+  await app.call('decide', { approvalId: handoff.id, decision: 'approve' });
+  const finished = await eventually(async () => {
+    const page = await app.call('messages', { botId: bot.id }) as MessagePage;
+    return page.messages.find(message => message.status === 'completed' && message.content.includes('已完成应用交接并截图'));
+  }, 15000);
+  const task = await serverDb.tx(tx => tx.get('agent_tasks', finished.task_id!));
+  assert.equal(task.operation_target, 'device:' + app.state().deviceId);
+  assert.ok(existsSync(join(dir, 'data', 'electron-test-evidence', task.child_run_id, 'screenshot-1.png')));
+  assert.deepEqual(readdirSync(join(dir, 'data', 'electron-test-profiles')), []);
 });
 
 test('the Mac harness logs in, binds itself and runs bots against its library', { skip }, async () => {

@@ -323,6 +323,12 @@ public final class AppStore {
         try await refreshBot(approval.botId)
     }
 
+    public func preferences() async throws -> DevelopmentPreferences { try await authed { try await self.api.preferences($0, token: $1) } }
+
+    public func setPreferences(_ enabled: Bool) async throws -> DevelopmentPreferences {
+        try await authed { try await self.api.setPreferences($0, token: $1, enabled: enabled) }
+    }
+
     public func authorizations() async throws -> [SavedAuthorization] { try await authed { try await self.api.authorizations($0, token: $1) } }
 
     public func authorizationLogs() async throws -> [AuthorizationLog] { try await authed { try await self.api.authorizationLogs($0, token: $1) } }

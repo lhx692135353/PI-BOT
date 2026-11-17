@@ -111,6 +111,11 @@ public struct ComputerStatus: Decodable, Hashable, Sendable {
     }
 }
 
+public struct DevelopmentPreferences: Codable, Sendable {
+    public let pstackEnabled: Bool
+    enum CodingKeys: String, CodingKey { case pstackEnabled = "pstack_enabled" }
+}
+
 public struct Me: Decodable, Sendable {
     public var user: User
     public var computer: ComputerStatus
