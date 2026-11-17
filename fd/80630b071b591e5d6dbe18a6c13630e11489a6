@@ -1,0 +1,61 @@
+desktop/packages/service/src/application.ts
+  s_2c169087b58dd5::t_221294fdb0fe09 81
+server/src/runs.ts
+  s_2c169087b58dd5::t_4fc0752df791b0 63,65-66
+  s_2c169087b58dd5::t_221294fdb0fe09 64,103-106,198,202-204,209-210,339
+  s_2c169087b58dd5::t_4ab7961beab3da 102
+ios/PiBot/Conversation/MessageRow.swift
+  s_2c169087b58dd5::t_b26f57c7b2b4e1 155-157,171-173,179
+server/src/targets.ts
+  s_2c169087b58dd5::t_221294fdb0fe09 7,24,66,70-71
+server/openapi.json
+  s_2c169087b58dd5::t_221fcb672e830e 1762-1763,1793-1794
+  s_2c169087b58dd5::t_e5b2838f1dbc9a 1795
+desktop/packages/protocol/src/index.ts
+  s_2c169087b58dd5::t_b26f57c7b2b4e1 83
+packages/agent/src/tasks.ts
+  s_2c169087b58dd5::t_221294fdb0fe09 27
+desktop/apps/desktop/ui/timeline.tsx
+  s_2c169087b58dd5::t_b26f57c7b2b4e1 138-139,151,157-158
+desktop/tests/harness-e2e.test.ts
+  s_2c169087b58dd5::t_625fd58cdecb25 246,249-252,289,327
+  s_2c169087b58dd5::t_298d1bfd5684e6 25,106-114,326,328-346
+  s_2c169087b58dd5::t_024944c9c7bc8d 347-348
+desktop/packages/service/src/browser-test.ts
+  s_2c169087b58dd5::t_5e8f28efe098c5 2,40,56-61,78-79,82,85,106,111,118,157,175-176,182,186-213,215,217-224,228-230,232-237,297,341-342,344
+  s_2c169087b58dd5::t_4fc0752df791b0 214,216,225-227,231
+  s_2c169087b58dd5::t_34ebc7b91de49d 149-154,160
+server/src/bots.ts
+  s_2c169087b58dd5::t_221294fdb0fe09 150,154,489-490,602,732
+server/src/routes.ts
+  s_2c169087b58dd5::t_221294fdb0fe09 313
+server/src/agents.ts
+  s_2c169087b58dd5::t_221294fdb0fe09 111,136
+desktop/README.md
+  s_2c169087b58dd5::t_b26f57c7b2b4e1 30-31
+.github/workflows/ci.yml
+  s_2c169087b58dd5::t_cff1cbcaa33403 56
+desktop/tests/browser-test.test.ts
+  s_2c169087b58dd5::t_cff1cbcaa33403 8,13-20,76-129
+  s_2c169087b58dd5::t_5193dc33c1ea12 130-132
+desktop/packages/service/src/executor.ts
+  s_2c169087b58dd5::t_5e8f28efe098c5 24-25,144-146,259-260
+android/app/src/main/java/dev/pibot/android/ui/TimelineScreen.kt
+  s_2c169087b58dd5::t_b26f57c7b2b4e1 490-492,503,505-506,508
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fd80630b071b591e5d6dbe18a6c13630e11489a6",
+  "prompts": {},
+  "sessions": {
+    "s_2c169087b58dd5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1e4a8-7aad-7831-a016-54738d594741",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
