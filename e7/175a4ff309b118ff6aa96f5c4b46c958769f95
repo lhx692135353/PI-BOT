@@ -1,0 +1,21 @@
+desktop/tests/bot-editor-runner.mjs
+  s_2c169087b58dd5::t_2eb16defdcdf85 1-71
+desktop/tests/bot-editor.harness.tsx
+  s_2c169087b58dd5::t_62202a5a88984a 1-31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e7175a4ff309b118ff6aa96f5c4b46c958769f95",
+  "prompts": {},
+  "sessions": {
+    "s_2c169087b58dd5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1e4a8-7aad-7831-a016-54738d594741",
+        "model": "unknown"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
