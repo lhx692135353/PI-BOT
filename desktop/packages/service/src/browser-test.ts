@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { mkdir, mkdtemp, realpath, writeFile } from 'node:fs/promises';
 import { isAbsolute, join, relative, sep } from 'node:path';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
@@ -36,7 +37,7 @@ const clean = (value: string, limit = 240) => value.replace(/[\u0000-\u001f\u007
 const netLocation = (value: string) => {
   try { return browserTestUrl(value).origin; } catch { return 'unknown'; }
 };
-type Operation = 'open' | 'observe' | 'click' | 'fill' | 'press' | 'assert' | 'diagnostics' | 'screenshot' | 'authorize';
+type Operation = 'open' | 'observe' | 'click' | 'fill' | 'press' | 'assert' | 'diagnostics' | 'screenshot' | 'authorize' | 'login';
 interface Args {
   op: Operation;
   url?: string;
@@ -52,6 +53,12 @@ interface BrowserAuthorization {
   userAuthorized: boolean;
   request(origins: string[], signal?: AbortSignal): Promise<boolean>;
 }
+interface LoginHandoff {
+  visible: boolean;
+  wait(origin: string, signal?: AbortSignal): Promise<boolean>;
+}
+type StorageState = Awaited<ReturnType<BrowserContext['storageState']>>;
+const operations: Operation[] = ['open', 'observe', 'click', 'fill', 'press', 'assert', 'diagnostics', 'screenshot', 'authorize'];
 
 export class BrowserTest {
   private browser?: Browser;
@@ -68,11 +75,14 @@ export class BrowserTest {
   private origins: Set<string>;
   private blocked = new Set<string>();
   private refused = new Set<string>();
+  private visible: boolean;
+  private manual = false;
 
   constructor(private config: BrowserTestConfig, private origin: string, private dataDir: string, private libraryRoot: string,
-    private authorization?: BrowserAuthorization) {
+    private authorization?: BrowserAuthorization, private handoff?: LoginHandoff) {
     this.origins = new Set(config.origins);
     if (authorization?.userAuthorized) this.origins.add(origin);
+    this.visible = handoff?.visible ?? false;
   }
 
   private recordBlocked(url: string) {
@@ -93,18 +103,19 @@ export class BrowserTest {
 
   private log(kind: Diagnostic['kind'], message: string) {
     this.counts[kind]++;
+    if (this.manual) return;
     if (this.events.length === 100) this.events.shift();
     this.events.push({ kind, message: clean(message, 1500) });
   }
 
-  private async openContext() {
+  private async openContext(storageState?: StorageState) {
     await this.proxy?.close().catch(() => {});
     this.proxy = await browserTestProxy(this.origins, origin => {
       if (this.page) this.log('blocked', origin);
     });
     if (this.stopped) throw new Error('浏览器测试已取消');
     const options = {
-      chromiumSandbox: true, headless: true, timeout: 30000,
+      chromiumSandbox: true, headless: !this.visible, timeout: 30000,
       proxy: { server: this.proxy.url, bypass: '<-loopback>' },
       args: ['--disable-quic', '--force-webrtc-ip-handling-policy=disable_non_proxied_udp'],
     };
@@ -135,13 +146,18 @@ export class BrowserTest {
           return undefined;
         });
       }
-      if (!this.browser) throw new Error(this.stopped ? '浏览器测试已取消' :
-        '无法安全启动测试浏览器。请检查 Chrome Stable、代理和沙箱，或运行 npx --yes playwright@1.65.1 install --no-shell chromium。', { cause });
+      if (!this.browser) {
+        if (this.stopped) throw new Error('浏览器测试已取消', { cause });
+        throw new Error(this.visible
+          ? '无法打开测试窗口。请确认执行电脑已登录图形桌面，且 Chrome 或 Chromium 可用。'
+          : '无法安全启动测试浏览器。请检查 Chrome Stable、代理和沙箱，或运行 npx --yes playwright@1.65.1 install --no-shell chromium。', { cause });
+      }
     }
     if (this.stopped) throw new Error('浏览器测试已取消');
-    const context = await this.browser.newContext({ acceptDownloads: false, serviceWorkers: 'block' });
+    const context = await this.browser.newContext({ acceptDownloads: false, serviceWorkers: 'block', storageState });
     context.setDefaultTimeout(timeout);
     context.setDefaultNavigationTimeout(timeout);
+    context.on('request', request => this.recordBlocked(request.url()));
     await context.route('**/*', route => {
       const url = route.request().url();
       if (this.origins.has(netLocation(url))) return route.continue();
@@ -156,16 +172,67 @@ export class BrowserTest {
     return context;
   }
 
-  private async openPage() {
-    const context = this.context ?? await this.openContext();
+  private async openPage(storageState?: StorageState) {
+    const context = this.context ?? await this.openContext(storageState);
     const page = this.page = await context.newPage();
     page.on('console', message => { if (message.type() === 'error' || message.type() === 'warning') this.log('console', message.text()); });
     page.on('pageerror', error => this.log('page', error.message));
-    page.on('request', request => this.recordBlocked(request.url()));
     page.on('requestfailed', request => this.log('request', request.url() + ' ' + (request.failure()?.errorText ?? '')));
     page.on('response', response => { if (response.status() >= 400) this.log('http', response.status() + ' ' + response.url()); });
-    page.on('popup', popup => { void popup.close().catch(() => {}); });
+    page.on('popup', popup => { if (!this.manual) void popup.close().catch(() => {}); });
     return page;
+  }
+
+  private async login(page: Page, signal?: AbortSignal) {
+    if (!this.handoff) throw new Error('此任务不支持打开登录窗口');
+    this.manual = true;
+    try {
+      if (!this.visible) {
+        const url = browserTestUrl(page.url());
+        const state = await page.context().storageState({ indexedDB: true });
+        const entries = await page.evaluate(() => Object.entries(sessionStorage));
+        await this.browser?.close();
+        this.browser = this.context = this.page = undefined;
+        this.visible = true;
+        page = await this.openPage(state);
+        const marker = `__pibot_restore_${randomUUID()}`;
+        await page.addInitScript(({ origin, entries, marker }) => {
+          if (window.location.origin !== origin || sessionStorage.getItem(marker)) return;
+          for (const [key, value] of entries) sessionStorage.setItem(key, value);
+          sessionStorage.setItem(marker, '1');
+        }, { origin: url.origin, entries, marker });
+        // Resume at the login URL with a navigation, never replay a form submission.
+        await page.goto(url.href, { waitUntil: 'domcontentloaded' }).catch(() => undefined);
+      }
+      const origin = netLocation(page.url());
+      if (!this.origins.has(origin) || !this.browser?.isConnected())
+        return { resumed: false, blocked_origins: [...this.blocked], reason: '登录窗口未打开允许的页面' };
+      await page.bringToFront().catch(() => {});
+      const closed = new AbortController();
+      const browser = this.browser;
+      const disconnect = () => closed.abort();
+      const closePage = () => { if (page.context().pages().every(candidate => candidate.isClosed())) disconnect(); };
+      browser.once('disconnected', disconnect);
+      page.once('close', closePage);
+      try {
+        const waiting = signal ? AbortSignal.any([signal, closed.signal]) : closed.signal;
+        if (!await this.handoff.wait(origin, waiting) || waiting.aborted || this.stopped) {
+          this.stopped = true;
+          await browser.close().catch(() => {});
+          return { resumed: false, reason: '用户取消或关闭了登录窗口' };
+        }
+        const allowedPage = (candidate: Page) => !candidate.isClosed() && this.origins.has(netLocation(candidate.url()));
+        const candidates = page.context().pages().filter(allowedPage);
+        this.page = candidates.find(candidate => netLocation(candidate.url()) === this.origin) ??
+          (allowedPage(page) ? page : candidates.at(-1));
+        return { resumed: !!this.page, origin: this.page ? netLocation(this.page.url()) : undefined, blocked_origins: [...this.blocked] };
+      } finally {
+        browser.off('disconnected', disconnect);
+        page.off('close', closePage);
+      }
+    } finally {
+      this.manual = false;
+    }
   }
 
   private async localEvidenceDir() {
@@ -227,6 +294,7 @@ export class BrowserTest {
     const page = this.page;
     if (!page) throw new Error('请先打开测试页面');
     if (!this.origins.has(netLocation(page.url()))) throw new Error('测试页面已离开允许的站点');
+    if (args.op === 'login') return await this.login(page, signal);
     if (args.op === 'screenshot') return { screenshot: await this.capture(page) };
     if (args.op === 'observe') {
       const snapshot = await page.locator('body').ariaSnapshot({ timeout });
@@ -270,9 +338,10 @@ export class BrowserTest {
     const optional = (limit: number) => Type.Optional(Type.String({ minLength: 1, maxLength: limit }));
     return {
       name: 'browser_test', label: '端侧浏览器测试', exposure: 'deferred',
-      description: '在选定电脑上测试 Web 页面。open 打开站点，observe 查看页面，click/fill/press 操作，assert 执行断言，diagnostics 列出错误和 blocked_origins，screenshot 本机截图。authorize 可一次申请本次实际被拦截、测试所需的多个 origin。获批后安全地重新打开页面验证，避免重放可能已提交的操作。',
+      description: '在选定电脑上测试 Web 页面。open 打开站点，observe 查看页面，click/fill/press 操作，assert 执行断言，diagnostics 列出错误和 blocked_origins，screenshot 本机截图。authorize 可一次申请本次实际被拦截、测试所需的多个 origin。获批后安全地重新打开页面验证，避免重放可能已提交的操作。' +
+        (this.handoff ? ' 遇到登录页、扫码或人工身份验证时调用 login，打开独立窗口并暂停。用户返回后先观察页面验证是否登录。' : ''),
       parameters: Type.Object({
-        op: Type.Union(['open', 'observe', 'click', 'fill', 'press', 'assert', 'diagnostics', 'screenshot', 'authorize'].map(op => Type.Literal(op))),
+        op: Type.Union((this.handoff ? [...operations, 'login'] : operations).map(op => Type.Literal(op))),
         url: optional(2048), role: Type.Optional(Type.Union(roles.map(role => Type.Literal(role)))),
         origins: Type.Optional(Type.Array(Type.String({ maxLength: 2048 }), { minItems: 1, maxItems: 8 })),
         name: optional(240), text: Type.Optional(Type.String({ maxLength: 1000 })),

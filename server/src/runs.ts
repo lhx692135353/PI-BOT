@@ -60,7 +60,10 @@ export async function dispatchDevice(db: Database, s: Settings, hub: Hub, runId:
     const claimed = await claimExecution(tx, runId, s,undefined,hub);
     if (!claimed) return null;
     await tx.notify({ user_id: run.user_id, bot_id: run.bot_id });
-    return { conn:hub.device(claimed.user_id,claimed.device_id), context: await buildContext(tx, s, claimed) };
+    const selected = hub.device(claimed.user_id, claimed.device_id);
+    const context = await buildContext(tx, s, claimed);
+    if (context.browser_test_authorization && selected?.capabilities?.includes("browser-test-handoff-v1")) context.browser_test_handoff = true;
+    return { conn: selected, context };
   });
   job?.conn?.send({ type: "run", run: job.context });
 }
@@ -95,6 +98,11 @@ const runEvent = z.discriminatedUnion("kind", [
     kind: z.literal("browser_approval"),
     request_id: z.string().max(80),
     origins: z.array(z.string().max(2048)).min(1).max(8),
+  }),
+  z.object({
+    kind: z.literal("browser_login"),
+    request_id: z.string().max(80),
+    origin: z.string().max(2048),
   }),
   z.object({
     kind: z.literal("done"),
@@ -187,16 +195,19 @@ export async function handleRunEvent(
       return null;
     }
     if (run.automation_readonly || run.cancel_requested) return null;
-    const browser = e.kind === "browser_approval";
+    const browser = e.kind === "browser_approval" || e.kind === "browser_login";
     let detail: Row;
     if (browser) {
       if (!run.routing?.browser_test_authorization || run.lane !== "task") return null;
-      const origins = [...new Set(e.origins)];
+      const handoff = e.kind === "browser_login";
+      if (handoff && !conn.capabilities?.includes("browser-test-handoff-v1")) return null;
+      const origins = handoff ? [e.origin] : [...new Set(e.origins)];
       if (origins.some(origin => browserTestOrigin(origin) !== origin)) return null;
       const device = await tx.get("devices", run.device_id);
       detail = {
         path: origins.join("\n"), origins, access: "browser", target_label: device?.label ?? "执行电脑",
-        reason: "本次 Web 测试需要访问这些站点",
+        handoff,
+        reason: handoff ? "请在执行电脑上的测试窗口完成登录。遇到问题也可以返回聊天继续处理。" : "本次 Web 测试需要访问这些站点",
       };
     } else {
       detail = { path: e.path, reason: e.reason, access: e.access ?? 'legacy',
@@ -325,7 +336,7 @@ export async function decideApproval(
   if (!run || run.cancel_requested || !['running','waiting_approval'].includes(run.status)) return fail(409,'任务已结束，审批已失效');
   if (a!.kind === 'browser_access') {
     if (decision === 'approve_always') fail(422, '浏览器访问权限仅适用于本次任务');
-    for (const origin of a!.detail.origins) await tx.insert('authorization_logs', {
+    for (const origin of a!.detail.handoff ? [] : a!.detail.origins) await tx.insert('authorization_logs', {
       user_id: userId, target: `device:${run.device_id}`, operation: 'browser', resource: origin,
       action: decision === 'reject' ? 'reject' : 'allow_once', approval_id: approvalId, run_id: run.run_id,
     });

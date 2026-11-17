@@ -24,6 +24,7 @@ export function taskTools(baseUrl: string, token: () => string, runId: string): 
       parameters: Type.Object({
         ...routingParameters,
         browser_test_origin: Type.Optional(Type.String({ maxLength: 2048, description: "端侧 Web 功能测试的 HTTP(S) origin，只含协议、主机和端口。服务端自动添加端侧浏览器能力要求。未指定电脑时省略 device_id。已知项目设备时保留 resources.target。" })),
+        browser_test_visible: Type.Optional(Type.Boolean({ description: "已知需要用户登录、扫码，或用户要求观看时开启。从任务开始在执行电脑上显示独立浏览器窗口。默认后台运行。" })),
         title: Type.String({ minLength: 1, maxLength: 80, description: "用户能看懂的简短任务名称，通常 10–20 字，例如检查显存占用；不填内部代号、命令或参数" }),
         task: Type.String({ minLength: 1, maxLength: 8000 }),
       }),

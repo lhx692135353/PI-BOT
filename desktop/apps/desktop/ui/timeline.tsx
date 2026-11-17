@@ -135,7 +135,8 @@ function RelayMessage({ m, onOpenBot }: { m: Message & { from_bot: FromBot }; on
 }
 
 export function ApprovalCard({ approval }: { approval: Approval }) {
-  const browser = approval.kind === 'browser_access';
+  const login = approval.kind === 'browser_login';
+  const browser = login || approval.kind === 'browser_access';
   const [busy, setBusy] = useState(false);
   const [decided, setDecided] = useState(false);
   const [error, setError] = useState('');
@@ -147,14 +148,14 @@ export function ApprovalCard({ approval }: { approval: Approval }) {
   };
   return (
     <div className="approval">
-      <strong>{browser ? '浏览器测试需要访问站点' : '想访问资料库以外的位置'}</strong>
+      <strong>{login ? '测试暂停，等待你登录' : browser ? '浏览器测试需要访问站点' : '想访问资料库以外的位置'}</strong>
       <code style={browser ? { whiteSpace: 'pre-wrap' } : undefined}>{approval.path}</code>
       <p>{approval.reason}</p>
       <p className="small">{approval.scope ?? (browser ? '仅本次任务可访问以上站点' : '仅本次任务访问此路径。旧版执行端无法保存授权，请更新执行电脑客户端。')}</p>
       {decided && <p role="status">已提交决定，正在同步…</p>}{error && <p className="error small">{error}</p>}
       <div className="row-end">
-        <button className="ghost" disabled={busy || decided} onClick={() => decide('reject')}>拒绝</button>
-        <button className="primary" disabled={busy || decided} onClick={() => decide('approve')}>仅本次允许</button>
+        <button className="ghost" disabled={busy || decided} onClick={() => decide('reject')}>{login ? '取消登录' : '拒绝'}</button>
+        <button className="primary" disabled={busy || decided} onClick={() => decide('approve')}>{login ? '返回 Bot 继续' : '仅本次允许'}</button>
         {!browser && <button className="ghost" disabled={busy || decided || !approval.can_remember} title={approval.can_remember ? '保存上述操作权限，可在设置中撤销' : '旧版或范围不明确的权限需要逐次确认'} onClick={() => decide('approve_always')}>一直允许</button>}
       </div>
     </div>

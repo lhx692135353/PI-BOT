@@ -1759,7 +1759,8 @@
                         "always-on-v1",
                         "preflight-v1",
                         "browser-test",
-                        "browser-test-task-v1"
+                        "browser-test-task-v1",
+                        "browser-test-handoff-v1"
                       ]
                     }
                   },
@@ -1788,6 +1789,9 @@
                   "browser_test_origin": {
                     "type": "string",
                     "maxLength": 2048
+                  },
+                  "browser_test_visible": {
+                    "type": "boolean"
                   },
                   "agent": {
                     "type": "string",

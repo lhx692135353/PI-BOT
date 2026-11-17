@@ -53,5 +53,6 @@ jobs:
         env:
           PI_BOT_TEST_DATABASE_URL: postgresql://pibot:pibot@127.0.0.1:5432/pibot_test
           PI_BOT_TEST_BROWSER: chromium
+          PI_BOT_TEST_BROWSER_HANDOFF: '1'
           PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/pibot-playwright
       - run: npm run build

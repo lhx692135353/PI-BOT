@@ -152,7 +152,9 @@ struct ApprovalCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(approval.kind == "browser_access" ? "浏览器测试需要访问站点" : "想访问资料库以外的位置").fontWeight(.semibold)
+            let login = approval.kind == "browser_login"
+            let browser = login || approval.kind == "browser_access"
+            Text(login ? "测试暂停，等待你登录" : browser ? "浏览器测试需要访问站点" : "想访问资料库以外的位置").fontWeight(.semibold)
             Text(approval.path)
                 .font(.system(size: 13, design: .monospaced))
                 .textSelection(.enabled)
@@ -166,15 +168,15 @@ struct ApprovalCard: View {
             if let error { Text(error).font(.footnote).foregroundStyle(Palette.danger) }
             HStack(spacing: 4) {
                 Spacer()
-                Button("拒绝") { decide("reject") }
-                Button("仅本次允许") { decide("approve") }
-                if approval.kind != "browser_access" {
+                Button(login ? "取消登录" : "拒绝") { decide("reject") }
+                Button(login ? "返回 Bot 继续" : "仅本次允许") { decide("approve") }
+                if !browser {
                     Button("一直允许") { confirmAlways = true }.disabled(!approval.canRemember)
                 }
             }
             .buttonStyle(.borderless)
             .disabled(deciding)
-            if approval.kind != "browser_access" && !approval.canRemember {
+            if !browser && !approval.canRemember {
                 Text("写入、命令和旧版宽泛权限需要逐次确认。").font(.caption).foregroundStyle(Palette.muted)
             }
         }

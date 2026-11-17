@@ -22,6 +22,7 @@ import type { AppEvent, Bot, MessagePage } from '../packages/protocol/src/index.
 const skip = !TEST_DB && '需要 PI_BOT_TEST_DATABASE_URL';
 const browserMode = process.env.PI_BOT_TEST_BROWSER;
 const browserSkip = skip || (!['chrome', 'chromium', 'auto'].includes(browserMode ?? '') && '需要 PI_BOT_TEST_BROWSER=chrome 或 chromium');
+const handoffSkip = browserSkip || (process.env.PI_BOT_TEST_BROWSER_HANDOFF !== '1' && '需要 PI_BOT_TEST_BROWSER_HANDOFF=1');
 const BROWSER_PRIVATE_LOG = 'LOCAL-ONLY-BROWSER-DIAGNOSTIC';
 
 async function browserPages() {
@@ -102,6 +103,15 @@ async function scriptedProvider(outside: string, browserOrigin?: string, depende
         const args = steps[results.length - 1];
         reply = args ? { tool: { name: 'browser_test', args } } : { text: '注册流程通过，错误消息校验失败，已保存本机截图。' };
       }
+    } else if (user === `打开测试窗口让我登录 ${browserOrigin}/register`) {
+      reply = toolDone ? { text: '已安排可见浏览器任务。' } : {
+        tool: { name: 'start_task', args: { browser_test_origin: browserOrigin, browser_test_visible: true, title: '可见浏览器交接', task: '验证浏览器登录交接' } },
+      };
+    } else if (user === '验证浏览器登录交接') {
+      if (results.length === 0) reply = { tool: { name: 'tool_search', args: { query: 'browser_test' } } };
+      else if (results.length === 1) reply = { tool: { name: 'browser_test', args: { op: 'open', url: browserOrigin } } };
+      else if (results.length === 2) reply = { tool: { name: 'browser_test', args: { op: 'login' } } };
+      else reply = { text: results.at(-1)?.includes('"resumed":true') ? '收到继续信号，已接回测试窗口。' : '用户取消了登录。' };
     } else if (user === '检查推断的测试站点' || user === '重新检查推断的测试站点') {
       reply = toolDone ? { text: '已安排网站权限测试。' } :
         { tool: { name: 'start_task', args: { browser_test_origin: browserOrigin, title: '单次网站权限', task: '验证本次网站授权' } } };
@@ -233,9 +243,13 @@ after(async () => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-test('browser testing is discovered on the selected desktop and keeps raw evidence local', { skip: browserSkip }, async () => {
+async function connectBrowserHarness() {
   if (!app.state().user) await app.login({ serverUrl: base, username: 'bob', password: 'bob-password', label: 'Bob 的 Mac' });
   await eventually(() => app.state().connection === 'online');
+}
+
+test('browser testing is discovered on the selected desktop and keeps raw evidence local', { skip: browserSkip }, async () => {
+  await connectBrowserHarness();
   const bot = await app.call('botCreate', { name: 'Web Tester', persona: '', avatar: { shape: 'bean', color: 'mint', scheme: 'light' } }) as Bot;
   if (browserMode !== 'chromium') assert.equal(existsSync(join(dir, 'data', 'browser-test.json')), false);
   await app.call('send', { botId: bot.id, text: `测试网页注册流程 ${pages!.origin}/register` });
@@ -272,7 +286,7 @@ test('browser testing is discovered on the selected desktop and keeps raw eviden
 
 test('inferred sites and blocked dependencies require an approval that expires with the task', { skip: browserSkip }, async () => {
   const fixture = pages!;
-  await eventually(() => app.state().connection === 'online');
+  await connectBrowserHarness();
   const bot = await app.call('botCreate', { name: 'Scope Tester', persona: '', avatar: { shape: 'bean', color: 'mint', scheme: 'light' } }) as Bot;
   const approval = async () => eventually(async () => {
     const { bots } = await app.call('bots', {}) as { bots: Bot[] };
@@ -307,6 +321,29 @@ test('inferred sites and blocked dependencies require an approval that expires w
     return page.messages.find(message => message.status === 'completed' && /未获授权/.test(message.content));
   }, 15000);
   assert.equal(fixture.redirects(), beforeSecond);
+});
+
+test('a visible browser waits for the chat login confirmation before resuming', { skip: handoffSkip }, async () => {
+  await connectBrowserHarness();
+  const bot = await app.call('botCreate', { name: 'Login Tester', persona: '', avatar: { shape: 'bean', color: 'mint', scheme: 'light' } }) as Bot;
+  await app.call('send', { botId: bot.id, text: `打开测试窗口让我登录 ${pages!.origin}/register` });
+  const approval = await eventually(async () => {
+    const { bots } = await app.call('bots', {}) as { bots: Bot[] };
+    return bots.find(record => record.id === bot.id)?.pending_approvals[0];
+  }, 45000);
+  assert.equal(approval.kind, 'browser_login');
+  assert.equal(approval.path, pages!.origin);
+  assert.equal(approval.can_remember, false);
+  assert.match(approval.scope ?? '', /独立测试窗口/);
+  const task = await serverDb.tx(tx => tx.one("SELECT * FROM agent_tasks WHERE parent_bot_id=$1", [bot.id]));
+  assert.equal(task?.status, 'waiting_approval');
+  assert.equal(task?.routing.browser_test_visible, true);
+  await assert.rejects(app.call('decide', { approvalId: approval.id, decision: 'approve_always' }), /仅适用于本次任务/);
+  await app.call('decide', { approvalId: approval.id, decision: 'approve' });
+  await eventually(async () => {
+    const page = await app.call('messages', { botId: bot.id }) as MessagePage;
+    return page.messages.find(message => message.status === 'completed' && /已接回测试窗口/.test(message.content));
+  }, 15000);
 });
 
 test('the Mac harness logs in, binds itself and runs bots against its library', { skip }, async () => {

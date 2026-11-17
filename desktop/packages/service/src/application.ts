@@ -78,7 +78,7 @@ export class Application {
     const generation = ++this.connectionGeneration;
     this.account = account;
     this.sign = signer(account.deviceId, privateKey);
-    const features = () => readBrowserTestConfig(this.o.dataDir) ? ['browser-test', 'browser-test-task-v1'] : [];
+    const features = () => readBrowserTestConfig(this.o.dataDir) ? ['browser-test', 'browser-test-task-v1', 'browser-test-handoff-v1'] : [];
     this.executor = new Executor({
       libraryRoot: this.o.libraryRoot,
       agentDir: agentDirFor(this.o.dataDir),

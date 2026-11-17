@@ -4,7 +4,7 @@ import { fail, HttpError, type Tx, type Row } from "./db.js";
 import type { Settings } from "./config.js";
 import type { Hub } from "./hub.js";
 
-export const CAPABILITIES = ["files", "shell", "browser", "desktop", "phone", "always-on-v1", "preflight-v1", "browser-test", "browser-test-task-v1"] as const;
+export const CAPABILITIES = ["files", "shell", "browser", "desktop", "phone", "always-on-v1", "preflight-v1", "browser-test", "browser-test-task-v1", "browser-test-handoff-v1"] as const;
 export const resourceSchema = z.object({
   target: z.string().regex(/^(device|remote):[0-9a-f-]{36}$/).refine(value => z.string().uuid().safeParse(value.slice(7)).success,"资源机器 ID 无效"),
   path: z.string().min(1).max(2000).optional(),
@@ -21,6 +21,7 @@ export interface Routing {
   preferred_device_id?: string;
   browser_test_origin?: string;
   browser_test_authorization?: "user" | "prompt";
+  browser_test_visible?: boolean;
   requirements: string[];
   resources: { target: string; path?: string }[];
 }
@@ -62,10 +63,12 @@ export async function browserTestRouting(tx: Tx, s: Settings | undefined, hub: H
   const routing = await taskRouting(tx, userId, source, { ...input, execution: "auto" });
   routing.execution = "device";
   routing.browser_test_origin = origin.origin;
+  if (input.browser_test_visible) routing.browser_test_visible = true;
   const message = source.origin === "user" && source.user_message_id ? await tx.get("bot_messages", source.user_message_id) : null;
   routing.browser_test_authorization = message?.role === "user" && message.visibility === "public" && !message.ui_action &&
     browserTestOriginInMessage(String(message.content ?? ""), normalized) ? "user" : "prompt";
-  const requirements = input.requirements?.filter(capability => !["browser", "browser-test-task-v1"].includes(capability)) ?? [];
+  const requirements = input.requirements?.filter(capability => !["browser", "browser-test-task-v1", "browser-test-handoff-v1"].includes(capability)) ?? [];
+  if (routing.browser_test_visible) requirements.push("browser-test-handoff-v1");
   routing.requirements = [...new Set([...requirements, "browser-test"])].sort();
   const knownTargets = [...new Set(routing.resources.map(resource => resource.target))];
   if (knownTargets.length > 1 || knownTargets.some(target => !targetDevice(target))) fail(422, "请确认测试项目所在的用户电脑");

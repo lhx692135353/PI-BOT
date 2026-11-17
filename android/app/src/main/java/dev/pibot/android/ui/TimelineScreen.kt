@@ -487,7 +487,9 @@ private fun ApprovalCard(approval: Approval, onDecide: suspend (String) -> Unit)
     Column(
         Modifier.fillMaxWidth().background(AccentSoft, RoundedCornerShape(18.dp)).padding(14.dp),
     ) {
-        Text(if (approval.kind == "browser_access") "浏览器测试需要访问站点" else "想访问资料库以外的位置", fontWeight = FontWeight.SemiBold)
+        val login = approval.kind == "browser_login"
+        val browser = login || approval.kind == "browser_access"
+        Text(if (login) "测试暂停，等待你登录" else if (browser) "浏览器测试需要访问站点" else "想访问资料库以外的位置", fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(8.dp))
         Text(approval.path, fontFamily = FontFamily.Monospace, fontSize = 13.sp, modifier = Modifier.fillMaxWidth().background(Card, RoundedCornerShape(8.dp)).padding(8.dp))
         if (approval.reason.isNotBlank()) {
@@ -498,12 +500,12 @@ private fun ApprovalCard(approval: Approval, onDecide: suspend (String) -> Unit)
         Text(approval.scope, fontSize = 12.sp)
         error?.let { Text(it, color = Danger) }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            TextButton(onClick = { decide("reject") }, enabled = !deciding) { Text("拒绝") }
+            TextButton(onClick = { decide("reject") }, enabled = !deciding) { Text(if (login) "取消登录" else "拒绝") }
             Spacer(Modifier.size(8.dp))
-            TextButton(onClick = { decide("approve") }, enabled = !deciding) { Text("仅本次允许") }
-            if (approval.kind != "browser_access") TextButton(onClick = { confirmAlways = true }, enabled = !deciding && approval.canRemember) { Text("一直允许") }
+            TextButton(onClick = { decide("approve") }, enabled = !deciding) { Text(if (login) "返回 Bot 继续" else "仅本次允许") }
+            if (!browser) TextButton(onClick = { confirmAlways = true }, enabled = !deciding && approval.canRemember) { Text("一直允许") }
         }
-        if (approval.kind != "browser_access" && !approval.canRemember) Text("旧版或范围不明确的权限需要逐次确认，请更新执行端并指定具体文件或目录。", color = Muted, fontSize = 12.sp)
+        if (!browser && !approval.canRemember) Text("旧版或范围不明确的权限需要逐次确认，请更新执行端并指定具体文件或目录。", color = Muted, fontSize = 12.sp)
     }
     if (confirmAlways) AlertDialog(
         onDismissRequest = { confirmAlways = false }, title = { Text("记住以下权限？") },

@@ -108,7 +108,7 @@ export async function createTask(
   hub: Hub,
   userId: string,
   claims: LlmClaims,
-  body: { run_id: string; agent?: string; task: string; wait: boolean; kind?: "background" | "delegation"; title?: string; request_id?: string;resumed_from?:string; execution?: "auto" | "device" | "cloud" | "remote"; device_id?:string; operation_target?:string; requirements?:string[]; resources?:Routing["resources"]; browser_test_origin?: string },
+  body: { run_id: string; agent?: string; task: string; wait: boolean; kind?: "background" | "delegation"; title?: string; request_id?: string;resumed_from?:string; execution?: "auto" | "device" | "cloud" | "remote"; device_id?:string; operation_target?:string; requirements?:string[]; resources?:Routing["resources"]; browser_test_origin?: string; browser_test_visible?: boolean },
   settings?:Settings,
 ) {
   const parent = await callerRun(tx, userId, claims, body.run_id);
@@ -133,6 +133,7 @@ export async function createTask(
   if (n >= MAX_TASKS_PER_RUN) fail(422, `本次任务已委托 ${MAX_TASKS_PER_RUN} 次，达到上限，请自己完成剩余部分`);
   if (body.browser_test_origin !== undefined && (kind !== "background" || isCliRuntime(target.runtime)))
     fail(422, "浏览器测试需要由 Pi 智能体安排为端侧后台任务");
+  if (body.browser_test_visible && body.browser_test_origin === undefined) fail(422, "显示测试窗口需要指定测试站点");
   const routing = body.browser_test_origin !== undefined
     ? await browserTestRouting(tx, settings, hub, userId, parent, { ...body, browser_test_origin: body.browser_test_origin })
     : await taskRouting(tx,userId,parent,body);
