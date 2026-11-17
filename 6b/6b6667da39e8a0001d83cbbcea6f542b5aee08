@@ -1,0 +1,125 @@
+desktop/packages/protocol/src/index.ts
+  s_2c169087b58dd5::t_914c50018e11cd 28-29
+ios/PiBotKit/Sources/PiBotKit/API.swift
+  s_2c169087b58dd5::t_914c50018e11cd 89-96
+packages/agent/src/pstack-LICENSE
+  s_2c169087b58dd5::t_914c50018e11cd 1-22
+server/src/config.ts
+  s_2c169087b58dd5::t_869af058ad5fdc 85
+server/src/memory.ts
+  s_2c169087b58dd5::t_68b000906d84bc 325-328
+desktop/packages/service/src/executor.ts
+  s_2c169087b58dd5::t_914c50018e11cd 173
+  s_2c169087b58dd5::t_8a625686d3dfe4 17,27-29,78,133,136-137,167-172,174-179,183,254-255,268,276-277,283,287,289-290,313,328,384,404
+android/app/src/main/java/dev/pibot/android/data/PiBotApi.kt
+  s_2c169087b58dd5::t_914c50018e11cd 48-49,304-307
+  s_2c169087b58dd5::t_40dba1d3673d6b 47,308
+ios/PiBot/Settings/SettingsView.swift
+  s_2c169087b58dd5::t_914c50018e11cd 10-11,23-33,91-92
+  s_2c169087b58dd5::t_75bc7e57ce4b59 93
+server/src/bots.ts
+  s_2c169087b58dd5::t_68b000906d84bc 491-493,605-606,738-740
+  s_2c169087b58dd5::t_914c50018e11cd 155
+  s_2c169087b58dd5::t_91931ebb13afb8 608,711,713
+desktop/apps/desktop/ui/main.tsx
+  s_2c169087b58dd5::t_914c50018e11cd 86-95,99,119-121
+android/app/src/main/java/dev/pibot/android/ui/SettingsScreen.kt
+  s_2c169087b58dd5::t_914c50018e11cd 25-26,70-71,73-75,93-104
+  s_2c169087b58dd5::t_cbd4e458fddfd6 105
+desktop/scripts/prepare-runtime.mjs
+  s_2c169087b58dd5::t_91931ebb13afb8 19
+packages/agent/src/index.ts
+  s_2c169087b58dd5::t_0ffbf323e3aaeb 31,288-290,292-297,307-309,370,401,413-415,428-431
+  s_2c169087b58dd5::t_68b000906d84bc 291,298-306,416-420,424-427
+  s_2c169087b58dd5::t_05abf531a3f607 85,421-423
+packages/agent/src/task-workflow.ts
+  s_2c169087b58dd5::t_68b000906d84bc 11,55,67,103-104,108-109
+  s_2c169087b58dd5::t_4671c9bc1e72a0 1-10,12-16,19-37,41-47,49-54,56-66,68-76,78-99,110-121
+  s_2c169087b58dd5::t_313b1eb3af0614 18,38-40,48,77,100-102,105-107
+  s_2c169087b58dd5::t_cd6b98a8f1743b 17
+desktop/tests/electron-test.test.ts
+  s_2c169087b58dd5::t_91931ebb13afb8 17-21,24,27,29
+  s_2c169087b58dd5::t_f6230c4742fcf7 1-16,22-23,25-26,28,30-69
+server/src/agents.ts
+  s_2c169087b58dd5::t_68b000906d84bc 4,39-40,67,113,139-140,143,145-149,265,334,336,488-489
+  s_2c169087b58dd5::t_28f3c6dc8b30a0 25,332-333
+server/src/routes.ts
+  s_2c169087b58dd5::t_0ffbf323e3aaeb 263-266,268,273,281-284,339-343,398,445-453
+  s_2c169087b58dd5::t_313b1eb3af0614 267
+  s_2c169087b58dd5::t_1987a5a6402f80 269-272,274-280
+ios/PiBotKit/Sources/PiBotKit/AppStore.swift
+  s_2c169087b58dd5::t_914c50018e11cd 326-331
+desktop/packages/service/src/electron-test.ts
+  s_2c169087b58dd5::t_91931ebb13afb8 20-115,139
+  s_2c169087b58dd5::t_85ea9c751d854c 1-19,116-138,140-151
+server/src/migrate.ts
+  s_2c169087b58dd5::t_869af058ad5fdc 11
+server/src/llm.ts
+  s_2c169087b58dd5::t_68b000906d84bc 116,120-121,123-125,154
+  s_2c169087b58dd5::t_869af058ad5fdc 115,117-119,122,126-131,153,155,158
+  s_2c169087b58dd5::t_e84e5d3dd60fc2 102,166-173,186,192,212,228,238,245
+packages/agent/src/tasks.ts
+  s_2c169087b58dd5::t_68b000906d84bc 28-33
+android/app/src/main/java/dev/pibot/android/data/PiBotRepository.kt
+  s_2c169087b58dd5::t_914c50018e11cd 241-244
+desktop/README.md
+  s_2c169087b58dd5::t_91931ebb13afb8 45-54
+server/Dockerfile
+  s_2c169087b58dd5::t_91931ebb13afb8 23
+server/migrations/0029-pi-task-workflow.sql
+  s_2c169087b58dd5::t_869af058ad5fdc 1,4-5
+  s_2c169087b58dd5::t_68b000906d84bc 2-3
+server/src/runner.ts
+  s_2c169087b58dd5::t_68b000906d84bc 35-36,157
+  s_2c169087b58dd5::t_bcb6d0fcb1841b 158
+ios/PiBotKit/Sources/PiBotKit/Models.swift
+  s_2c169087b58dd5::t_914c50018e11cd 114-118
+server/src/runs.ts
+  s_2c169087b58dd5::t_914c50018e11cd 107-116,208,210-219,356
+THIRD_PARTY_NOTICES.md
+  s_2c169087b58dd5::t_91931ebb13afb8 27-33
+desktop/packages/service/src/application.ts
+  s_2c169087b58dd5::t_914c50018e11cd 238-239
+  s_2c169087b58dd5::t_d4262a41effd91 81-88
+packages/agent/src/ask-agent.ts
+  s_2c169087b58dd5::t_68b000906d84bc 59,67
+  s_2c169087b58dd5::t_91931ebb13afb8 8-9,16,88-89
+.github/scripts/install-ci-chromium.sh
+  s_2c169087b58dd5::t_3c0c9ee009acfb 8-9
+desktop/apps/desktop/src/main.ts
+  s_2c169087b58dd5::t_6bf9ab1db26e7c 54-56,58-60,64
+desktop/scripts/dev.mjs
+  s_2c169087b58dd5::t_fc021fd7ecc24c 24-30
+desktop/tests/harness-e2e.test.ts
+  s_2c169087b58dd5::t_4c70578044c26c 7,27,86-108,373-409
+packages/agent/tests/agent.test.ts
+  s_2c169087b58dd5::t_eec269d752f6fa 18,48-52,69-93,456-502
+packages/runtime-contracts/src/index.ts
+  s_2c169087b58dd5::t_8597cf132a5aba 123-125
+server/openapi.json
+  s_2c169087b58dd5::t_acaa500a2ca5f9 1763-1765,1798-1841,2141-2206
+server/src/targets.ts
+  s_2c169087b58dd5::t_240b299a71d72a 7,25-27,104-129,163-165
+server/tests/async-tasks.test.ts
+  s_2c169087b58dd5::t_71cf289a62daca 347-396
+server/tests/browser-test-routing.test.ts
+  s_2c169087b58dd5::t_18d8206b4e701e 5,58-83
+server/tests/llm.test.ts
+  s_2c169087b58dd5::t_8feb92272600c1 172-231
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6b6b6667da39e8a0001d83cbbcea6f542b5aee08",
+  "prompts": {},
+  "sessions": {
+    "s_2c169087b58dd5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1e4a8-7aad-7831-a016-54738d594741",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
