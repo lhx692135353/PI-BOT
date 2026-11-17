@@ -11,7 +11,7 @@ export function BotEditor({ bot, models, deviceId, onClose, onSaved }: { bot?: B
   const [name, setName] = useState(bot?.name ?? '');
   const [persona, setPersona] = useState(bot?.persona ?? '');
   const [modelId, setModelId] = useState<string>(bot?.model_id ?? '');
-  const [runtime, setRuntime] = useState<Runtime>(bot?.runtime ?? 'pi');
+  const runtime: Runtime = bot?.runtime ?? 'pi';
   const [profile, setProfile] = useState(bot?.cli_profile ?? '');
   const [directory, setDirectory] = useState(bot?.cli_directory ?? '');
   const [profiles, setProfiles] = useState<CliProfileScan | null>(null);
@@ -34,7 +34,7 @@ export function BotEditor({ bot, models, deviceId, onClose, onSaved }: { bot?: B
     try {
       if (cli && !choices?.installed) throw new Error(runtime === 'cursor' ? '未检测到 Cursor CLI（agent）' : '未检测到 Codex CLI（codex）');
       if (cli && (!profile || !directory)) throw new Error('请选择 profile 和目录');
-      const body = { name, persona, model_id: modelId || null, avatar, ...(cli ? { runtime, cli_profile: profile, cli_directory: directory, cli_device_id: deviceId ?? undefined } : { runtime: 'pi' as const }) };
+      const body = { name, persona, ...(bot ? { model_id: modelId || null } : {}), avatar, ...(cli ? { runtime, cli_profile: profile, cli_directory: directory, cli_device_id: deviceId ?? undefined } : { runtime: 'pi' as const }) };
       onSaved(bot ? await call<Bot>('botUpdate', { id: bot.id, ...body }) : await call<Bot>('botCreate', body));
     } catch (err) {
       setError(errorText(err));
@@ -54,11 +54,9 @@ export function BotEditor({ bot, models, deviceId, onClose, onSaved }: { bot?: B
           <h2>{bot ? '编辑 Bot' : '新建 Bot'}</h2>
           <label>名字<input value={name} onChange={e => setName(e.target.value)} maxLength={40} placeholder="例如：研究助理" autoFocus /></label>
           <label>运行时
-            <select value={runtime} disabled={!!bot} onChange={e => { setRuntime(e.target.value as Runtime); setProfile(''); setDirectory(bot?.cli_directory ?? ''); }}>
+            {cli ? <input value={runtime === 'cursor' ? '本机 Cursor' : '本机 Codex'} disabled /> : <select value={runtime} disabled={!!bot}>
               <option value="pi">Pi</option>
-              <option value="cursor">本机 Cursor</option>
-              <option value="codex">本机 Codex</option>
-            </select>
+            </select>}
           </label>
           <label>人设与职责<textarea value={persona} onChange={e => setPersona(e.target.value)} rows={4} maxLength={8000} placeholder="它负责做什么、用什么风格说话、有哪些习惯……" /></label>
           {cli && <label>Profile
@@ -72,12 +70,12 @@ export function BotEditor({ bot, models, deviceId, onClose, onSaved }: { bot?: B
               <button type="button" className="ghost" onClick={() => { void bridge.pickDirectory?.().then(path => { if (path) setDirectory(path); }); }}>选择</button>
             </span>
           </label>}
-          <label>{cli ? '路由模型' : '模型'}
+          {bot && <label>{cli ? '路由模型' : '模型'}
             <select value={modelId} onChange={e => setModelId(e.target.value)}>
               <option value="">跟随默认{models.find(m => m.is_default) ? `（${models.find(m => m.is_default)!.name}）` : ''}</option>
               {models.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
             </select>
-          </label>
+          </label>}
           {cli && <p className="muted small">写代码用的模型来自 CLI profile。这里的模型只在 JEV 不可用时判断该续哪一段会话。电脑不在线时不能改到云端运行。</p>}
           {cli && choices?.installed === false && <p className="error">未检测到 {runtime === "cursor" ? "Cursor CLI（agent）" : "Codex CLI（codex）"}。终端里能运行不够，从程序坞打开时要用登录 shell 的 PATH 才能找到命令，所以创建保持灰色。</p>}
           <div className="field">
