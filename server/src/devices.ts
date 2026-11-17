@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { posix } from 'node:path';
 import { fail, type Row, type Tx } from './db.js';
 import type { Hub } from './hub.js';
@@ -34,4 +34,33 @@ export async function checkDevice(tx: Tx, userId: string, deviceId: string | nul
   // subsequent cleanup also sees work accepted just before the revoke.
   if (!await tx.one('SELECT 1 FROM devices WHERE device_id=$1 AND user_id=$2 AND revoked_at IS NULL FOR SHARE', [deviceId,userId]))
     fail(422, '请选择自己账号下未解绑的执行电脑');
+}
+
+/** Account lock serializes key/fingerprint decisions, including first registration. */
+export async function registerDevice(tx: Tx, userId: string, input: { public_key: string; label: string; platform: string; hardware_fingerprint?: string }) {
+  await tx.one('SELECT user_id FROM users WHERE user_id=$1 FOR UPDATE', [userId]);
+  const prior = await tx.one('SELECT * FROM devices WHERE user_id=$1 AND public_key=$2 AND revoked_at IS NULL', [userId,input.public_key]);
+  const matches = !prior && input.hardware_fingerprint ? await tx.rows('SELECT * FROM devices WHERE user_id=$1 AND hardware_fingerprint=$2 AND revoked_at IS NULL FOR UPDATE', [userId,input.hardware_fingerprint]) : [];
+  const recovered = !prior && matches.length === 1 ? matches[0] : undefined;
+  const original = prior ?? recovered;
+  const d = original ? await tx.update('devices',original.device_id, {
+    label:input.label,platform:input.platform,hardware_fingerprint:input.hardware_fingerprint,
+    public_key:input.public_key,key_version:recovered ? original.key_version + 1 : original.key_version,
+  }) : await tx.insert('devices',{device_id:randomUUID(),user_id:userId,...input});
+  if (recovered) await tx.insert('device_key_rotations', {
+    rotation_id:randomUUID(),device_id:d.device_id,user_id:userId,key_version:d.key_version,
+    old_key_hash:createHash('sha256').update(recovered!.public_key).digest('hex'),
+    new_key_hash:createHash('sha256').update(input.public_key).digest('hex'),
+  });
+  return { device:d, rebound:!!recovered, notice:recovered ? `已识别为 ${recovered!.label}（重装后重新绑定）` : undefined };
+}
+
+export async function messageProvenance(tx: Tx, userId: string, client = 'unknown', deviceId?: string) {
+  if (deviceId) {
+    await checkDevice(tx,userId,deviceId);
+    if (["android","ios","web"].includes(client)) return fail(422,"云端入口不能声明来源执行电脑");
+    const d = await tx.get('devices',deviceId);
+    return {client:'desktop',device_id:deviceId,device_label:d.label};
+  }
+  return {client:client === 'legacy' ? 'unknown' : client, entry:['ios','android'].includes(client) ? 'cloud' : undefined};
 }

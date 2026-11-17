@@ -130,6 +130,7 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolDescriptor>> =
       "waiting",
     ),
     ask_agent: tool("联系智能体", "delegate", "public", "waiting"),
+    endpoint_experience: tool("核查执行端经验", "read", "internal"),
     start_task: tool("安排后台任务", "delegate", "internal"),
     task_status: tool("查看任务", "read", "internal"),
     task_message: tool("补充任务", "control", "internal"),

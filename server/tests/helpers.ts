@@ -53,7 +53,7 @@ export async function mockProvider() {
     requests.push({ headers: req.headers, body: json });
     const input = typeof json.input === "string" ? [{ role: "user", content: json.input }] : json.input;
     const text = (c: any): string => (Array.isArray(c) ? c.map((p) => p.text ?? "").join("") : String(c ?? ""));
-    const last = latestUserText(input);
+    const last = latestUserText(input).replace(/^\[消息来源：[^\n]*\]\n/, "");
     const all = JSON.stringify(json.input);
     const toolDone = isRealToolResult(json.input);
     const delegation = DELEGATIONS[last];

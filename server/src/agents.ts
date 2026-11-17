@@ -110,7 +110,7 @@ export async function createTask(
   hub: Hub,
   userId: string,
   claims: LlmClaims,
-  body: { run_id: string; agent?: string; task: string; wait: boolean; kind?: "background" | "delegation"; title?: string; request_id?: string;resumed_from?:string; execution?: "auto" | "device" | "cloud" | "remote"; device_id?:string; operation_target?:string; requirements?:string[]; resources?:Routing["resources"]; browser_test_origin?: string; browser_test_visible?: boolean; electron_test?: Routing["electron_test"]; coding?: boolean },
+  body: { run_id: string; agent?: string; task: string; wait: boolean; kind?: "background" | "delegation"; title?: string; request_id?: string;resumed_from?:string; execution?: "auto" | "device" | "cloud" | "remote"; device_id?:string; operation_target?:string; requirements?:string[]; resources?:Routing["resources"]; resource_key?:string; decision_reason?:string; browser_test_origin?: string; browser_test_visible?: boolean; electron_test?: Routing["electron_test"]; coding?: boolean },
   settings?:Settings,
 ) {
   const parent = await callerRun(tx, userId, claims, body.run_id);
@@ -138,7 +138,10 @@ export async function createTask(
   if (body.browser_test_visible && body.browser_test_origin === undefined) fail(422, "显示测试窗口需要指定测试站点");
   if (body.electron_test && (body.browser_test_origin || kind !== "background" || isCliRuntime(target.runtime)))
     fail(422, "Electron 测试需要由 Pi 智能体安排为独立端侧任务");
-  const routing = body.browser_test_origin !== undefined
+  if (isCliRuntime(target.runtime) && (!target.cli_device_id || body.device_id && body.device_id !== target.cli_device_id)) fail(422,"CLI 智能体只能使用其绑定电脑，请确认目标");
+  const routing = isCliRuntime(target.runtime)
+    ? await taskRouting(tx,userId,parent,{...body,execution:"device",device_id:target.cli_device_id})
+    : body.browser_test_origin !== undefined
     ? await browserTestRouting(tx, settings, hub, userId, parent, { ...body, browser_test_origin: body.browser_test_origin })
     : body.electron_test ? await electronTestRouting(tx, hub, userId, parent, { ...body, electron_test: body.electron_test })
     : await taskRouting(tx,userId,parent,body);
@@ -147,12 +150,9 @@ export async function createTask(
     routing.pstack_enabled = original ? original.routing?.pstack_enabled === true : (await tx.get("users", userId))?.pstack_enabled === true;
     routing.coding = body.coding === true;
   }
-  // Explicit destinations fail immediately when unavailable. Automatic work is resolved at dispatch.
-  let location = {execution:"cloud",device_id:null as string | null,operation_target:"pending"};
-  if (routing.execution !== "auto" || body.operation_target) {
-    location = await resolveTaskTarget(tx,settings,hub,userId,target.slug,routing);
-    if(body.operation_target && body.operation_target !== location.operation_target) fail(409,"原任务的资源所在环境已变化");
-  }
+  // Resolve before insertion: ambiguous/offline work is never silently queued.
+  const location = await resolveTaskTarget(tx,settings,hub,userId,target.slug,routing);
+  if(body.operation_target && body.operation_target !== location.operation_target) fail(409,"原任务的资源所在环境已变化");
   const task = await tx.insert("agent_tasks", {
     ...location,
     routing,
@@ -225,7 +225,7 @@ export async function startTask(tx: Tx, hub: Hub, task: Row, settings?:Settings)
   }
   const conn = hub.device(task.user_id,task.device_id);
   if (isCliRuntime(target.runtime) && !conn) { await failQueued(tx, task, CLI_OFFLINE); return null; }
-  if(task.execution==="device"&&task.operation_target!=="legacy"&&!conn){await failQueued(tx,task,"指定电脑已离线，本次操作未执行");return null;}
+  if(task.execution==="device"&&!conn){await failQueued(tx,task,"指定电脑已离线，本次操作未执行");return null;}
   const parent = await tx.get("bot_runs", task.parent_run_id);
   if (parent?.execution_policy === "device_only" && (!conn?.capabilities?.includes("always-on-v1") || parent.cancel_requested || !ACTIVE.includes(parent.status))) return null;
   const run = await insertRun(tx, {

@@ -16,7 +16,7 @@ export function cliSearchDirs(env: NodeJS.ProcessEnv = process.env) {
   const listed = (env.PATH ?? env.Path ?? "").split(delimiter).filter(Boolean);
   if (process.platform === "win32") return [...new Set(listed)];
   const home = env.HOME || homedir();
-  const extra = ["/opt/homebrew/bin", "/opt/homebrew/sbin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin", join(home, ".local/bin"), join(home, ".npm-global/bin")];
+  const extra = [join(home, ".local/bin"), join(home, ".npm-global/bin"), "/opt/homebrew/bin", "/opt/homebrew/sbin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"];
   return [...new Set([...loginPath(env), ...listed, ...extra])];
 }
 

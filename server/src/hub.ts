@@ -6,6 +6,7 @@ export interface DeviceConnection {
   deviceId: string;
   userId: string;
   capabilities?: string[];
+  keyVersion?:number;
   send(message: Row): void;
   close(code: number): void;
 }

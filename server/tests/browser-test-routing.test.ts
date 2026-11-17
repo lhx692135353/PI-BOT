@@ -40,18 +40,18 @@ test("browser-test routing chooses an eligible computer and pins its destination
   const route = (source: Row, origin = lan, deviceId?: string, resources?: {target: string}[]) =>
     browserTestRouting(tx, undefined, hub, user, source, { browser_test_origin: origin, device_id: deviceId, resources, requirements: ["browser"] });
   const current = attach(first);
-  assert.equal((await route({})).device_id, first.device_id);
+  await assert.rejects(route({}), /请确认测试项目/);
   attach(second);
-  await assert.rejects(route({}), /Home PC|Work Mac/);
-  const pinned = await route({ source_device_id: first.device_id }, loopback);
+  await assert.rejects(route({}), /请确认测试项目/);
+  const pinned = await route({ source_device_id: first.device_id }, loopback, first.device_id);
   assert.equal(pinned.execution, "device");
   assert.equal(pinned.device_id, first.device_id);
   assert.deepEqual(pinned.requirements, ["browser-test"]);
   assert.equal((await route({}, loopback, undefined, [{target: `device:${second.device_id}`}])).device_id, second.device_id);
   await assert.rejects(route({}, loopback, first.device_id, [{target: `device:${second.device_id}`}]), /项目所在电脑不同/);
   hub.detach(current);
-  await assert.rejects(route({ source_device_id: first.device_id }, loopback), /请在聊天中确认使用哪台电脑/);
-  assert.equal((await route({ source_device_id: first.device_id })).device_id, second.device_id);
+  await assert.rejects(route({ source_device_id: first.device_id }, loopback), /请确认测试项目/);
+  await assert.rejects(route({ source_device_id: first.device_id }), /请确认测试项目/);
   await assert.rejects(resolveTaskTarget(tx, undefined, hub, user, "tester", pinned), /电脑已离线/);
   await assert.rejects(resolveTaskTarget(tx, undefined, hub, user, "tester", { ...pinned, execution: "remote" }), /已选定的用户电脑/);
 });
@@ -70,10 +70,10 @@ test("Electron tests choose a capable desktop and keep local targets pinned", as
   connect(a, true);
   connect(b);
   const app = { electron_test: { app: "electron" as const, executable: "test-app" } };
-  await assert.rejects(electronTestRouting(tx, hub, user, {}, app), /Mac、Windows/);
-  const generic = await electronTestRouting(tx, hub, user, { source_device_id: b.device_id }, app);
+  await assert.rejects(electronTestRouting(tx, hub, user, {}, app), /请确认应用/);
+  const generic = await electronTestRouting(tx, hub, user, { source_device_id: b.device_id }, {...app,device_id:b.device_id});
   assert.equal(generic.device_id, b.device_id);
-  const builtIn = await electronTestRouting(tx, hub, user, {}, { electron_test: { app: "pibot" } });
+  const builtIn = await electronTestRouting(tx, hub, user, {}, { electron_test: { app: "pibot" },device_id:a.device_id });
   assert.equal(builtIn.device_id, a.device_id);
   assert.equal((await resolveTaskTarget(tx, undefined, hub, user, "test", builtIn)).execution, "device");
   const pinned = await electronTestRouting(tx, hub, user, {}, { ...app, resources: [{ target: `device:${a.device_id}` }] });

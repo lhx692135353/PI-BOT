@@ -36,7 +36,7 @@ beforeEach(async () => {
     bot = (await createBot(tx, user, { name: "检查员", persona: "推进自己的目标" })).bot_id;
   });
   const dialog = await dialogue();
-  const created = await control(dialog, { action: "create", title: "持续推进", goal: "把已授权的事项做到有进展再告诉我", authorization: "用户授权在自己的资料库里整理进度" }) as Row;
+  const created = await control(dialog, { action: "create", title: "持续推进", goal: "把已授权的事项做到有进展再告诉我", resources:[{target:"device:"+device}],requirements:["files","shell","always-on-v1"],authorization: "用户授权在自己的资料库里整理进度" }) as Row;
   goalId = created.id;
   await db.tx(async tx => {
     await finishRun(tx, dialog.run_id, "completed", null, "已建立");
@@ -54,6 +54,7 @@ async function dialogue() {
   return db.tx(tx => insertRun(tx, { userId: user, botId: bot, requestId: randomUUID(), text: "管理目标", computer: { deviceId: device },sourceClient:"desktop",sourceDeviceId:device }));
 }
 async function control(run: Row, body: object) {
+  if ((body as any).action==="create" && !(body as any).resources && run.origin!=="automation") body={resources:[{target:"device:"+device}],requirements:["files","shell","always-on-v1"],...body};
   return db.tx(tx => manageGoals(tx, user, {...claims(),src:run.executor,did:run.device_id??undefined}, goalRequest.parse({ run_id: run.run_id, request_id: randomUUID(), ...body }), now,config(),hub));
 }
 function asDecision(extra: Record<string, any> = {}) {
@@ -355,4 +356,12 @@ test("each goal reports its own new progress once", { skip }, async () => {
   contents = (await db.tx(tx => messagesPage(tx, bot, undefined, 50))).messages.map(m => m.content);
   assert.equal(contents.filter(c => c === "第一条有进展").length, 1);
   assert.ok(!contents.includes("第一条又说一遍"));
+});
+
+
+test('legacy saved recurring preference runs online and requests a decision offline without migration',{skip},async()=>{
+  await db.tx(tx=>tx.update('bot_automations',review,{routing:{execution:'auto',preferred_device_id:device,requirements:['files','shell'],resources:[]}}));
+  await due();await scheduler().once();const run=await active();assert.equal(run?.device_id,device);
+  await done(run!);hub.detach(conn);await due();await scheduler().once();
+  assert.equal((await current()).status,'waiting_user');assert.equal(await active(),undefined);
 });

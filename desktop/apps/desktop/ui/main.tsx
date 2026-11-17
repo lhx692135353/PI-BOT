@@ -111,7 +111,7 @@ function Settings({ state, cloud, onClose, onOpenPhone }: { state: AccountState;
           <ThemeToggle />
           <dl>
             <dt>账号</dt><dd>{state.user?.display_name}（{state.user?.username}）</dd>
-            <dt>这台电脑</dt><dd>{state.deviceLabel}</dd>
+            <dt>这台电脑</dt><dd>{state.deviceLabel}{state.notice && <p role="status">{state.notice}</p>}</dd>
             <dt>服务器</dt><dd className="mono">{state.serverUrl}</dd>
             <dt>资料库</dt><dd className="mono">{state.libraryRoot}</dd>
           </dl>
@@ -423,6 +423,7 @@ function App() {
         </div>
       </aside>
       <main>
+        {account.notice && <div className="banner" role="status">{account.notice}</div>}
         {!online && <div className="banner">{account.connection === 'connecting' ? '正在连接服务器…' : '与服务器的连接已断开，正在自动重连。断开期间 Bot 无法在这台电脑上工作。'}</div>}
         {bot ? (
           <>

@@ -293,7 +293,10 @@ function reviewRouting(a: Row, goals: Row[]): Routing | null {
   if (!a.routing) return null;
   const sources = [a,...goals].filter(item => item.checkpoint_target && Array.isArray(item.checkpoint?.artifacts) && item.checkpoint.artifacts.length);
   const resources = [...(a.routing.resources ?? []),...sources.map(item => ({target:item.checkpoint_target}))];
-  return {...a.routing,requirements:[...new Set([...(a.routing.requirements ?? []),"always-on-v1"])],resources};
+  // A saved recurring policy may predate explicit device routing. Honor that
+  // persisted preference only for reviews, never infer it from a new message.
+  const savedPreference = !resources.length && a.routing.execution==='auto' ? a.routing.preferred_device_id : undefined;
+  return {...a.routing,...(savedPreference?{execution:'device' as const,device_id:savedPreference}:{}),requirements:[...new Set([...(a.routing.requirements ?? []),"always-on-v1"])],resources};
 }
 
 export class AutomationScheduler {
@@ -339,7 +342,7 @@ export class AutomationScheduler {
           if (routing) location = await resolveTaskTarget(tx,this.s,this.hub,a.user_id,bot.slug,routing);
           else if (location.execution === "device" && !this.hub.device(a.user_id,location.device_id)?.capabilities?.includes("always-on-v1")) throw new Error("任务资源不可用");
         } catch (error) {
-          const explicit = a.routing && a.routing.execution !== "auto";
+          const explicit = a.routing && (a.routing.execution !== "auto" || a.routing.preferred_device_id);
           const message = error instanceof Error ? error.message : "任务资源不可用";
           await tx.update("bot_automations",a.automation_id,{status:explicit ? "waiting_user" : "waiting_device",last_result:message,next_wake_at:explicit ? null : soon(now)});
           if (explicit) await queueReport(tx,a,"specified-target-unavailable","decision",message,now);

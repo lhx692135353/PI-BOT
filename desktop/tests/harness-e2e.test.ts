@@ -201,6 +201,11 @@ async function scriptedProvider(outside: string, browserOrigin?: string, depende
     assert.equal(req.url, "/v1/responses");
     const stream = new ResponseStream(res, json.model);
     if (reply.tool) {
+      // The mock AI explicitly chooses the test computer; provenance alone never routes on the server.
+      const provenance = JSON.parse(messages.map(m=>typeof m.content==='string'?m.content:(m.content??[]).map((part:any)=>part.text??'').join('')).join('\n').match(/当前消息来源：(\{[^}]*\})/)?.[1]??'{}');
+      if (['start_task','ask_agent'].includes(reply.tool.name) && !(reply.tool.args as any).device_id && (reply.tool.args as any).execution!=='cloud') Object.assign(reply.tool.args,{execution:'device',device_id:provenance.device_id});
+      if (reply.tool.name==='goal_manage' && (reply.tool.args as any).action==='create') Object.assign(reply.tool.args,{resources:[{target:'device:'+provenance.device_id}],requirements:['files','shell']});
+
       stream.text(reply.tool.name.startsWith('skill_') ? '内部：正在维护 skill。' : '我先看看资料，再帮你处理。');
       stream.tool(reply.tool.name, reply.tool.args, `call_${messages.length}`);
     } else {
@@ -426,6 +431,8 @@ test('the Mac harness logs in, binds itself and runs bots against its library', 
   assert.match(reply.content, /完成：已写入 notes\/hello.md/);
   assert.deepEqual(reply.tools, [], 'worker tools stay off the public result');
   const workerTools = await serverDb.tx(tx => tx.one("SELECT m.tools FROM agent_tasks t JOIN bot_runs r ON r.run_id=t.child_run_id JOIN bot_messages m ON m.message_id=r.assistant_message_id WHERE t.task_id=$1", [reply.task_id]));
+  const fileEvidence=await serverDb.tx(tx=>tx.one("SELECT * FROM endpoint_experiences WHERE bot_id=$1 AND capability='files' AND path=$2",[bot.id,join(dir,'pi-bot','writer','notes','hello.md')]));
+  assert.equal(fileEvidence?.target,'device:'+app.state().deviceId,'real desktop tool event records its observed path on the actual endpoint');
   assert.deepEqual(workerTools!.tools.map((t: any) => [t.name, t.state]), [['write_file', 'completed']]);
   assert.deepEqual(reply.progress, [], 'the result is separate from the opening acknowledgement');
   const page = await app.call('messages', { botId: bot.id }) as MessagePage;

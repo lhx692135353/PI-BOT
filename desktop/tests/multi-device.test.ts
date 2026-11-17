@@ -18,7 +18,7 @@ import { insertRun } from '../../server/src/bots.js';
 import { signer } from '../packages/service/src/cloud.js';
 import WebSocket from 'ws';
 
-test('one Agent independently selects source computers, preserves resource provenance and falls back when a computer is offline', {skip:!TEST_DB,timeout:60000}, async t => {
+test('one Agent independently selects source computers, preserves resource provenance and refuses an offline target', {skip:!TEST_DB,timeout:60000}, async t => {
   await resetDatabase(TEST_DB!);
   const dir=tempDir(), hub=new Hub(), executions:string[]=[], events:Record<string,string[]>={'linux-a':[],'linux-b':[]};
   const factory=(label:string):AgentFactory=>async o=>({
@@ -28,14 +28,15 @@ test('one Agent independently selects source computers, preserves resource prove
         const target=o.tools.find(t=>t.name===name); assert.ok(target,`missing ${name}`);
         return target.execute(randomUUID(),args,undefined,undefined,{} as any);
       };
+      const provenance=JSON.parse(o.systemPrompt.match(/当前消息来源：(\{[^\n]+\})/)?.[1]??'{}');
       if (text.startsWith('delegate:') && o.tools.some(t=>t.name==='start_task')) {
-        await tool('ask_agent',{agent:text.slice(9),task:'write:delegated.txt',wait:false}); return 'delegated';
+        await tool('ask_agent',{agent:text.slice(9),task:'write:delegated.txt',wait:false,execution:'device',device_id:provenance.device_id}); return 'delegated';
       }
       if (text === 'cloud:search' && o.tools.some(t=>t.name==='start_task')) {
         await tool('start_task',{title:'Cloud search',task:'cloud:search',execution:'cloud'}); return 'queued cloud search';
       }
       if ((text.startsWith('write:') || text.startsWith('outside:')) && o.tools.some(t=>t.name==='start_task')) {
-        await tool('start_task',{title:text.slice(0,80),task:text}); return 'queued';
+        await tool('start_task',{title:text.slice(0,80),task:text,execution:'device',device_id:provenance.device_id}); return 'queued';
       }
       const command = text.split('\n').find(line=>/^(write|outside):/.test(line)) ?? text;
       if (command.startsWith('write:')) {
@@ -56,7 +57,7 @@ test('one Agent independently selects source computers, preserves resource prove
   const base=`http://127.0.0.1:${(app.server.address() as any).port}`;
   const workerDb=new Database(TEST_DB!),worker=new Worker(workerDb,settings({...env,PI_BOT_INTERNAL_URL:base}));
   const loop=worker.runForever();
-  const computer=(name:string)=>new Application({dataDir:join(dir.path,name,'data'),libraryRoot:join(dir.path,name,'files'),credentials:new FileCredentials(join(dir.path,name,'data','secrets.json')),emit:e=>events[name].push(e.type),factory:factory(name),backoff:{baseMs:10,maxMs:50}});
+  const computer=(name:string)=>new Application({hardwareFingerprint:async()=>undefined,dataDir:join(dir.path,name,'data'),libraryRoot:join(dir.path,name,'files'),credentials:new FileCredentials(join(dir.path,name,'data','secrets.json')),emit:e=>events[name].push(e.type),factory:factory(name),backoff:{baseMs:10,maxMs:50}});
   const a=computer('linux-a'),b=computer('linux-b');
   t.after(async()=>{worker.stop();await a.shutdown();await b.shutdown();await loop;await workerDb.close();await app.close();await runner.close();dir.cleanup();});
   const login={serverUrl:base,username:'admin',password:'test-password'};
@@ -120,11 +121,9 @@ test('one Agent independently selects source computers, preserves resource prove
   assert.equal(hub.online(b.state().user!.id),true);
   const offline=await a.call('send',{botId:botA.id,text:'write:offline.txt'}) as any;
   assert.equal(offline.run.executor,'cloud');
-  await eventually(()=>existsSync(join(dir.path,'linux-b/files',botA.slug,'offline.txt')));
-  const migrated=await db.tx(tx=>tx.one("SELECT * FROM agent_tasks WHERE target_bot_id=$1 AND task='write:offline.txt'",[botA.id]));
-  assert.equal(migrated!.device_id,bid);assert.equal(migrated!.routing.preferred_device_id,aid);
-  const original=await api('GET',`/bots/${botA.id}/files?target=device:${aid}`);assert.equal(original.status,409);
-  const current=await api('GET',`/bots/${botA.id}/files/content?path=offline.txt&target=device:${bid}`);assert.equal(current.data.content,'linux-b');
+  await eventually(()=>db.tx(async tx=>(await tx.get('bot_runs',offline.run.id)).status==='failed'));
+  assert.equal(existsSync(join(dir.path,'linux-b/files',botA.slug,'offline.txt')),false);
+  assert.equal(await db.tx(tx=>tx.one("SELECT * FROM agent_tasks WHERE target_bot_id=$1 AND task='write:offline.txt'",[botA.id])),undefined);
   await a.start();await eventually(()=>a.state().connection==='online');
   await a.call('send',{botId:botA.id,text:'write:back-home.txt'});
   await eventually(()=>existsSync(join(dir.path,'linux-a/files',botA.slug,'back-home.txt')));

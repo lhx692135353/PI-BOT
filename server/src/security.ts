@@ -29,8 +29,8 @@ export async function passwordMatches(hashed: string, password: string) {
 }
 const secret = (s: Settings) => new TextEncoder().encode(s.jwtSecret);
 /** One-minute credential so a desktop renderer can open `/ws/voice` without the provider key. */
-export const issueVoiceTicket = (userId: string, botId: string, s: Settings, source?:{client:string;deviceId?:string}) =>
-  new SignJWT({ typ: "voice", bot: botId, client:source?.client, did:source?.deviceId })
+export const issueVoiceTicket = (userId: string, botId: string, s: Settings, source?:{client:string;deviceId?:string;keyVersion?:number}) =>
+  new SignJWT({ typ: "voice", bot: botId, client:source?.client, did:source?.deviceId, kv:source?.keyVersion })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(userId)
     .setIssuedAt()
@@ -41,7 +41,7 @@ export async function readVoiceTicket(token: string, s: Settings) {
   const botId = payload.bot;
   const userId = payload.sub;
   if (typeof botId !== "string" || typeof userId !== "string") throw new HttpError(401, "认证失败");
-  return { userId, botId, client:typeof payload.client==="string"?payload.client:"legacy", deviceId:typeof payload.did==="string"?payload.did:undefined };
+  return { userId, botId, keyVersion:typeof payload.kv==="number"?payload.kv:0, client:typeof payload.client==="string"?payload.client:"legacy", deviceId:typeof payload.did==="string"?payload.did:undefined };
 }
 export const issueToken = (u: Row, s: Settings) =>
   new SignJWT({ typ: "user", role: u.role })
@@ -55,10 +55,11 @@ export interface LlmClaims {
   src: "device" | "cloud" | "memory" | "test";
   bot?: string;
   did?: string;
+  kv?: number;
 }
 /** Short-lived bearer for the model proxy. Provider keys never leave the server. */
 export const issueLlmToken = (claims: LlmClaims, s: Settings, ttl = s.llmTokenTtl) =>
-  new SignJWT({ typ: "llm", src: claims.src, bot: claims.bot, did: claims.did })
+  new SignJWT({ typ: "llm", src: claims.src, bot: claims.bot, did: claims.did, kv:claims.kv })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(claims.sub)
     .setIssuedAt()
@@ -95,7 +96,7 @@ export async function llmCaller(tx: Tx, headers: Row, s: Settings) {
   const payload = await verifyToken(token!, s, "llm");
   const u = await activeUser(tx, payload.sub!);
   if (!["device","cloud","memory","test"].includes(String(payload.src))) fail(401,"请升级执行端并重新登录");
-  if (payload.src === "device" && !await tx.one("SELECT 1 FROM devices WHERE device_id=$1 AND user_id=$2 AND revoked_at IS NULL",[payload.did,payload.sub])) fail(401,"设备已解绑");
+  if (payload.src === "device" && !await tx.one("SELECT 1 FROM devices WHERE device_id=$1 AND user_id=$2 AND revoked_at IS NULL AND key_version=$3 FOR SHARE",[payload.did,payload.sub,payload.kv??0])) fail(401,"设备已解绑");
   return { user: u, claims: payload as unknown as LlmClaims };
 }
 export function decodeBase64(value: string, size?: number) {
@@ -141,8 +142,8 @@ export async function device(
       s.signatureSkew
   )
     fail(401, "设备认证失败");
-  const d = await tx.get("devices", id);
-  if (!d || d.revoked_at) fail(401, "设备认证失败");
+  const d = await tx.one("SELECT * FROM devices WHERE device_id=$1 FOR SHARE",[id]);
+  if (!d || d.revoked_at) return fail(401, "设备认证失败");
   try {
     const key = createPublicKey({
       key: Buffer.concat([

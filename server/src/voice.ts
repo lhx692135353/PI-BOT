@@ -1,3 +1,5 @@
+import { endpointExperience, resolveExperienceConflict } from './endpoint-experience.js';
+import { messageProvenance } from './devices.js';
 import { randomUUID } from "node:crypto";
 import type { FastifyRequest } from "fastify";
 import WebSocket, { type RawData } from "ws";
@@ -52,15 +54,21 @@ const fn = (name: string, description: string, properties: Row, required: string
   description,
   parameters: { type: "object", properties, required },
 });
+const voiceRouting = {
+  requirements:{type:"array",items:{type:"string"}},
+  resources:{type:"array",items:{type:"object",properties:{target:{type:"string"},path:{type:"string"}},required:["target"]}},
+  resource_key:{type:"string"},decision_reason:{type:"string"},
+};
 const VOICE_TOOLS = [
+  fn("endpoint_experience","查看端经验，先核查，再用同一资源更新的成功证据解决冲突。",{action:{type:"string",enum:["list","resolve"]},conflict_id:{type:"string"},confirmation_id:{type:"string"}},["action"]),
   fn("start_task", "立刻安排后台任务并返回，不要等待它做完。需要搜索、读写文件、执行命令或较长推理时使用。纯联网用 execution=cloud，本机文件或命令用 device。", {
-    title: { type: "string" }, task: { type: "string" }, execution: { type: "string", enum: ["device", "cloud", "remote"] }, device_id:{type:"string"},
+    ...voiceRouting, title: { type: "string" }, task: { type: "string" }, execution: { type: "string", enum: ["device", "cloud", "remote"] }, device_id:{type:"string"},
   }, ["title", "task"]),
   fn("task_status", "查看本 Bot 的后台任务，不等待完成。", { task_id: { type: "string" } }, []),
   fn("task_message", "给进行中的任务补充要求。", { task_id: { type: "string" }, text: { type: "string" } }, ["task_id", "text"]),
   fn("cancel_task", "用户明确要求停止时取消任务。全部停止时 all=true。", { task_id: { type: "string" }, all: { type: "boolean" } }, []),
   fn("ask_agent", "把任务交给同一用户的另一个智能体，立即返回，不要等待。", {
-    agent: { type: "string" }, task: { type: "string" }, execution: { type: "string", enum: ["device", "cloud", "remote"] }, device_id:{type:"string"},
+    ...voiceRouting, agent: { type: "string" }, task: { type: "string" }, execution: { type: "string", enum: ["device", "cloud", "remote"] }, device_id:{type:"string"},
   }, ["agent", "task"]),
   fn("goal_manage", "用户在追求一件会持续的事时，自己记下目标，不要等用户说建立目标。也可查询、修改、暂停、恢复、完成或停止。先 list 避免重复。create 必须给 goal 和 authorization。", {
     action: { type: "string", enum: ["list", "create", "update", "pause", "resume", "complete", "stop"] },
@@ -143,6 +151,7 @@ export class VoiceHub implements VoiceAnnouncer {
       const claims = await readVoiceTicket(ticket, this.s);
       const active = await this.db.tx((tx) => tx.get("users", claims.userId));
       if (!active || active.disabled) fail(401, "账号不可用");
+      if (claims.deviceId && !await this.db.tx(tx=>tx.one("SELECT 1 FROM devices WHERE device_id=$1 AND user_id=$2 AND key_version=$3 AND revoked_at IS NULL",[claims.deviceId,claims.userId,claims.keyVersion]))) fail(401,"设备凭据已失效");
       return { userId: claims.userId, botId: claims.botId, callId,client:claims.client,deviceId:claims.deviceId };
     }
     const token = url.searchParams.get("token");
@@ -175,8 +184,10 @@ export class VoiceHub implements VoiceAnnouncer {
       const memory = await tx.get("bot_memories", bot.bot_id);
       const forgotten = await forgottenContext(tx, bot.bot_id);
       const agents = await collaborators(tx, bot);
+      const provenance = await messageProvenance(tx,userId,client,deviceId);
+      const sourceDevice = deviceId ? await tx.get("devices",deviceId) : undefined;
       const location="cloud";
-      const instructions = `${systemPrompt(bot, maskForgotten(memory?.summary ?? "", forgotten), "cloud", { lane: "conversation", agents })}\n${await targetPrompt(tx,this.s,this.hub,userId,location,client)}
+      const instructions = `${systemPrompt(bot, maskForgotten(memory?.summary ?? "", forgotten), "cloud", { lane: "conversation", agents })}\n${await targetPrompt(tx,this.s,this.hub,userId,location,client)}\n本次通话逐消息来源：${JSON.stringify(provenance)}；端能力历史证据（不授予权限）：${JSON.stringify(await endpointExperience(tx,botId))}
 
 你正在和用户打电话。用口语短句，不要 Markdown、列表、链接堆砌、任务编号和工具日志。闲聊和已有依据的简单问题直接回答。需要搜索、读写文件、执行命令或较长推理时立刻 start_task，用一句话说明正在做什么，然后停下，不要等待做完。用户一打断就停止当前这句。后台任务结束后，系统会把结果发给你，你再用一两句话告诉用户。其他智能体只用 ask_agent，不要等待。`;
       const runId = randomUUID();
@@ -192,6 +203,7 @@ export class VoiceHub implements VoiceAnnouncer {
       });
       await tx.insert("bot_messages", {
         message_id: userMessageId, bot_id: botId, run_id: runId, seq: seq!.next_seq - 2,
+        provenance:await messageProvenance(tx,userId,client,deviceId),
         role: "user", content: "语音通话", status: "completed", visibility: "internal",
       });
       await tx.insert("bot_messages", {
@@ -203,7 +215,7 @@ export class VoiceHub implements VoiceAnnouncer {
       const vault = new Vault(this.s.vaultFile);
       const key = vault.open(voiceModel.secret, voiceModel.model_id);
       const summaryKey = vault.open(model.secret, model.model_id);
-      return { runId, assistantMessageId, endpoint, instructions, key, summaryKey, model, voiceProvider, aborts };
+      return { sourceDeviceId:deviceId,sourceKeyVersion:sourceDevice?.key_version,runId, assistantMessageId, endpoint, instructions, key, summaryKey, model, voiceProvider, aborts };
     });
     for (const abort of opened.aborts) {
       if (abort.kind === "device") abort.send({ type: "cancel", run_id: abort.runId });
@@ -214,7 +226,7 @@ export class VoiceHub implements VoiceAnnouncer {
       }
     }
     const session = new VoiceSession(this.db, this.s, this.hub, this.dispatcher, {
-      userId, botId, runId: opened.runId, assistantMessageId: opened.assistantMessageId,
+      sourceDeviceId:opened.sourceDeviceId,sourceKeyVersion:opened.sourceKeyVersion,userId, botId, runId: opened.runId, assistantMessageId: opened.assistantMessageId,
       endpoint: opened.endpoint, instructions: opened.instructions, key: opened.key, summaryKey: opened.summaryKey, model: opened.model, voiceProvider: opened.voiceProvider,
     }, () => {
       this.byBot.delete(botId);
@@ -299,6 +311,7 @@ class VoiceSession {
     private hub: Hub,
     private dispatcher: AgentDispatcher,
     private call: {
+      sourceDeviceId?:string;sourceKeyVersion?:number;
       userId: string; botId: string; runId: string; assistantMessageId: string;
       endpoint: string; instructions: string; key: string; summaryKey: string; model: Row; voiceProvider: string;
     },
@@ -456,7 +469,11 @@ class VoiceSession {
     if (type === "session.updated" && this.phase === "connecting") this.setPhase("listening");
     else if (type === "conversation.created" && event.conversation?.id) this.conversationId = String(event.conversation.id);
     else if (type === "input_audio_buffer.speech_started") this.barge();
-    else if (type === "conversation.item.input_audio_transcription.completed" && event.transcript) this.transcript.push(`用户：${String(event.transcript).slice(0, 2000)}`);
+    else if (type === "conversation.item.input_audio_transcription.completed" && event.transcript) {
+      const text = String(event.transcript).slice(0,100000);
+      this.transcript.push(`用户：${text}`);
+      void this.persistUserTranscript(text).catch(() => this.finish("failed","transcript_persistence_failed"));
+    }
     else if (type === "response.created") { this.responseOpen = true; this.setPhase(this.tools.length ? "thinking" : "speaking"); }
     else if ((type === "response.output_text.delta" || type === "response.text.delta" || type === "response.output_audio_transcript.delta" || type === "response.audio_transcript.delta") && event.delta) this.assistant = (this.assistant + String(event.delta)).slice(0, 8000);
     else if ((type === "response.output_audio_transcript.done" || type === "response.audio_transcript.done") && !this.assistant.trim() && event.transcript) this.assistant = String(event.transcript).slice(0, 8000);
@@ -483,6 +500,16 @@ class VoiceSession {
       this.speakingTask = undefined;
     }
     this.setPhase("listening");
+  }
+  private async persistUserTranscript(text: string) {
+    await this.db.tx(async tx => {
+      const run = await tx.get("bot_runs",this.call.runId);
+      const source = await tx.get("bot_messages",run.user_message_id);
+      const seq = await tx.one("UPDATE bots SET next_seq=next_seq+1 WHERE bot_id=$1 RETURNING next_seq",[this.call.botId]);
+      await tx.insert("bot_messages",{message_id:randomUUID(),bot_id:this.call.botId,run_id:run.run_id,
+        seq:seq!.next_seq-1,role:"user",content:text,status:"completed",visibility:"public",provenance:source.provenance});
+      await tx.notify({user_id:this.userId,bot_id:this.call.botId});
+    });
   }
   private async afterResponse(cancelled: boolean, clientPresent: boolean) {
     if (this.speakingTask) {
@@ -523,6 +550,11 @@ class VoiceSession {
     try { args = JSON.parse(tool.arguments || "{}"); } catch { return JSON.stringify({ error: "参数无效" }); }
     const claims: LlmClaims = { sub: this.userId, src: "cloud", bot: this.call.botId };
     try {
+      if (this.call.sourceDeviceId && !await this.db.tx(tx=>tx.one("SELECT 1 FROM devices WHERE device_id=$1 AND user_id=$2 AND key_version=$3 AND revoked_at IS NULL",[this.call.sourceDeviceId,this.userId,this.call.sourceKeyVersion]))) throw new Error("来源设备凭据已失效，请重新连接");
+      if(tool.name === "endpoint_experience") {
+        const result=await this.db.tx<unknown>(tx=>args.action==='list'?endpointExperience(tx,this.call.botId):resolveExperienceConflict(tx,this.call.botId,String(args.conflict_id),String(args.confirmation_id)));
+        return JSON.stringify(result);
+      }
       if (tool.name === "start_task" || tool.name === "ask_agent") {
         const created = await this.db.tx((tx) => createTask(tx, this.hub, this.userId, claims, {
           run_id: this.call.runId,
@@ -533,6 +565,7 @@ class VoiceSession {
           agent: typeof args.agent === "string" ? args.agent : undefined,
           execution: ["cloud","device","remote"].includes(args.execution)?args.execution:undefined,
           device_id:args.device_id,
+          requirements:args.requirements, resources:args.resources, resource_key:args.resource_key, decision_reason:args.decision_reason,
           request_id: tool.call_id || randomUUID(),
         },this.s));
         if (created.run?.executor === "device") await dispatchDevice(this.db, this.s, this.hub, created.run.run_id);
@@ -607,6 +640,7 @@ class VoiceSession {
     this.chain = this.chain.then(fn, fn);
   }
   private async renew() {
+    if (this.call.sourceDeviceId && !await this.db.tx(tx=>tx.one("SELECT 1 FROM devices WHERE device_id=$1 AND user_id=$2 AND key_version=$3 AND revoked_at IS NULL",[this.call.sourceDeviceId,this.userId,this.call.sourceKeyVersion]))) { await this.finish("failed","device_credentials_changed"); return; }
     if (this.ending) return;
     const kept = await this.db.tx((tx) => tx.one(
       "UPDATE bot_runs SET lease_until=$2 WHERE run_id=$1 AND status='running' RETURNING run_id",

@@ -64,3 +64,81 @@ test('Windows migration accepts win32 but rejects invalid platform', {skip:!TEST
   });
   await assert.rejects(db.tx(async tx => { await tx.insert('devices', {device_id:randomUUID(),user_id:user,public_key:'bad',label:'bad',platform:'unknown'}); }), /devices_platform_check/);
 });
+
+test('hardware recovery serializes concurrent same-account registrations and never revives revoked IDs',{skip:!TEST_DB},async t=>{
+  const {registerDevice}=await import('../src/devices.js');
+  await resetDatabase(TEST_DB!); const db=new Database(TEST_DB!);t.after(()=>db.close());await migrate(db);
+  const owner=randomUUID(),other=randomUUID(),fp='v1:'+'a'.repeat(64);
+  await db.tx(async tx=>{for(const [id,name] of [[owner,'owner'],[other,'other']])await tx.insert('users',{user_id:id,username:name,password_hash:'unused',role:'user'});});
+  const register=(user:string,key:string)=>db.tx(tx=>registerDevice(tx,user,{public_key:key,label:'Same name',platform:'linux',hardware_fingerprint:fp}));
+  const [first,second]=await Promise.all([register(owner,'first'),register(owner,'second')]);
+  assert.equal(first.device.device_id,second.device.device_id);
+  assert.equal((await db.tx(tx=>tx.one('SELECT count(*) AS n FROM device_key_rotations')))!.n,1);
+  assert.notEqual((await register(other,'foreign')).device.device_id,first.device.device_id);
+  await db.tx(tx=>tx.update('devices',first.device.device_id,{revoked_at:new Date()}));
+  assert.notEqual((await register(owner,'new')).device.device_id,first.device.device_id);
+});
+
+test('real terminal tool events build cloud and device experience, deduplicate calls and retain old resources',{skip:!TEST_DB},async t=>{
+  const {createBot,insertRun,recordTool,finishRun}=await import('../src/bots.js');
+  const {endpointExperience,resourceExperience,resolveExperienceConflict,recordEndpointExperience}=await import('../src/endpoint-experience.js');
+  await resetDatabase(TEST_DB!);const db=new Database(TEST_DB!);t.after(()=>db.close());await migrate(db);
+  const owner=randomUUID();
+  await db.tx(async tx=>{await tx.insert('users',{user_id:owner,username:'evidence',role:'user',password_hash:'unused'});});
+  const bot=await db.tx(tx=>createBot(tx,owner,{name:'Evidence',persona:''}));
+  const run=await db.tx(tx=>insertRun(tx,{userId:owner,botId:bot.bot_id,requestId:randomUUID(),text:'task',computer:null,lane:'task',operationTarget:'cloud'}));
+  await db.tx(async tx=>{
+    await recordTool(tx,run,{id:'first',name:'read_file',state:'completed',observed_path:'/actual/old-project'});
+    for(let i=0;i<110;i++)await recordTool(tx,run,{id:'read-'+i,name:'read_file',state:'completed',observed_path:'/actual/repeated'});
+    await recordTool(tx,run,{id:'running',name:'list_files',state:'running',observed_path:'/not-observed'});
+    await recordTool(tx,run,{id:'shell-failure',name:'run_command',state:'failed'});
+    await finishRun(tx,run.run_id,'completed',null,'done');
+  });
+  await db.tx(async tx=>{
+    assert.equal(await resourceExperience(tx,bot.bot_id,'/actual/old-project'),'cloud');
+    assert.equal(await resourceExperience(tx,bot.bot_id,'/not-observed'),undefined);
+    const grouped=await endpointExperience(tx,bot.bot_id);assert.equal(grouped.filter(r=>r.path==='/actual/repeated').length,1);
+    assert.equal(grouped.find(r=>r.path==='/actual/repeated')!.observations,110);
+    const saved=await tx.get('bot_runs',run.run_id);
+    await recordEndpointExperience(tx,saved,saved.endpoint_observations);
+    assert.equal((await tx.one('SELECT count(*) AS n FROM endpoint_experiences WHERE run_id=$1',[run.run_id]))!.n,112);
+  });
+  const later=async(state:'failed'|'completed')=>db.tx(async tx=>{
+    const r=await insertRun(tx,{userId:owner,botId:bot.bot_id,requestId:randomUUID(),text:'verify',computer:null,lane:'task',operationTarget:'cloud'});
+    await recordTool(tx,r,{id:'verify',name:'read_file',state,observed_path:'/actual/old-project'});await finishRun(tx,r.run_id,'completed',null,'checked');
+    return (await tx.one('SELECT * FROM endpoint_experiences WHERE run_id=$1',[r.run_id]))!;
+  });
+  const failure=await later('failed');
+  assert.equal(await db.tx(tx=>resourceExperience(tx,bot.bot_id,'/actual/old-project')),undefined);
+  const confirmation=await later('completed');
+  await db.tx(tx=>resolveExperienceConflict(tx,bot.bot_id,failure.evidence_id,confirmation.evidence_id));
+  assert.equal(await db.tx(tx=>resourceExperience(tx,bot.bot_id,'/actual/old-project')),'cloud');
+});
+
+test('registration API rotates a live socket and rejects stale keys and forged signed message sources',{skip:!TEST_DB},async t=>{
+  const {createApp}=await import('../src/app.js');const {Hub}=await import('../src/hub.js');const {settings}=await import('../src/config.js');
+  const {tempDir,vaultFile,deviceKeys,socket,eventually}=await import('./helpers.js');
+  await resetDatabase(TEST_DB!);const dir=tempDir(),db=new Database(TEST_DB!),hub=new Hub();
+  const s=settings({PI_BOT_DATABASE_URL:TEST_DB,PI_BOT_JWT_SECRET:'j'.repeat(40),PI_BOT_ADMIN_PASSWORD:'test-password',PI_BOT_VAULT_FILE:vaultFile(dir.path),PI_BOT_REMOTE_BACKEND:'none'});
+  const app=await createApp(s,db,hub);await app.listen({host:'127.0.0.1',port:0});
+  t.after(async()=>{await app.close();dir.cleanup();});
+  const base=`http://127.0.0.1:${(app.server.address() as any).port}`;
+  const login=(await app.inject({method:'POST',url:'/auth/login',payload:{username:'admin',password:'test-password'}})).json();
+  const api=(url:string,payload:any)=>app.inject({method:'POST',url,payload,headers:{authorization:'Bearer '+login.access_token}});
+  const old=deviceKeys(),fresh=deviceKeys();
+  const fingerprint='v1:'+'b'.repeat(64);
+  const registered=(await api('/devices/register',{public_key:old.publicKey,label:'Original',hardware_fingerprint:fingerprint})).json();
+  const id=registered.device.id;old.setId(id);fresh.setId(id);
+  const live=await socket(base.replace('http:','ws:')+'/ws/device',old.headers('GET','/ws/device'));
+  t.after(()=>live.ws.terminate());await eventually(()=>hub.device(login.user.id,id));
+  const rebound=await api('/devices/register',{public_key:fresh.publicKey,label:'Reinstalled',hardware_fingerprint:fingerprint});
+  assert.equal(rebound.statusCode,200,rebound.body);assert.equal(rebound.json().device.id,id);
+  await eventually(()=>!hub.device(login.user.id,id));
+  const stale=await app.inject({method:'GET',url:'/devices',headers:old.headers('GET','/devices')});assert.equal(stale.statusCode,401);
+  const valid=await app.inject({method:'GET',url:'/devices',headers:fresh.headers('GET','/devices')});assert.equal(valid.statusCode,200);
+  await api('/admin/api/models',{name:'test',base_url:'https://example.test/v1',provider_model:'test',api_key:'test',context_window:32000,max_tokens:1000});
+  const bot=(await api('/bots',{name:'Source'})).json();const foreign=randomUUID();
+  const body={text:'hello',request_id:randomUUID(),source_device_id:foreign};const path=`/bots/${bot.id}/messages`;
+  const forged=await app.inject({method:'POST',url:path,payload:body,headers:fresh.headers('POST',path,JSON.stringify(body))});
+  assert.equal(forged.statusCode,422,forged.body);
+});

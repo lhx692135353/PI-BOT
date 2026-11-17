@@ -64,7 +64,7 @@ export function askAgentTool(baseUrl: string, token: () => string, runId: string
     }),
     execute: async (_id, args: any, signal) => {
       const wait = options.conversation ? false : args.wait !== false;
-      let task = await call("POST", "/agent/tasks", { run_id: runId, agent: args.agent, task: args.task, coding: args.coding, title: args.title, wait, execution: args.execution, device_id:args.device_id, requirements:args.requirements, resources:args.resources, request_id: _id }, signal);
+      let task = await call("POST", "/agent/tasks", { run_id: runId, agent: args.agent, task: args.task, coding: args.coding, title: args.title, wait, resource_key:args.resource_key, decision_reason:args.decision_reason, execution: args.execution, device_id:args.device_id, requirements:args.requirements, resources:args.resources, request_id: _id }, signal);
       const name = task.agent.name || String(args.agent);
       checkFailure(task);
       if (!wait && !TERMINAL.has(task.status)) return text(`已转交给「${name}」。任务 ID：${task.id}；${task.status === "queued" ? "请求已保存，正在排队，尚不能确认对方已收到。" : "对方正在处理。"}对方完成后你会收到回报。`, task);

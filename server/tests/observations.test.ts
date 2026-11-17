@@ -423,7 +423,7 @@ test(
                   db,
                   s,
                   hub,
-                  { deviceId, send: () => {} } as any,
+                  { deviceId, userId, keyVersion:0, send: () => {} } as any,
                   message,
                 ),
               );

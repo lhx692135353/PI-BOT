@@ -1,3 +1,5 @@
+import { messageProvenance } from './devices.js';
+import { endpointExperience, recordEndpointExperience } from './endpoint-experience.js';
 import { absoluteClientPath, isCliRuntime, type CliRuntime } from "./cli.js";
 import { cliRouteMaterial, closeCliSessions } from "./cli-sessions.js";
 import { messageAttachments, copyPublishedRunArtifacts } from "./reports.js";
@@ -110,6 +112,7 @@ export const messageOut = (m: Row, tasks: Row[] = []) => ({
   seq: m.seq,
   role: m.role,
   content: m.content,
+  provenance:m.provenance??{client:"unknown"},
   attachments: m.attachments ?? [],
   images: (m.images ?? []).map((image: ChatImage & { id: string }) => ({ id: image.id, name: image.name, mime_type: image.mime_type })),
   status: m.status,
@@ -420,6 +423,9 @@ export async function insertRun(tx: Tx, o: NewRun) {
   }
   const task=o.taskId?await tx.get("agent_tasks",o.taskId):null;
   const parent=task?await tx.get("bot_runs",task.parent_run_id):null;
+  const provenance = parent && !o.sourceClient && !o.sourceDeviceId
+    ? (await tx.get("bot_messages",parent.user_message_id))?.provenance??{client:"unknown"}
+    : await messageProvenance(tx,o.userId,o.sourceClient,o.sourceDeviceId);
   const seq = await nextSeq(tx, o.botId, 2, (o.executionPolicy ?? parent?.execution_policy) !== "device_only" || o.origin === "report");
   const run = await tx.insert("bot_runs", {
     run_id: runId,
@@ -452,6 +458,7 @@ export async function insertRun(tx: Tx, o: NewRun) {
     seq,
     role: "user",
     content: o.text,
+    provenance,
     images: (o.images ?? []).map(image => ({ ...image, id: randomUUID() })),
     status: "completed",
     from_bot_id: o.fromBotId ?? null,
@@ -593,17 +600,17 @@ export function systemPrompt(
         ].join("\n")
       : [
           "对话由云端统一处理，智能体没有绑定的电脑。",
-          `你只能对话${options.search ? "和联网搜索" : ""}。需要文件或命令的工作用 start_task(execution=auto) 安排，服务端选择可用机器；纯联网搜索用 execution=cloud，不要假装已经完成本地工作。`,
+          `你只能对话${options.search ? "和联网搜索" : ""}。需要文件或命令的工作由你按用户明确意图或已核实资源选择目标后用 start_task 安排；无依据先询问；纯联网搜索用 execution=cloud，不要假装已经完成本地工作。`,
         ].join("\n"),
   );
   if (options.lane === "conversation") parts.push([
     "你现在处于对话调度通道：持续接话、理解意图、安排工作、查询任务和整理回报。所有执行工作交后台，聊天保持可用。",
     "闲聊和已有依据的简单问题直接回答。凡需要搜索、读写文件、执行命令或较长推理的工作，先用 send_reply(phase=opening) 发一句简短、具体的回应，说明要核实什么，再立即用 start_task 创建后台任务。首轮不推演完整方案，也不展开执行计划；详细分析交给后台。只有创建成功后才能确认已安排，然后结束当前回合；创建失败则说明失败，不宣称已启动。你自己不能执行这些工作，也不要等待后台完成。",
-    "start_task 默认 execution=auto，每个新任务优先在云端电脑执行；需要用户电脑上的文件、应用或用户明确指定电脑时用 execution=device 并填 device_id；纯联网搜索或不依赖本地文件的云端处理可指定 execution=cloud。start_task 的 task 必须自包含但精简：保留用户目标、必要上下文、已有条件、文件位置、约束和期望输出。用文件引用代替复制历史全文，不附详细执行计划或重复首句；不要为精简而省略关键条件。避免重复创建已有任务。",
+    "start_task 的目标由你选择：用户本轮明确指定 > 经验账本唯一资源命中 > 纯文字/搜索 cloud > 询问；auto 不会自动选其他机器；需要用户电脑上的文件、应用或用户明确指定电脑时用 execution=device 并填 device_id；纯联网搜索或不依赖本地文件的云端处理可指定 execution=cloud。start_task 的 task 必须自包含但精简：保留用户目标、必要上下文、已有条件、文件位置、约束和期望输出。用文件引用代替复制历史全文，不附详细执行计划或重复首句；不要为精简而省略关键条件。避免重复创建已有任务。",
     "查询任务用 task_status，结果仅代表记录的活动和更新时间；查询外部训练、部署的最新状态时，另建一个简短的核查任务，不要把缓存当作刚查到的外部进度。",
-    "本机开发站或指定测试站的 Web 功能测试用 start_task 的 browser_test_origin（HTTP(S) 协议、主机和端口），在 task 保留待测页及目标。用户本轮明确提供的 URL 授权该站点一次，其他站点由桌面任务发起审批。用户指定电脑或明确继续同一台电脑上的测试时填 device_id；项目所在设备用 resources.target；其余情况省略设备，由服务端选机。目标不明或选机有歧义时在聊天里核实。",
+    "本机开发站或指定测试站的 Web 功能测试用 start_task 的 browser_test_origin（HTTP(S) 协议、主机和端口），在 task 保留待测页及目标。用户本轮明确提供的 URL 授权该站点一次，其他站点由桌面任务发起审批。用户指定电脑或明确继续同一台电脑上的测试时填 device_id；项目所在设备用 resources.target；其余情况先询问项目在哪台电脑。目标不明或选机有歧义时在聊天里核实。",
     "用户要求改代码、修 bug 或实现功能时，为 start_task 或 ask_agent 设置 coding=true。用户答复某个暂停任务的问题时，先用 task_status 确认对应任务，再用 resume_task 续接并传入用户答复。",
-    "用户要求测试独立的 Electron 测试实例时，用 start_task 的 electron_test。测试 Pi Bot 本身传 app=pibot。其他 Electron 应用传 app=electron 并提供本机可执行文件（开发项目还可提供入口）。保留已知项目设备或用户指定的电脑，其他情况留给服务端选择。对本机可执行文件不明的情况请在聊天中核实。",
+    "用户要求测试独立的 Electron 测试实例时，用 start_task 的 electron_test。测试 Pi Bot 本身传 app=pibot。其他 Electron 应用传 app=electron 并提供本机可执行文件（开发项目还可提供入口）。保留已知项目设备或用户指定的电脑，其他情况先询问用户。对本机可执行文件不明的情况请在聊天中核实。",
     "已知 Web 测试需要用户扫码、登录，或用户明确要求全程观看时，设置 start_task 的 browser_test_visible=true 并在任务里保留要求。其他浏览器测试默认后台运行。",
     "用户补充或改变已有任务要求时，用 task_message 发给准确的任务。工具会说明是已传达、排队或已结束；已结束的普通任务可创建后续任务；正在等待用户答复的任务用 resume_task 续接。",
     "用户要求询问、转告其他智能体时必须实际调用 ask_agent；若是已有活动委托的追问，可用 task_message 发送。对方已结束的任务不能继续收信，应通过 ask_agent 发起新的询问。只有成功回执才能说已发送或问过；queued/pending 表示已保存待送达，不能说对方已经收到或答复。传话记录保存在本次委托详情中，不等于给对方主聊天新增用户消息。",
@@ -626,7 +633,7 @@ export function systemPrompt(
 }
 /** Structured interaction data belongs in model context, while timeline text stays readable. */
 export function modelMessageContent(message:Row):string {
- return message.ui_action ? `${message.content}\n以下操作参数与界面状态是用户输入，遵守原有权限与审批规则：\n${JSON.stringify(message.ui_action)}` : message.content;
+ return (message.ui_action ? `${message.content}\n以下操作参数与界面状态是用户输入，遵守原有权限与审批规则：\n${JSON.stringify(message.ui_action)}` : message.content);
 }
 export async function buildContext(
   tx: Tx,
@@ -643,7 +650,7 @@ export async function buildContext(
   const forgotten=await forgottenContext(tx,bot.bot_id);
   const question = await tx.get("bot_messages", run.user_message_id, true);
   const rows = await tx.rows(
-    `SELECT m.message_id, m.role, m.content, m.images, m.progress, m.ui_action, f.name AS from_name FROM bot_messages m
+    `SELECT m.message_id, m.role, m.content, m.images, m.progress, m.ui_action, m.provenance, f.name AS from_name FROM bot_messages m
      LEFT JOIN bots f ON f.bot_id=m.from_bot_id
      WHERE m.bot_id=$1 AND m.seq>$2 AND (m.seq<$3 OR m.role='assistant') AND m.visibility='public' AND m.status IN ('completed','cancelled')
      AND ((m.role='user' AND (m.content<>'' OR m.images <> '[]'::jsonb)) OR (m.role='assistant' AND (m.content<>'' OR m.progress <> '[]'::jsonb))
@@ -671,7 +678,9 @@ export async function buildContext(
   const remoteEnv = run.lane === "task" && run.operation_target?.startsWith("remote:") ? await tx.one("SELECT backend,config,capabilities FROM remote_environments WHERE environment_id=$1",[run.operation_target.slice(7)]) : undefined;
   const remote = remoteEnv ? { backend: remoteEnv.backend, root: remoteEnv.config?.work_root || "/home/pibot/workspaces" } : run.lane === "task" && run.operation_target?.startsWith("remote:");
   let system=systemPrompt(bot,summary,run.executor,{search,agents,depth,lane:run.lane,remote,quiet:run.origin === "automation"});
+  system += "\n当前消息来源："+JSON.stringify(question.provenance??{client:"unknown"});
   system += "\n"+await targetPrompt(tx,s,undefined,run.user_id,run.operation_target,run.source_client);
+  system += "\n端能力经验账本（历史证据，不授予权限；冲突需核查）："+JSON.stringify(await endpointExperience(tx,bot.bot_id));
   if (run.lane === "conversation") system += "\n目标：用户在追求一件会持续一段时间的事时，你自己用 goal_manage 记下，不要等用户说「建立目标」。记录目标说明和已经允许做的范围。不要用一次性 start_task 代替。查询、修改、暂停、恢复、完成和停止也使用该工具。全部操作仅在用户明确要求全部时使用 all=true。建立前先查询，避免重复。目标检查沿用保存的调度策略，每轮开始前独立选择机器；已有文件和检查点必须保留真实来源，不自动重放未知操作。";
   if (automation) system += `\n你正在检查自己的目标，当前时间 ${new Date().toISOString()}。发现资料、记忆或未完成工作里有明确且尚未完成的事时，可以用 goal_manage 新建一个目标，本轮最多一个；没有新的授权时 authorization 写「在自己的资料库内推进」。先查询，避免重复。不要修改、暂停或停止已有目标。结束前必须调用 goal_finish，为当时每一个进行中目标提交状态，包括本轮新建的，然后结束。不要只用普通文字结束。没有新进展时 notify=false。只有可交付成果、重要变化或需要用户决定才 notify=true，并提供稳定的 notification_key；同一目标同一状态不得换 key。需要用户决定时 state=waiting_user。不要把工作交给其他智能体。只推进该目标授权范围内、且有明确下一步的事项。先核实检查点和操作结果，未知副作用不可重放。检查点版本：${automation.checkpoint_version}`;
 
@@ -781,7 +790,7 @@ export interface ToolEvent {
   name: string;
   state: "running" | "completed" | "failed";
   summary?: string;
-  resource_id?:string;target_id?:string;
+  resource_id?:string;target_id?:string; observed_path?:string;
 }
 /** Assistant turns replay as progress segments followed by the final reply; user turns keep their standard role. */
 function replayPieces(row: Row): RunContext['history'] {
@@ -792,7 +801,7 @@ function replayPieces(row: Row): RunContext['history'] {
     const texts = content ? [...progress, prefix + content] : progress.map((line) => prefix + line);
     return texts.map((content) => ({ role: "assistant", content }));
   }
-  return [{ role: "user", content: prefix + modelMessageContent(row), ...(row.images?.length ? { images: row.images } : {}) }];
+  return [{ role: "user", content: prefix + `[消息来源：${JSON.stringify(row.provenance??{client:"unknown"})}]\n` + modelMessageContent(row), ...(row.images?.length ? { images: row.images } : {}) }];
 }
 export async function setProgress(tx: Tx, run: Row, lines: string[]) {
   const progress = [...new Set(lines.map(line => line.trim().slice(0, PROGRESS_CHARS)).filter(Boolean))].slice(0, PROGRESS_SEGMENTS);
@@ -809,6 +818,7 @@ export async function setProgress(tx: Tx, run: Row, lines: string[]) {
 }
 export async function recordTool(tx: Tx, run: Row, tool: ToolEvent) {
   await tx.rows(`INSERT INTO action_receipts(run_id,call_id,tool,status,resource_id,target_id) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(run_id,call_id) DO UPDATE SET status=CASE WHEN action_receipts.status IN ('completed','failed') THEN action_receipts.status ELSE EXCLUDED.status END,resource_id=coalesce(action_receipts.resource_id,EXCLUDED.resource_id),target_id=coalesce(action_receipts.target_id,EXCLUDED.target_id)`, [run.run_id,tool.id,tool.name,tool.state === 'running' ? 'accepted' : tool.state,tool.resource_id??null,tool.target_id??null]);
+  if (tool.state !== "running") await tx.rows(`UPDATE bot_runs SET endpoint_observations=(SELECT coalesce(jsonb_agg(value),'[]'::jsonb) FROM jsonb_array_elements(endpoint_observations) WHERE value->>'id'<>$2) || $3::jsonb WHERE run_id=$1`,[run.run_id,tool.id,JSON.stringify([tool])]);
   if (internalTool(tool.name)) return;
   const m = await tx.get("bot_messages", run.assistant_message_id);
   if (!m) return;
@@ -817,6 +827,7 @@ export async function recordTool(tx: Tx, run: Row, tool: ToolEvent) {
     id: String(tool.id).slice(0, 80),
     name: String(tool.name).slice(0, 80),
     state: tool.state,
+    observed_path:tool.observed_path,
     summary: tool.summary ? String(tool.summary).slice(0, 300) : undefined,
   };
   const i = tools.findIndex((t) => t.id === entry.id);
@@ -858,6 +869,7 @@ export async function finishRun(
   let segments: ReplySegment[] = message?.reply_segments ?? [];
   const reports = await tx.rows("SELECT artifact_id,title,name,mime,size,created_at,summary FROM report_artifacts WHERE run_id=$1 AND mime='text/markdown' ORDER BY created_at",[runId]);
   if (reports.length && state === 'completed') { content = reports.map(r => r.summary).join('\n\n'); segments=segments.filter(r=>r.phase!=="answer"); await tx.rows("UPDATE bot_messages SET reply_segments=$2 WHERE message_id=$1",[run.assistant_message_id,JSON.stringify(segments)]); }
+  if (final === "completed" || final === "failed") await recordEndpointExperience(tx,run,run.endpoint_observations?.length?run.endpoint_observations:message?.tools??[]);
   const finalText = content ?? message?.content ?? "";
   const answer = reports.length ? finalText : replyAnswer(segments, finalText);
   if (finalText.trim() && !segments.some(r => r.phase === "answer")) {

@@ -44,17 +44,8 @@ export async function dispatchDevice(db: Database, s: Settings, hub: Hub, runId:
       await tx.rows("UPDATE bot_automations SET status='enabled' WHERE automation_id=$1 AND status='waiting_device'", [run.automation_id]);
       await tx.rows("UPDATE bot_runs SET deadline_at=$2 WHERE run_id=$1", [runId, new Date(Date.now() + s.automationRoundSeconds * 1000)]);
     }
-    if (!conn && run.lane === "task" && !run.routing) return null;
-    if (run.execution_policy !== "device_only" && !conn && run.lane !== "task") {
-      await tx.rows(
-        "UPDATE bot_runs SET executor='cloud', device_id=NULL WHERE run_id=$1",
-        [runId],
-      );
-      await tx.rows(
-        "UPDATE bot_messages SET executor='cloud' WHERE message_id=$1",
-        [run.assistant_message_id],
-      );
-      await tx.notify({ user_id: run.user_id, bot_id: run.bot_id });
+    if (!conn && !run.routing) {
+      await finishRun(tx,runId,"failed",DEVICE_OFFLINE,DEVICE_OFFLINE);
       return null;
     }
     const claimed = await claimExecution(tx, runId, s,undefined,hub);
@@ -84,7 +75,7 @@ const runEvent = z.discriminatedUnion("kind", [
     name: z.string().max(80),
     state: z.enum(["running", "completed", "failed"]),
     summary: z.string().max(2000).optional(),
-    resource_id:z.string().max(200).optional(),target_id:z.string().max(200).optional(),
+    observed_path:z.string().min(1).max(2000).optional(),resource_id:z.string().max(200).optional(),target_id:z.string().max(200).optional(),
   }),
   z.object({
     kind: z.literal("approval"),
@@ -134,11 +125,10 @@ export async function handleRunEvent(
   if (!parsed.success || typeof message.run_id !== "string") return;
   const e = parsed.data,
     runId = message.run_id;
-  const own = (tx: Tx) =>
-    tx.one(
-      "SELECT * FROM bot_runs WHERE run_id=$1 AND device_id=$2 AND executor='device'",
-      [runId, conn.deviceId],
-    );
+  const own = async (tx: Tx) => {
+    if (!await tx.one("SELECT 1 FROM devices WHERE device_id=$1 AND user_id=$2 AND revoked_at IS NULL AND key_version=$3 FOR SHARE",[conn.deviceId,conn.userId,conn.keyVersion??0])) return undefined;
+    return tx.one("SELECT * FROM bot_runs WHERE run_id=$1 AND device_id=$2 AND executor='device'",[runId,conn.deviceId]);
+  };
   if (e.kind === "text") {
     const state = live.get(runId) ?? { content: "", written: 0 };
     state.content = e.text;
@@ -262,9 +252,9 @@ export async function handleRunEvent(
 
 export async function failDeviceRuns(db: Database, deviceId: string, reason = DEVICE_OFFLINE, keepQueued = true) {
   await db.tx(async (tx) => {
-    if (!keepQueued) {
+    {
       const tasks = await tx.rows(`UPDATE agent_tasks SET status='failed',error=$2,finished_at=now(),updated_at=now()
-        WHERE device_id=$1 AND status='queued' AND child_run_id IS NULL AND routing IS NULL RETURNING *`, [deviceId, reason]);
+        WHERE (device_id=$1 OR routing->>'device_id'=($1::uuid)::text OR coalesce(routing->'resources','[]'::jsonb) @> jsonb_build_array(jsonb_build_object('target','device:'||($1::uuid)::text))) AND status='queued' AND child_run_id IS NULL RETURNING *`, [deviceId, reason]);
       for (const t of tasks) {
         await taskMessage(tx, t, "terminal", "error", reason);
         await tx.notify({user_id:t.user_id,bot_id:t.parent_bot_id});
@@ -275,14 +265,14 @@ export async function failDeviceRuns(db: Database, deviceId: string, reason = DE
       "SELECT run_id FROM bot_runs WHERE executor='device' AND device_id=$1 AND status = ANY($2)",
       [deviceId, ACTIVE],
     );
-    await tx.rows("UPDATE bot_runs SET executor='cloud', device_id=NULL WHERE executor='device' AND device_id=$1 AND status='queued' AND lane='conversation' AND execution_policy='any'", [deviceId]);
-    await tx.rows("UPDATE bot_messages m SET executor='cloud' FROM bot_runs r WHERE m.message_id=r.assistant_message_id AND r.executor='cloud' AND r.status='queued' AND m.executor='device'");
+
+
     for (const r of runs) {
       const current = await tx.get("bot_runs", r.run_id);
       if (current?.executor !== "device") continue;
       live.delete(r.run_id);
-      if (current.routing && current.status === "queued") continue;
-      if (keepQueued && current.status === "queued" && (current.lane === "task" || current.execution_policy === "device_only")) {
+
+      if (keepQueued && current.status === "queued" && current.execution_policy === "device_only") {
         await tx.rows("UPDATE bot_automations SET status='waiting_device' WHERE automation_id=$1 AND status='enabled'", [current.automation_id]);
         continue;
       }
@@ -293,16 +283,19 @@ export async function failDeviceRuns(db: Database, deviceId: string, reason = DE
 /** Preserve queued local work after a restart, and fail interrupted device runs. */
 export async function failOrphanedDeviceRuns(db: Database) {
   await db.tx(async (tx) => {
+    const tasks=await tx.rows("UPDATE agent_tasks SET status='failed',error=$1,finished_at=now(),updated_at=now() WHERE execution='device' AND status='queued' AND child_run_id IS NULL RETURNING *",[DEVICE_OFFLINE]);
+    for(const task of tasks){await taskMessage(tx,task,"terminal","error",DEVICE_OFFLINE);await tx.notify({user_id:task.user_id,bot_id:task.parent_bot_id});}
+
     const runs = await tx.rows(
       "SELECT run_id FROM bot_runs WHERE executor='device' AND status = ANY($1)",
       [ACTIVE],
     );
-    await tx.rows("UPDATE bot_runs SET executor='cloud', device_id=NULL WHERE executor='device' AND status='queued' AND lane='conversation' AND execution_policy='any'");
-    await tx.rows("UPDATE bot_messages m SET executor='cloud' FROM bot_runs r WHERE m.message_id=r.assistant_message_id AND r.executor='cloud' AND r.status='queued' AND m.executor='device'");
+
+
     for (const r of runs) {
       const current = await tx.get("bot_runs", r.run_id);
       if (current?.executor === "device") {
-        if (current.status === "queued" && (current.lane === "task" || current.execution_policy === "device_only")) {
+        if (current.status === "queued" && current.execution_policy === "device_only") {
           await tx.rows("UPDATE bot_automations SET status='waiting_device' WHERE automation_id=$1 AND status='enabled'", [current.automation_id]);
           continue;
         }

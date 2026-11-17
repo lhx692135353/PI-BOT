@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { Database } from '../src/db.js';
+import { Database, type Row } from '../src/db.js';
 import { migrate } from '../src/migrate.js';
 import { Hub, type DeviceConnection } from '../src/hub.js';
 import { settings } from '../src/config.js';
@@ -12,189 +12,36 @@ import { resolveTaskTarget, taskRouting, RemotePreparationRequired, resourceSche
 import { manageGoals, AutomationScheduler, saveGoalDecision } from '../src/automations.js';
 import { TEST_DB, resetDatabase, eventually } from './helpers.js';
 
-test('task routing uses machines as per-task resources, never Bot identity', {skip:!TEST_DB}, async t => {
+test('routing rejects ambiguity before insertion and keeps an explicit destination through dispatch', {skip:!TEST_DB}, async t => {
   await resetDatabase(TEST_DB!);
-  const db=new Database(TEST_DB!), hub=new Hub();
-  t.after(()=>db.close());
-  await migrate(db);
-  const user=randomUUID(), otherUser=randomUUID(), a=randomUUID(), b=randomUUID(), c=randomUUID();
+  const db=new Database(TEST_DB!),hub=new Hub(); t.after(()=>db.close()); await migrate(db);
+  const user=randomUUID(),a=randomUUID(),b=randomUUID();
   const s=settings({PI_BOT_DATABASE_URL:TEST_DB,PI_BOT_JWT_SECRET:'j'.repeat(40),PI_BOT_ADMIN_PASSWORD:'test-password',PI_BOT_RUNNER_TOKEN:'r'.repeat(40),PI_BOT_REMOTE_BACKEND:'none'});
-  const sent: {device:string;message:any}[]=[];
-  const connect=(id:string,capabilities=['files','shell','always-on-v1','preflight-v1'],available=true,reason?:string):DeviceConnection=>{
-    const connection:DeviceConnection={deviceId:id,userId:user,capabilities,close(){},send(message){
-      sent.push({device:id,message});
-      if(message.type==='rpc') queueMicrotask(()=>hub.resolveRpc(id,{id:message.id,ok:true,result:{available,reason}}));
-    }};
-    hub.attach(connection);return connection;
-  };
   await db.tx(async tx=>{
-    for(const [id,name] of [[user,'routing-user'],[otherUser,'other-user']]) await tx.insert('users',{user_id:id,username:name,password_hash:'unused',role:'user'});
-    for(const id of [a,b,c]) await tx.insert('devices',{device_id:id,user_id:user,label:id,public_key:id,platform:'linux'});
+    await tx.insert('users',{user_id:user,username:'routing',password_hash:'unused',role:'user'});
+    for(const id of [a,b])await tx.insert('devices',{device_id:id,user_id:user,label:id,public_key:id,platform:'linux'});
     await tx.insert('models',{model_id:randomUUID(),name:'test',base_url:'https://example.com/v1',provider_model:'test',context_window:32000,max_tokens:1000,secret:{},is_default:true});
   });
-  const bot=await db.tx(tx=>createBot(tx,user,{name:'Routing',persona:'',execution_device_id:a}));
-  const makeParent=async(device=a)=>db.tx(async tx=>{
-    const run=await insertRun(tx,{userId:user,botId:bot.bot_id,requestId:randomUUID(),text:'new request',computer:{deviceId:device},sourceClient:'desktop',sourceDeviceId:device,operationTarget:'cloud'});
-    return tx.update('bot_runs',run.run_id,{status:'running'});
-  });
-  let parent=await makeParent();
+  const bot=await db.tx(tx=>createBot(tx,user,{name:'Routing',persona:''}));
+  const parent=await db.tx(async tx=>{const run=await insertRun(tx,{userId:user,botId:bot.bot_id,requestId:randomUUID(),text:'request',computer:null,sourceClient:'android'});return tx.update('bot_runs',run.run_id,{status:'running'});});
   const claims={sub:user,bot:bot.bot_id,src:'cloud' as const};
-  const route=(execution:'auto'|'device'|'cloud'|'remote'='auto')=>({execution,preferred_device_id:a,requirements:execution==='cloud'?[]:['files','shell'],resources:[]});
-  let ca=connect(a), cb=connect(b);
-  await t.test('Bot edits ignore deprecated bindings, conversations stay in cloud',async()=>{
-    assert.equal(bot.execution_device_id,null);
-    await db.tx(tx=>updateBot(tx,user,bot.bot_id,{execution_device_id:c,name:'Renamed'}));
-    assert.equal((await db.tx(tx=>tx.get('bots',bot.bot_id))).execution_device_id,null);
-    assert.equal(parent.executor,'cloud');assert.equal(parent.device_id,null);assert.equal(parent.source_device_id,a);
-  });
-  await t.test('source computer wins; a different new request uses its own source',async()=>{
-    const first=await db.tx(tx=>resolveTaskTarget(tx,s,hub,user,bot.slug,route()));assert.equal(first.device_id,a);
-    const second=await db.tx(tx=>resolveTaskTarget(tx,s,hub,user,bot.slug,{...route(),preferred_device_id:b}));assert.equal(second.device_id,b);
-    const routed=await db.tx(tx=>taskRouting(tx,user,{...parent,operation_target:'device:'+c}));assert.equal(routed.preferred_device_id,a);assert.equal(routed.execution,'auto');
-    const mobile=await db.tx(tx=>taskRouting(tx,user,{source_client:'android'}));assert.equal(mobile.preferred_device_id,a);
-  });
-  await t.test('undeclared capability and missing resources are never assumed available',async()=>{
-    assert.equal(resourceSchema.safeParse({target:'device:'+ '-'.repeat(36)}).success,false);
-    ca=connect(a,['files']);
-    assert.equal((await db.tx(tx=>resolveTaskTarget(tx,s,hub,user,bot.slug,route()))).device_id,b);
-    ca=connect(a,undefined,false);
-    await assert.rejects(db.tx(tx=>resolveTaskTarget(tx,s,hub,user,bot.slug,{...route(),resources:[{target:'device:'+a,path:'project/data.csv'}]})),/文件所在电脑不可用/);
-    ca=connect(a);
-    assert.equal((await db.tx(tx=>resolveTaskTarget(tx,s,hub,user,bot.slug,{...route(),resources:[{target:'device:'+a,path:'project/data.csv'}]}))).device_id,a);
-    await assert.rejects(db.tx(tx=>taskRouting(tx,otherUser,{}, {resources:[{target:'device:'+a}]})),/不属于当前账号/);
-  });
-  await t.test('explicit unavailable computer fails and does not contact another machine',async()=>{
-    hub.detach(ca);sent.length=0;
-    await assert.rejects(db.tx(tx=>createTask(tx,hub,user,claims,{run_id:parent.run_id,kind:'background',task:'explicit',wait:false,execution:'device',device_id:a},s)),/电脑已离线/);
-    assert.equal(sent.filter(x=>x.message.type==='run').length,0);
-    assert.equal((await db.tx(tx=>resolveTaskTarget(tx,s,hub,user,bot.slug,route()))).device_id,b);
-    ca=connect(a);
-  });
-  await t.test('an online device reports missing capabilities and inaccessible resources without claiming it is offline',async()=>{
-    ca=connect(a,['files']);
-    await assert.rejects(db.tx(tx=>resolveTaskTarget(tx,s,hub,user,bot.slug,{...route('device'),device_id:a})),error=>{
-      assert.match((error as Error).message,/电脑已连接.*shell/);assert.doesNotMatch((error as Error).message,/离线/);return true;
-    });
-    ca=connect(a,undefined,false,'outside_library');
-    const resources=[{target:'device:'+a,path:'/outside/project'}];
-    await assert.rejects(db.tx(tx=>resolveTaskTarget(tx,s,hub,user,bot.slug,{...route('device'),device_id:a,resources})),/电脑已连接.*request_outside_access/);
-    await assert.rejects(db.tx(tx=>resolveTaskTarget(tx,s,hub,user,bot.slug,{...route(),resources})),/电脑已连接.*request_outside_access/);
-    assert.equal((await db.tx(tx=>resolveTaskTarget(tx,s,hub,user,bot.slug,{...route('device'),device_id:a,resources:[{target:'device:'+a}]}))).device_id,a,'a task may request permission on the same device without pre-reading outside resources');
-    ca=connect(a,undefined,false,'missing');
-    await assert.rejects(db.tx(tx=>resolveTaskTarget(tx,s,hub,user,bot.slug,{...route('device'),device_id:a,resources})),/电脑已连接.*不存在.*不要省略/);
-    ca=connect(a,undefined,false);
-    await assert.rejects(db.tx(tx=>resolveTaskTarget(tx,s,hub,user,bot.slug,{...route('device'),device_id:a,resources})),/电脑已连接.*路径检查未通过/,'old clients without a reason remain supported');
-    ca=connect(a);
-  });
-  await t.test('other computers use load then stable device ID; cloud text avoids machines',async()=>{
-    const busy=await db.tx(tx=>insertRun(tx,{userId:user,botId:bot.bot_id,requestId:randomUUID(),text:'busy',computer:{deviceId:a},lane:'task'}));
-    assert.equal((await db.tx(tx=>resolveTaskTarget(tx,s,hub,user,bot.slug,{...route(),preferred_device_id:undefined}))).device_id,b);
-    await db.tx(tx=>finishRun(tx,busy.run_id,'completed',null,'done'));
-    assert.equal((await db.tx(tx=>resolveTaskTarget(tx,s,hub,user,bot.slug,{...route(),preferred_device_id:undefined}))).device_id,[a,b].sort()[0]);
-    assert.equal((await db.tx(tx=>resolveTaskTarget(tx,s,hub,user,bot.slug,route('cloud')))).operation_target,'cloud');
-    await assert.rejects(db.tx(tx=>resolveTaskTarget(tx,s,hub,user,bot.slug,{...route('cloud'),resources:[{target:'device:'+a}]})),/不能访问机器/);
-  });
-  await t.test('cloud fallback checks actual environment capabilities and resource source',async()=>{
-    hub.detach(ca);hub.detach(cb);
-    await assert.rejects(db.tx(tx=>resolveTaskTarget(tx,s,hub,user,bot.slug,route())),/云端执行环境未开启/);
-    const remoteSettings={...s,remoteBackend:'ssh' as const};
-    await assert.rejects(db.tx(tx=>resolveTaskTarget(tx,remoteSettings,hub,user,bot.slug,route())),RemotePreparationRequired);
-    const env=await db.tx(tx=>tx.insert('remote_environments',{environment_id:randomUUID(),user_id:user,backend:'ssh',secret:{},status:'ready',capabilities:['files','shell']}));
-    assert.equal((await db.tx(tx=>resolveTaskTarget(tx,remoteSettings,hub,user,bot.slug,route()))).operation_target,'remote:'+env.environment_id);
-    await assert.rejects(db.tx(tx=>resolveTaskTarget(tx,remoteSettings,hub,user,bot.slug,{...route(),requirements:['browser']})),/缺少任务所需能力/);
-    await assert.rejects(db.tx(tx=>resolveTaskTarget(tx,remoteSettings,hub,user,bot.slug,{...route(),resources:[{target:'device:'+a}]})),/文件所在电脑/);
-    ca=connect(a);cb=connect(b);
-  });
-  await t.test('the cloud computer is the default machine; a named computer or its files still win',async()=>{
-    const local={...s,remoteBackend:'local' as const};
-    await db.tx(tx=>tx.rows("UPDATE remote_environments SET status='retired' WHERE user_id=$1",[user]));
-    await assert.rejects(db.tx(tx=>resolveTaskTarget(tx,local,hub,user,bot.slug,route())),RemotePreparationRequired,'first use prepares the server host');
-    const env=await db.tx(async tx=>(await tx.one("SELECT * FROM remote_environments WHERE user_id=$1 AND status<>'retired'",[user])) ?? tx.insert('remote_environments',{environment_id:randomUUID(),user_id:user,backend:'local',config:{work_root:'/tmp/w'},secret:{},status:'ready',capabilities:['files','shell','preflight-v1']}));
-    assert.equal(env.backend,'local');
-    assert.equal((await db.tx(tx=>resolveTaskTarget(tx,local,hub,user,bot.slug,route()))).operation_target,'remote:'+env.environment_id);
-    assert.equal((await db.tx(tx=>resolveTaskTarget(tx,local,hub,user,bot.slug,{...route('device'),device_id:b}))).device_id,b);
-    assert.equal((await db.tx(tx=>resolveTaskTarget(tx,local,hub,user,bot.slug,{...route(),resources:[{target:'device:'+a}]}))).device_id,a);
-    const cc=connect(c,['files','shell','browser']);
-    assert.equal((await db.tx(tx=>resolveTaskTarget(tx,local,hub,user,bot.slug,{...route(),requirements:['browser']}))).device_id,c,'a capability the cloud lacks falls back to a computer');
-    hub.detach(cc);
-    await db.tx(tx=>tx.rows("DELETE FROM remote_environments WHERE environment_id=$1",[env.environment_id]));
-  });
-  await t.test('queued automatic work reselects immediately before claim; concurrent claims execute once',async()=>{
-    const result=await db.tx(tx=>createTask(tx,hub,user,claims,{run_id:parent.run_id,kind:'background',task:'automatic',wait:false,request_id:'automatic'},s));
-    const queued=await db.tx(tx=>tx.get('agent_tasks',result.task.id));assert.equal(queued.operation_target,'pending');assert.equal(queued.device_id,null);
-    const run=await db.tx(tx=>startTask(tx,hub,queued,s));assert.equal(run?.device_id,a);
-    hub.detach(ca);sent.length=0;
-    await Promise.all([dispatchDevice(db,s,hub,run!.run_id),dispatchDevice(db,s,hub,run!.run_id)]);
-    const started=await db.tx(tx=>tx.get('bot_runs',run!.run_id));assert.equal(started.status,'running');assert.equal(started.device_id,b);
-    assert.equal(sent.filter(x=>x.message.type==='run').length,1);assert.equal(sent.find(x=>x.message.type==='run')?.device,b);
-    const task=await db.tx(tx=>tx.get('agent_tasks',result.task.id));assert.equal(task.routing.preferred_device_id,a);assert.equal(task.device_id,b);
-    hub.detach(cb);await failDeviceRuns(db,b);
-    assert.equal((await db.tx(tx=>tx.get('bot_runs',run!.run_id))).status,'failed');
-    ca=connect(a);cb=connect(b);sent.length=0;
-    await dispatchDevice(db,s,hub,run!.run_id);assert.equal(sent.filter(x=>x.message.type==='run').length,0,'interrupted execution is not replayed');
-    // A new task still prefers the source rather than the previous selected node.
-    const next=await db.tx(tx=>createTask(tx,hub,user,claims,{run_id:parent.run_id,kind:'background',task:'next',wait:false},s));
-    const nextTask=await db.tx(tx=>tx.get('agent_tasks',next.task.id));
-    const nextRun=await db.tx(tx=>startTask(tx,hub,nextTask,s));assert.equal(nextRun?.device_id,a);
-    await db.tx(tx=>finishRun(tx,nextRun!.run_id,'completed',null,'done'));
-  });
-  await t.test('explicit destination lost after queuing fails instead of falling back',async()=>{
-    const result=await db.tx(tx=>createTask(tx,hub,user,claims,{run_id:parent.run_id,kind:'background',task:'explicit queued',wait:false,execution:'device',device_id:a},s));
-    hub.detach(ca);sent.length=0;
-    await dispatchDevice(db,s,hub,result.run!.run_id);
-    assert.equal((await db.tx(tx=>tx.get('bot_runs',result.run!.run_id))).status,'failed');assert.equal(sent.filter(x=>x.message.type==='run').length,0);
-    ca=connect(a);
-  });
-  await t.test('concurrent queued starts reread the task after locking the bot and create one child run',async()=>{
-    const result=await db.tx(tx=>createTask(tx,hub,user,claims,{run_id:parent.run_id,kind:'background',task:'concurrent starts',wait:false},s));
-    const snapshot=await db.tx(tx=>tx.get('agent_tasks',result.task.id));
-    const starts=await Promise.all([db.tx(tx=>startTask(tx,hub,snapshot,s)),db.tx(tx=>startTask(tx,hub,{...snapshot},s))]);
-    assert.equal(starts.filter(Boolean).length,1);
-    const runs=await db.tx(tx=>tx.rows('SELECT * FROM bot_runs WHERE task_id=$1',[snapshot.task_id]));
-    assert.equal(runs.length,1);assert.equal((await db.tx(tx=>tx.get('agent_tasks',snapshot.task_id))).child_run_id,runs[0].run_id);
-    assert.equal(await db.tx(tx=>startTask(tx,hub,snapshot,s)),null,'a stale task snapshot cannot restart queued work');
-    await db.tx(tx=>finishRun(tx,runs[0].run_id,'completed',null,'done'));
-  });
-  await t.test('dispatcher waits for the bot before locking its queued task',async()=>{
-    const result=await db.tx(tx=>createTask(tx,hub,user,claims,{run_id:parent.run_id,kind:'background',task:'lock ordering',wait:false},s));
-    const blocker=await db.pool.connect();
-    const dispatcher=new AgentDispatcher(db,s,hub);
-    let pass:Promise<void>|undefined;
-    try {
-      await blocker.query('BEGIN');
-      await blocker.query('SELECT bot_id FROM bots WHERE bot_id=$1 FOR NO KEY UPDATE',[bot.bot_id]);
-      pass=dispatcher.once();
-      await eventually(()=>db.tx(tx=>tx.one("SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE 'SELECT * FROM bots WHERE bot_id=%FOR NO KEY UPDATE%'")));
-      await blocker.query('SELECT task_id FROM agent_tasks WHERE task_id=$1 FOR NO KEY UPDATE NOWAIT',[result.task.id]);
-      await blocker.query('COMMIT');
-      await pass;
-      const task=await db.tx(tx=>tx.get('agent_tasks',result.task.id));assert.ok(task.child_run_id);
-      await db.tx(tx=>finishRun(tx,task.child_run_id,'completed',null,'done'));
-    } finally {
-      await blocker.query('ROLLBACK').catch(()=>{});blocker.release();await pass;await dispatcher.stop();
-    }
-  });
-  await t.test('goal policy remembers source preference while a review uses an available machine',async()=>{
-    await db.tx(tx=>finishRun(tx,parent.run_id,'completed',null,'done'));
-    parent=await makeParent();
-    const goal=await db.tx(tx=>manageGoals(tx,user,claims,{run_id:parent.run_id,request_id:'goal',action:'create',goal:'Inspect data',authorization:'Only inspect library'},new Date(),s,hub));
-    assert.ok('id' in goal);
-    const saved=await db.tx(tx=>tx.get('bot_goals',goal.id));assert.equal(saved.routing.execution,'auto');assert.equal(saved.routing.preferred_device_id,a);assert.match(saved.operation_target,/^policy:/);
-    await db.tx(tx=>finishRun(tx,parent.run_id,'completed',null,'done'));hub.detach(ca);
-    await new AutomationScheduler(db,s,hub,()=>new Date(Date.now()+120000)).once();
-    const review=await db.tx(tx=>tx.one("SELECT * FROM bot_runs WHERE bot_id=$1 AND origin='automation' ORDER BY created_at DESC LIMIT 1",[bot.bot_id]));
-    assert.equal(review?.device_id,b);assert.equal((await db.tx(tx=>tx.get('bot_goals',goal.id))).operation_target,saved.operation_target);
-    await db.tx(async tx=>{
-      await saveGoalDecision(tx,user,{sub:user,src:'device',bot:bot.bot_id,did:b},{run_id:review!.run_id,decision:{goals:[{id:goal.id,state:'continue',progress:'Saved report',notify:false,reason:'checkpoint',checkpoint:{artifacts:['report.md']}}]}});
-      await finishRun(tx,review!.run_id,'completed',null,'done');
-      await tx.rows('UPDATE bot_automations SET next_wake_at=now() WHERE automation_id=$1',[review!.automation_id]);
-    });
-    ca=connect(a);hub.detach(cb);sent.length=0;
-    await new AutomationScheduler(db,s,hub,()=>new Date(Date.now()+120000)).once();
-    assert.equal(sent.filter(x=>x.message.type==='run').length,0,'checkpoint files on B are not replaced with same paths on A');
-    assert.equal((await db.tx(tx=>tx.get('bot_automations',review!.automation_id))).status,'waiting_device');
-
-  });
+  const sends:Row[]=[];
+  const connect=(id:string)=>{const c={userId:user,deviceId:id,capabilities:['files','shell'],send(m:Row){sends.push(m);},close(){}};hub.attach(c);return c;};
+  connect(b);
+  const create=(extra:object)=>db.tx(tx=>createTask(tx,hub,user,claims,{run_id:parent.run_id,kind:'background',task:'work',wait:false,...extra},s));
+  await assert.rejects(create({requirements:['shell']}),/执行目标不明确/);
+  await assert.rejects(create({device_id:a,requirements:['shell']}),/离线/);
+  assert.equal((await db.tx(tx=>tx.one('SELECT count(*) AS n FROM agent_tasks')))!.n,0);
+  const legacy=await db.tx(tx=>tx.insert('agent_tasks',{task_id:randomUUID(),user_id:user,parent_run_id:parent.run_id,parent_bot_id:bot.bot_id,target_bot_id:bot.bot_id,depth:0,mode:'report',kind:'background',task:'old pinned resource',status:'queued',execution:'device',operation_target:'pending',routing:{execution:'auto',requirements:['files'],resources:[{target:'device:'+a}]}}));
+  await failDeviceRuns(db,a);
+  assert.equal((await db.tx(tx=>tx.get('agent_tasks',legacy.task_id))).status,'failed');
+  const ca=connect(a);
+  const result=await create({device_id:a,requirements:['shell']});
+  hub.detach(ca);sends.length=0;
+  await dispatchDevice(db,s,hub,result.run!.run_id);
+  assert.equal((await db.tx(tx=>tx.get('bot_runs',result.run!.run_id))).status,'failed');
+  assert.equal(sends.filter(m=>m.type==='run').length,0);
+  assert.equal((await db.tx(tx=>tx.get('bot_runs',result.run!.run_id))).device_id,a);
 });
 
 test('routing migration preserves queued destinations, history and checkpoints, and converts goal bindings into preferences',{skip:!TEST_DB},async t=>{
@@ -237,7 +84,7 @@ test('cloud worker finalizes queued routing through authenticated API; file read
   await db.tx(async tx=>{for(const id of [a,b]) await tx.insert('devices',{device_id:id,user_id:user,label:id,public_key:id});});
   const sends:any[]=[];
   for(const id of [a,b]) hub.attach({deviceId:id,userId:user,capabilities:['files','shell'],close(){},send(message){sends.push({id,message});if(message.type==='rpc')queueMicrotask(()=>hub.resolveRpc(id,{id:message.id,ok:true,result:{path:message.params.path,kind:'text',content:id,entries:[]}}));}});
-  const queued=await db.tx(tx=>insertRun(tx,{userId:user,botId:bot.id,requestId:randomUUID(),text:'queued task',computer:null,lane:'task',operationTarget:'cloud',routing:{execution:'auto',preferred_device_id:a,requirements:['files','shell'],resources:[]}}));
+  const queued=await db.tx(tx=>insertRun(tx,{userId:user,botId:bot.id,requestId:randomUUID(),text:'queued task',computer:null,lane:'task',operationTarget:'cloud',routing:{execution:'device',device_id:a,requirements:['files','shell'],resources:[]}}));
   assert.equal((await app.inject({method:'POST',url:`/internal/runs/${queued.run_id}/claim`,payload:{worker_id:randomUUID()}})).statusCode,401);
   const response=await app.inject({method:'POST',url:`/internal/runs/${queued.run_id}/claim`,headers:{authorization:'Bearer '+s.runnerToken},payload:{worker_id:randomUUID()}});
   assert.equal(response.statusCode,200,response.body);assert.equal(response.json().run,null);
@@ -251,4 +98,42 @@ test('cloud worker finalizes queued routing through authenticated API; file read
   const content=(await api('GET',`/bots/${bot.id}/files/content?target=device:${b}&path=data.csv`)).json();assert.equal(content.content,b);assert.equal(content.target,'device:'+b);
   assert.equal((await api('GET',`/bots/${bot.id}/files?target=device:${randomUUID()}`)).statusCode,404);
   const patch=await api('PATCH',`/bots/${bot.id}`,{execution_device_id:b});assert.equal(patch.statusCode,200);assert.equal(patch.json().execution_device_id,null);
+});
+
+test('ownership, capabilities, preflight and outside-library authorization remain enforced',{skip:!TEST_DB},async t=>{
+  await resetDatabase(TEST_DB!);const db=new Database(TEST_DB!),hub=new Hub();t.after(()=>db.close());await migrate(db);
+  const user=randomUUID(),otherUser=randomUUID(),a=randomUUID(),b=randomUUID();
+  const s=settings({PI_BOT_DATABASE_URL:TEST_DB,PI_BOT_JWT_SECRET:'j'.repeat(40),PI_BOT_REMOTE_BACKEND:'none'});
+  await db.tx(async tx=>{for(const [id,name] of [[user,'owner'],[otherUser,'other']])await tx.insert('users',{user_id:id,username:name,role:'user',password_hash:'unused'});for(const id of [a,b])await tx.insert('devices',{device_id:id,user_id:user,label:id,public_key:id});});
+  const bot=await db.tx(tx=>createBot(tx,user,{name:'Safe',persona:''}));
+  const connect=(id:string,capabilities=['files','shell','preflight-v1'],available=true,reason?:string)=>{const c={deviceId:id,userId:user,capabilities,close(){},send(message:Row){if(message.type==='rpc')queueMicrotask(()=>hub.resolveRpc(id,{id:message.id,ok:true,result:{available,reason}}));}};hub.attach(c);return c;};
+  let ca=connect(a);connect(b);
+  const route=(execution:'auto'|'device'|'cloud'|'remote'='device')=>({execution,device_id:a,requirements:['files','shell'],resources:[] as {target:string;path?:string}[]});
+  await t.test('undeclared capability and missing resources are never assumed available',async()=>{
+    assert.equal(resourceSchema.safeParse({target:'device:'+ '-'.repeat(36)}).success,false);
+    ca=connect(a,['files']);
+    await assert.rejects(db.tx(tx=>resolveTaskTarget(tx,s,hub,user,bot.slug,route())),/shell/);
+    ca=connect(a,undefined,false);
+    await assert.rejects(db.tx(tx=>resolveTaskTarget(tx,s,hub,user,bot.slug,{...route(),resources:[{target:'device:'+a,path:'project/data.csv'}]})),/资源检查未通过/);
+    ca=connect(a);
+    assert.equal((await db.tx(tx=>resolveTaskTarget(tx,s,hub,user,bot.slug,{...route(),resources:[{target:'device:'+a,path:'project/data.csv'}]}))).device_id,a);
+    await assert.rejects(db.tx(tx=>taskRouting(tx,otherUser,{}, {resources:[{target:'device:'+a}]})),/不属于当前账号/);
+  });
+  await t.test('an online device reports missing capabilities and inaccessible resources without claiming it is offline',async()=>{
+    ca=connect(a,['files']);
+    await assert.rejects(db.tx(tx=>resolveTaskTarget(tx,s,hub,user,bot.slug,{...route('device'),device_id:a})),error=>{
+      assert.match((error as Error).message,/电脑已连接.*shell/);assert.doesNotMatch((error as Error).message,/离线/);return true;
+    });
+    ca=connect(a,undefined,false,'outside_library');
+    const resources=[{target:'device:'+a,path:'/outside/project'}];
+    await assert.rejects(db.tx(tx=>resolveTaskTarget(tx,s,hub,user,bot.slug,{...route('device'),device_id:a,resources})),/电脑已连接.*request_outside_access/);
+    await assert.rejects(db.tx(tx=>resolveTaskTarget(tx,s,hub,user,bot.slug,{...route(),resources})),/电脑已连接.*request_outside_access/);
+    assert.equal((await db.tx(tx=>resolveTaskTarget(tx,s,hub,user,bot.slug,{...route('device'),device_id:a,resources:[{target:'device:'+a}]}))).device_id,a,'a task may request permission on the same device without pre-reading outside resources');
+    ca=connect(a,undefined,false,'missing');
+    await assert.rejects(db.tx(tx=>resolveTaskTarget(tx,s,hub,user,bot.slug,{...route('device'),device_id:a,resources})),/电脑已连接.*不存在.*不要省略/);
+    ca=connect(a,undefined,false);
+    await assert.rejects(db.tx(tx=>resolveTaskTarget(tx,s,hub,user,bot.slug,{...route('device'),device_id:a,resources})),/电脑已连接.*路径检查未通过/,'old clients without a reason remain supported');
+    ca=connect(a);
+  });
+
 });

@@ -1,3 +1,4 @@
+import { resolve as resolveObservedPath } from 'node:path';
 import { reportContextExtension } from "./reports.js";
 export { reportTools } from "./reports.js";
 import { internalTool, toolDescriptor, type ModelCapabilities, RuntimeError } from "@pi-bot/runtime-contracts";
@@ -62,6 +63,7 @@ export interface ToolActivity {
   summary?: string;
   resource_id?: string;
   target_id?: string;
+  observed_path?: string;
 }
 export interface BotAgentOptions {
   model: ModelConfig;
@@ -149,6 +151,7 @@ export class PiAgent implements AgentHandle {
     private privateSkills = false,
     private replies: ReplyEvent[] = [],
     private replyClock = { started: 0 },
+    private executionCwd = process.cwd(),
   ) {
     this.tools = session.getActiveToolNames();
   }
@@ -168,6 +171,7 @@ export class PiAgent implements AgentHandle {
       exhausted = false;
     const progress: string[] = [];
     let idleTimer: NodeJS.Timeout | undefined, timedOut = false;
+    const filePaths = new Map<string,string>();
     const runningTools = new Set<string>();
     const armIdleTimer = () => {
       clearTimeout(idleTimer);
@@ -186,6 +190,10 @@ export class PiAgent implements AgentHandle {
       if (event.type === "message_start" && event.message.role === "assistant") {
         content = "";
       }
+      if (e.type === "tool_execution_start" && ["read_file","write_file","edit_file","list_files","search_files","file_bytes","file_fetch","document_read","document_write","document_edit","read","write","edit","ls","find","grep"].includes(e.toolName)) {
+        const path = e.args?.path;
+        if (typeof path === "string") filePaths.set(String(e.toolCallId),resolveObservedPath(this.executionCwd,path));
+      }
       if (e.type === "tool_execution_start" )
         this.onTool?.({
           id: String(e.toolCallId ?? e.toolName),
@@ -198,6 +206,7 @@ export class PiAgent implements AgentHandle {
           id: String(e.toolCallId ?? e.toolName),
           name: e.toolName,
           state: e.isError ? "failed" : "completed",
+          observed_path: filePaths.get(String(e.toolCallId)),
           resource_id: e.result?.details?.task?.id ?? e.result?.details?.artifact?.id ?? e.result?.details?.id,
           target_id: e.result?.details?.task?.agent?.id ?? e.result?.details?.agent?.id,
         });
@@ -409,6 +418,7 @@ export const createBotAgent: AgentFactory = async (o) => {
     !!o.skills || !!o.onReply,
     replies,
     replyClock,
+    o.cwd,
   );
   if (supervision) {
     const prompt = agent.prompt.bind(agent);

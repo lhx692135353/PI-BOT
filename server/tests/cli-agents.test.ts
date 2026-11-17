@@ -81,11 +81,7 @@ test("CLI bots stay on the computer that created them", { skip: !TEST_DB }, asyn
     const run = await insertRun(tx, { userId: user, botId: pi.bot_id, requestId: randomUUID(), text: "请交给本机", computer: { deviceId: device }, sourceClient: "desktop", sourceDeviceId: device, operationTarget: "cloud" });
     return tx.update("bot_runs", run.run_id, { status: "running" });
   });
-  const offline = await db.tx(tx => createTask(tx, hub, user, { sub: user, bot: pi.bot_id, src: "cloud" }, { run_id: parent.run_id, agent: "Codex", task: "修一下", wait: false, execution: "cloud" }, s));
-  assert.equal(offline.run, null);
-  const offlineTask = await db.tx(tx => tx.get("agent_tasks", offline.task.id));
-  assert.equal(offlineTask.status, "failed");
-  assert.equal(offlineTask.error, CLI_OFFLINE);
+  await assert.rejects(db.tx(tx => createTask(tx, hub, user, { sub: user, bot: pi.bot_id, src: "cloud" }, { run_id: parent.run_id, agent: "Codex", task: "修一下", wait: false, execution: "cloud" }, s)),/离线/);
 
   connect();
   const delegated = await db.tx(tx => createTask(tx, hub, user, { sub: user, bot: pi.bot_id, src: "cloud" }, { run_id: parent.run_id, agent: "Codex", task: "再修一下", wait: false, execution: "cloud" }, s));

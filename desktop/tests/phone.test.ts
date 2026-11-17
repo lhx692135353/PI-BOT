@@ -1,4 +1,6 @@
-import { test } from 'node:test';
+import { test as nodeTest, type TestContext } from 'node:test';
+// The implementation invokes /usr/bin/flock; retain full coverage on Linux CI.
+const test=(name:string,fn:(t:TestContext)=>void|Promise<void>)=>nodeTest(name,{skip:process.platform!=='linux' && 'Requires Linux /usr/bin/flock'},fn);
 import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, chmodSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';

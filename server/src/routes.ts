@@ -1,3 +1,4 @@
+import { endpointExperience, resolveExperienceConflict } from './endpoint-experience.js';
 import {documentRoutes,readableDocument} from './documents.js';
 import { isCliRuntime } from "./cli.js";
 import { saveCliSession } from "./cli-sessions.js";
@@ -44,7 +45,7 @@ import {
 } from "./bots.js";
 import { cancelRun, decideApproval, dispatchDevice, failDeviceRuns } from "./runs.js";
 import { cancelTask, createTask, readTask, reportLater, TERMINAL, listTasks, messageTask, callerRun } from "./agents.js";
-import { deviceOut, deviceList, cloudComputer, libraryFileId } from './devices.js';
+import { registerDevice, deviceOut, deviceList, cloudComputer, libraryFileId } from './devices.js';
 import { ensureEnvironment } from './remote/environments.js';
 import { posix } from 'node:path';
 import { complete, findModel, proxyResponses, proxySystemOne, recordUsage } from "./llm.js";
@@ -330,6 +331,17 @@ export const routes: Route[] = [
     },
   },
   {
+    method:"POST",path:"/agent/endpoint-experience",auth:"llm",tag:"agents",summary:"查看端能力证据并用更新证据解决冲突",internal:true,
+    body:z.object({run_id:uuid,action:z.enum(['list','resolve']),resource_key:z.string().min(1).max(2000).optional(),conflict_id:uuid.optional(),confirmation_id:uuid.optional()}),
+    handler:async({tx,user,llm,body})=>{
+      const run=await callerRun(tx,user.user_id,llm!,body.run_id);
+      if(body.action==='list') return {evidence:await endpointExperience(tx,run.bot_id,body.resource_key)};
+      if(run.automation_readonly) fail(403,'本轮只允许读取经验');
+      if(!body.conflict_id||!body.confirmation_id) fail(422,'需要冲突及更新成功证据 ID');
+      return resolveExperienceConflict(tx,run.bot_id,body.conflict_id,body.confirmation_id);
+    },
+  },
+  {
     method: "POST", path: "/agent/tasks", auth: "llm", tag: "agents", summary: "智能体把任务委托给同一用户的另一个 Bot（短期智能体令牌）",
     body: z.object({
       run_id: uuid,
@@ -453,18 +465,19 @@ export const routes: Route[] = [
     } },
   {
     method: "POST", path: "/devices/register", auth: "user", tag: "device", summary: "注册或更新当前用户的一台执行电脑",
-    body: z.object({ public_key: z.string(), label: z.string().trim().min(1).max(80), platform: z.enum(["darwin","linux","win32"]).default("darwin") }),
-    handler: async ({ tx, hub, user, body, after }) => {
+    body: z.object({ hardware_fingerprint: z.string().regex(/^v1:[a-f0-9]{64}$/).optional(), public_key: z.string(), label: z.string().trim().min(1).max(80), platform: z.enum(["darwin","linux","win32"]).default("darwin") }),
+    handler: async ({ tx, db, hub, user, body, after }) => {
       try {
         decodeBase64(body.public_key, 32);
       } catch {
         fail(422, "公钥必须是 32 字节 Ed25519 的标准 Base64");
       }
-      await tx.one("SELECT user_id FROM users WHERE user_id=$1 FOR UPDATE", [user.user_id]);
-      const prior = await tx.one("SELECT * FROM devices WHERE user_id=$1 AND public_key=$2 AND revoked_at IS NULL", [user.user_id,body.public_key]);
-      const d = prior ? await tx.update("devices",prior.device_id,{label:body.label,platform:body.platform}) : await tx.insert("devices", { device_id: randomUUID(), user_id: user.user_id, public_key: body.public_key, label: body.label, platform: body.platform });
-      after(() => hub.publish(user.user_id, {type:'bots'}));
-      return { device: deviceOut(d, false), user: userOut(user) };
+      const result = await registerDevice(tx,user.user_id,body);
+      after(async () => {
+        if (result.rebound) { hub.kick(result.device.device_id); await failDeviceRuns(db,result.device.device_id,'设备密钥已轮换',false); }
+        hub.publish(user.user_id, {type:'bots'});
+      });
+      return { device: deviceOut(result.device, false), user: userOut(user), rebound:result.rebound, notice:result.notice };
     },
   },
   {
@@ -485,7 +498,7 @@ export const routes: Route[] = [
     method: "POST", path: "/device/llm-token", auth: "device", tag: "device", summary: "电脑换取访问模型代理的短期令牌",
     body: z.object({ bot_id: uuid.optional() }),
     handler: async ({ s, user, device, body }) => ({
-      token: await issueLlmToken({ sub: user.user_id, src: "device", did: device!.device_id, bot: body.bot_id }, s),
+      token: await issueLlmToken({ sub: user.user_id, src: "device", did: device!.device_id, kv:device!.key_version, bot: body.bot_id }, s),
       expires_in: s.llmTokenTtl,
       base_path: "/llm/v1",
     }),
@@ -553,7 +566,7 @@ export const routes: Route[] = [
     handler: async ({ tx, s, user, device, params, body }) => {
       const bot = await ownBot(tx, user.user_id, params.id);
       if (isCliRuntime(bot.runtime)) fail(422, "本机 CLI 智能体不支持语音通话");
-      return { ticket: await issueVoiceTicket(user.user_id, bot.bot_id, s,{client:device?"desktop":body.client??"legacy",deviceId:device?.device_id}), expires_in: 60 };
+      return { ticket: await issueVoiceTicket(user.user_id, bot.bot_id, s,{client:device?"desktop":body.client??"legacy",deviceId:device?.device_id,keyVersion:device?.key_version}), expires_in: 60 };
     },
   },
   {
@@ -574,10 +587,13 @@ export const routes: Route[] = [
   },
   {
     method: "POST", path: "/bots/:id/messages", auth: "actor", tag: "bots", summary: "给 Bot 发消息；由云端统一处理对话与任务调度",
-    body: z.object({ text: z.string().trim().max(100000).default(''), images: imagesSchema.default([]), request_id: z.string().min(8).max(80), client:z.enum(['android','ios','desktop']).optional(), document_ids:z.array(uuid).max(4).default([]) }).refine(body => body.text.length > 0 || body.images.length > 0 || body.document_ids.length > 0, '请填写消息或选择图片、文档'),
+    body: z.object({ text: z.string().trim().max(100000).default(''), images: imagesSchema.default([]), request_id: z.string().min(8).max(80), client:z.enum(['android','ios','desktop','web']).optional(), source_device_id:uuid.optional(), document_ids:z.array(uuid).max(4).default([]) }).refine(body => body.text.length > 0 || body.images.length > 0 || body.document_ids.length > 0, '请填写消息或选择图片、文档'),
     handler: async ({ db, tx, s, hub, user, device, params, body, after }) => {
       await ownBot(tx,user.user_id,params.id,true);
-      const { run, created } = await postMessage(tx, user.user_id, params.id, body.text, body.request_id, null, body.images, {client:device?"desktop":body.client??"legacy",deviceId:device?.device_id});
+      if(device && body.source_device_id && body.source_device_id!==device.device_id) fail(422,"来源电脑必须与签名设备一致");
+      const messageBot = await tx.get("bots",params.id);
+      if (isCliRuntime(messageBot.runtime) && !hub.device(user.user_id,messageBot.cli_device_id)) fail(409,"指定 CLI 电脑已离线，本次操作未执行；请连接该电脑，或选择其他智能体");
+      const { run, created } = await postMessage(tx, user.user_id, params.id, body.text, body.request_id, null, body.images, {client:device?"desktop":body.client??"legacy",deviceId:device?.device_id??body.source_device_id});
       if(created)for(const id of body.document_ids){const file=await readableDocument(tx,user.user_id,params.id,id);await tx.rows('INSERT INTO message_artifacts(message_id,artifact_id) VALUES($1,$2) ON CONFLICT DO NOTHING',[run.user_message_id,file.artifact_id]);}
       if (created && run.executor === "device") after(() => dispatchDevice(db, s, hub, run.run_id));
       const messages = await tx.rows("SELECT * FROM bot_messages WHERE message_id = ANY($1) ORDER BY seq", [[run.user_message_id, run.assistant_message_id]]);
@@ -602,10 +618,11 @@ export const routes: Route[] = [
   },
   {
     method:"POST",path:"/bots/:id/messages/:messageId/ui-actions",auth:"actor",tag:"bots",summary:"提交界面操作并启动下一次 Bot 任务",
-    body:z.object({client:z.enum(["desktop","android","ios"]).optional(),revision:z.number().int().positive(),request_id:z.string().uuid(),states:z.array(z.object({surfaceId:z.string().min(1).max(80),data:z.record(z.string(),z.unknown())})).max(4),action:z.object({name:z.string().min(1).max(80),surfaceId:z.string().min(1).max(80),sourceComponentId:z.string().min(1).max(80),context:z.record(z.string(),z.unknown())})}),
+    body:z.object({source_device_id:uuid.optional(),client:z.enum(["desktop","android","ios","web"]).optional(),revision:z.number().int().positive(),request_id:z.string().uuid(),states:z.array(z.object({surfaceId:z.string().min(1).max(80),data:z.record(z.string(),z.unknown())})).max(4),action:z.object({name:z.string().min(1).max(80),surfaceId:z.string().min(1).max(80),sourceComponentId:z.string().min(1).max(80),context:z.record(z.string(),z.unknown())})}),
     handler:async({db,tx,s,hub,user,device,params,body,after})=>{
       await ownBot(tx,user.user_id,params.id,true);
-      const {run,created}=await submitUiAction(tx,user.user_id,params.id,params.messageId,body,null,{client:device?"desktop":body.client??"legacy",deviceId:device?.device_id});
+      if(device && body.source_device_id && body.source_device_id!==device.device_id) fail(422,"来源电脑必须与签名设备一致");
+      const {run,created}=await submitUiAction(tx,user.user_id,params.id,params.messageId,body,null,{client:device?"desktop":body.client??"legacy",deviceId:device?.device_id??body.source_device_id});
       if(created&&run.executor==='device')after(()=>dispatchDevice(db,s,hub,run.run_id));
       const messages=await tx.rows("SELECT * FROM bot_messages WHERE message_id=ANY($1) ORDER BY seq",[[run.user_message_id,run.assistant_message_id]]);
       return {run:runOut(run),messages:messages.map(m=>messageOut(m))};

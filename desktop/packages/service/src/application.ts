@@ -1,3 +1,4 @@
+import { hardwareFingerprint } from './hardware-identity.js';
 import { errorInfo, httpErrorInfo, RuntimeError } from "@pi-bot/runtime-contracts";
 import { PhoneController } from './phone.js';
 import { randomUUID } from 'node:crypto';
@@ -27,6 +28,7 @@ export interface ApplicationOptions {
   emit(event: AppEvent): void;
   log?(event: LogEvent, detail?: Record<string, string>): void;
   factory?: AgentFactory;
+  hardwareFingerprint?:()=>Promise<string|undefined>;
   backoff?: { baseMs: number; maxMs: number };
 }
 
@@ -65,8 +67,9 @@ export class Application {
       this.setConnection('signed_out');
     }
   }
+  private identityNotice?:string;
   state(): AccountState {
-    return { connection: this.connection, serverUrl: this.account?.serverUrl ?? null, user: this.account?.user ?? null, deviceId: this.account?.deviceId ?? null, deviceLabel: this.account?.deviceLabel ?? null, libraryRoot: this.o.libraryRoot };
+    return { notice:this.identityNotice, connection: this.connection, serverUrl: this.account?.serverUrl ?? null, user: this.account?.user ?? null, deviceId: this.account?.deviceId ?? null, deviceLabel: this.account?.deviceLabel ?? null, libraryRoot: this.o.libraryRoot };
   }
   private setConnection(connection: Connection) {
     if (this.connection === connection) return;
@@ -195,7 +198,7 @@ export class Application {
     const savedKey = this.account?.serverUrl === serverUrl && this.account?.user.id === auth.user.id
       ? await this.o.credentials.get(this.account.deviceId) : null;
     const identity = savedKey ? identityFromPrivateKey(savedKey) : newIdentity();
-    const reg = await cloudFetch<{ device: { id: string } }>(serverUrl, 'POST', '/devices/register', { body: { public_key: identity.publicKey, label: input.label, platform: process.platform }, headers: { authorization: `Bearer ${auth.access_token}` } });
+    const reg = await cloudFetch<{ device: { id: string }; notice?:string }>(serverUrl, 'POST', '/devices/register', { body: { hardware_fingerprint:await (this.o.hardwareFingerprint??hardwareFingerprint)(), public_key: identity.publicKey, label: input.label, platform: process.platform }, headers: { authorization: `Bearer ${auth.access_token}` } });
     await this.logout(false);
     const account: Account = { serverUrl, deviceId: reg.device.id, deviceLabel: input.label, user: { id: auth.user.id, username: auth.user.username, display_name: auth.user.display_name } };
     await this.o.credentials.set(account.deviceId, identity.privateKey);
@@ -203,8 +206,9 @@ export class Application {
     const tmp = `${this.accountFile}.${process.pid}.tmp`;
     writeFileSync(tmp, JSON.stringify(account), { mode: 0o600 });
     renameSync(tmp, this.accountFile);
+    this.identityNotice = reg.notice;
     this.connect(account, identity.privateKey);
-    return this.state();
+    return { ...this.state(), notice:reg.notice };
   }
   async logout(revoke = true) {
     const account = this.account, sign = this.sign;

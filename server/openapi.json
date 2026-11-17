@@ -1731,6 +1731,16 @@
                     "format": "uuid",
                     "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                   },
+                  "resource_key": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  },
+                  "decision_reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
                   "execution": {
                     "type": "string",
                     "enum": [
@@ -2223,6 +2233,10 @@
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
                 "type": "object",
                 "properties": {
+                  "hardware_fingerprint": {
+                    "type": "string",
+                    "pattern": "^v1:[a-f0-9]{64}$"
+                  },
                   "public_key": {
                     "type": "string"
                   },
@@ -3058,8 +3072,14 @@
                     "enum": [
                       "android",
                       "ios",
-                      "desktop"
+                      "desktop",
+                      "web"
                     ]
+                  },
+                  "source_device_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                   },
                   "document_ids": {
                     "default": [],
@@ -3275,12 +3295,18 @@
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
                 "type": "object",
                 "properties": {
+                  "source_device_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
                   "client": {
                     "type": "string",
                     "enum": [
                       "desktop",
                       "android",
-                      "ios"
+                      "ios",
+                      "web"
                     ]
                   },
                   "revision": {

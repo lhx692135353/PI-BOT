@@ -470,13 +470,13 @@ test(
         s,
       ),
     );
-    assert.equal(result.task.operation_target,"pending");
+    assert.equal(result.task.operation_target,"cloud");
     await service.connect(await db.tx(tx=>tx.get("remote_environments",envId)));
     const dispatched=await eventually(()=>db.tx(async tx=>{
       const task=await tx.get("agent_tasks",result.task.id);
       return task.child_run_id ? tx.get("bot_runs",task.child_run_id) : undefined;
     }));
-    assert.equal(dispatched?.operation_target,"remote:"+envId);
+    assert.equal(dispatched?.operation_target,"cloud");
     assert.equal(dispatched?.executor,"cloud");
     const plain = await db.tx((tx) =>
       createTask(

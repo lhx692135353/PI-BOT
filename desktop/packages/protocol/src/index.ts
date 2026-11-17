@@ -94,6 +94,7 @@ export interface MessagePage { messages: Message[]; has_more: boolean }
 
 export type Connection = 'signed_out' | 'connecting' | 'online' | 'offline' | 'revoked';
 export interface AccountState {
+  notice?:string;
   connection: Connection;
   serverUrl: string | null;
   user: { id: string; username: string; display_name: string } | null;

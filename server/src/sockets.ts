@@ -73,26 +73,29 @@ export async function sockets(
     const heartbeat = setInterval(() => {
       if (conn && Date.now() - lastMessageAt > 60000) ws.terminate();
     }, 15000);
+    let connectionKeyVersion = -1;
     let queue = Promise.resolve();
     const ready = db
       .tx((tx) => device(tx, req.headers, "GET", "/ws/device", Buffer.alloc(0), s))
       .then(({ device: d, user: u }) => lifecycle(d.device_id, async () => {
         if (ws.readyState !== 1) return;
-        const previous = hub.device(u.user_id, d.device_id);
-        if (previous) {
-          hub.detach(previous);
-          previous.close(4409);
-        }
-        // Cleanup may still be pending even after the previous socket detached.
-        await failDeviceRuns(db, d.device_id);
         await db.tx(async tx => {
           // Hold the device row until attachment finishes: revoke's post-commit
           // kick must see this socket even if the signed handshake began earlier.
-          const active = await tx.one('UPDATE devices SET last_seen_at=now() WHERE device_id=$1 AND revoked_at IS NULL RETURNING device_id', [d.device_id]);
+          const active = await tx.one('UPDATE devices SET last_seen_at=now() WHERE device_id=$1 AND revoked_at IS NULL AND key_version=$2 RETURNING device_id', [d.device_id,d.key_version]);
           if (!active) { ws.close(4401); return; }
           if (ws.readyState !== 1) return;
+          const previous = hub.device(u.user_id, d.device_id);
+          if (previous) {
+            hub.detach(previous);
+            previous.close(4409);
+          }
+          // Cleanup may still be pending even after the previous socket detached.
+          await failDeviceRuns(db, d.device_id);
+          connectionKeyVersion = d.key_version;
           conn = {
             deviceId: d.device_id,
+            keyVersion:d.key_version,
             userId: u.user_id,
             send: (m) => send(ws, m),
             close: (code) => ws.close(code),
@@ -107,6 +110,8 @@ export async function sockets(
         .then(async () => {
           await ready;
           if (!conn || hub.device(conn.userId, conn.deviceId) !== conn) return;
+          const active = await db.tx(tx => tx.one('SELECT 1 FROM devices WHERE device_id=$1 AND key_version=$2 AND revoked_at IS NULL',[conn!.deviceId, connectionKeyVersion]));
+          if (!active) { hub.kick(conn.deviceId); return; }
           let m: Row;
           try {
             m = JSON.parse(raw.toString());
@@ -131,7 +136,9 @@ export async function sockets(
               if (revoked) ws.close(4401);
             }
           } else if (m.type === "run_event") await handleRunEvent(db, s, hub, conn, m);
-          else if (m.type === "rpc_result") hub.resolveRpc(conn.deviceId, m);
+          else if (m.type === "rpc_result") await db.tx(async tx => {
+            if (await tx.one('SELECT 1 FROM devices WHERE device_id=$1 AND key_version=$2 AND revoked_at IS NULL FOR SHARE',[conn!.deviceId,connectionKeyVersion])) hub.resolveRpc(conn!.deviceId,m);
+          });
         })
         .catch(() => {});
     });
