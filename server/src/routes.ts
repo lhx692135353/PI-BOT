@@ -216,6 +216,9 @@ async function deviceFiles(ctx: Context, method: "list" | "read") {
   return {...result,target:source!.target,source_label:source!.label};
 }
 
+// Large/reasoning models can take well over 30s to answer; give the admin test enough headroom.
+const MODEL_TEST_TIMEOUT_MS = 120_000;
+
 export const routes: Route[] = [
   ...authorizationRoutes,
   ...pushRoutes,
@@ -777,7 +780,7 @@ export const routes: Route[] = [
       try {
         // Reasoning models spend the output budget on thinking before replying.
         // Test with the configured budget, rather than truncating them at 16 tokens.
-        const r = await complete(m, new Vault(s.vaultFile).open(m.secret, m.model_id), [{ role: "user", content: "Reply with OK." }], m.max_tokens, 30000);
+        const r = await complete(m, new Vault(s.vaultFile).open(m.secret, m.model_id), [{ role: "user", content: "Reply with OK." }], m.max_tokens, MODEL_TEST_TIMEOUT_MS);
         await recordUsage(db, { sub: user.user_id, src: "test" }, m.model_id, r.usage);
         return { ok: true, latency_ms: Date.now() - started, reply: r.text.slice(0, 200) };
       } catch (e) {
