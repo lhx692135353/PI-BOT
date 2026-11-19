@@ -65,7 +65,7 @@ const requestSchema = z.object({
  */
 export async function createRunner(options: { token: string; dir: string; factory?: AgentFactory }) {
   if (options.token.length < 32) throw new Error("Runner token 至少 32 字符");
-  const app = Fastify({ bodyLimit: 16 * 1024 * 1024, logger: false });
+  const app = Fastify({ bodyLimit: 48 * 1024 * 1024, logger: false });
   const factory = options.factory ?? createBotAgent;
   interface Running { agent?: AgentHandle; cancelled: boolean; prompted: boolean; received: Set<string>; pending: { id: string; text: string }[] }
   const active = new Map<string, Running>();

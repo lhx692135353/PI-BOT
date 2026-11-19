@@ -3052,7 +3052,7 @@
                         "data": {
                           "type": "string",
                           "minLength": 1,
-                          "maxLength": 2796204
+                          "maxLength": 27962028
                         }
                       },
                       "required": [

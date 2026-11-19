@@ -1,8 +1,11 @@
 package dev.pibot.android.ui
 
 import android.content.Context
-import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Bitmap
+import android.graphics.Matrix
+import android.media.ExifInterface
+import java.io.ByteArrayInputStream
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Base64
@@ -32,52 +35,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 
-const val IMAGE_LIMIT_HINT = "最多 4 张图片，单张不超过 2 MB，合计不超过 4 MB；支持 JPEG、PNG、WebP、GIF"
-private const val MAX_IMAGE_BYTES = 2 * 1024 * 1024
-private const val MAX_TOTAL_BYTES = 4L * 1024 * 1024
-private const val MAX_LONG_SIDE = 2048
+const val IMAGE_LIMIT_HINT = "最多 4 张图片，单张原图不超过 20 MB，合计不超过 32 MB；原图保存，模型仅使用压缩副本；支持 JPEG、PNG、WebP、GIF"
+private const val MAX_IMAGE_BYTES = 20 * 1024 * 1024
+private const val MAX_TOTAL_BYTES = 32L * 1024 * 1024
 private val ACCEPTED_TYPES = listOf("image/jpeg", "image/png", "image/webp", "image/gif")
 
 data class ReadImagesResult(
     val images: List<ChatImage>,
     val warnings: List<String>,
 )
-
-/**
- * Compress a bitmap so that the longest side is at most [MAX_LONG_SIDE] px
- * and the JPEG output is at most [MAX_IMAGE_BYTES] bytes.
- * Returns the compressed JPEG bytes, or null if even quality 50 is too large.
- */
-private fun compressToFit(context: Context, uri: Uri, maxBytes: Int): ByteArray? {
-    val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
-    if (options.outWidth <= 0 || options.outHeight <= 0) return null
-    var sample = 1
-    while (maxOf(options.outWidth, options.outHeight) / sample > MAX_LONG_SIDE * 2) sample *= 2
-    options.inJustDecodeBounds = false
-    options.inSampleSize = sample
-    val original = context.contentResolver.openInputStream(uri)?.use {
-        BitmapFactory.decodeStream(it, null, options)
-    } ?: return null
-    var bitmap = original
-    try {
-        if (maxOf(original.width, original.height) > MAX_LONG_SIDE) {
-            val scale = MAX_LONG_SIDE.toFloat() / maxOf(original.width, original.height)
-            bitmap = Bitmap.createScaledBitmap(original,
-                (original.width * scale).toInt().coerceAtLeast(1),
-                (original.height * scale).toInt().coerceAtLeast(1), true)
-        }
-        for (quality in 80 downTo 50 step 10) {
-            val out = ByteArrayOutputStream()
-            if (!bitmap.compress(Bitmap.CompressFormat.JPEG, quality, out)) return null
-            if (out.size() <= maxBytes) return out.toByteArray()
-        }
-        return null
-    } finally {
-        if (bitmap !== original) bitmap.recycle()
-        original.recycle()
-    }
-}
 
 suspend fun readChatImages(context: Context, uris: List<Uri>, existing: List<ChatImage>): ReadImagesResult = withContext(Dispatchers.IO) {
     val warnings = mutableListOf<String>()
@@ -127,34 +93,19 @@ suspend fun readChatImages(context: Context, uris: List<Uri>, existing: List<Cha
                 continue
             }
 
-            var finalBytes = rawBytes
-            var finalType = type
-            var finalName = name
-
-            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, bounds)
-            val byteBudget = minOf(MAX_IMAGE_BYTES, (MAX_TOTAL_BYTES - totalBytes).coerceAtLeast(0).toInt())
-            if (byteBudget == 0) {
-                warnings.add("$name 超过合计 4MB 限制，已跳过")
+            // Keep originals (including orientation, alpha and animation). The trusted
+            // server/model boundary creates the only resized representation.
+            if (rawBytes.size > MAX_IMAGE_BYTES) {
+                warnings.add("$name 超过 20MB 限制，已跳过")
                 continue
             }
-            if (rawBytes.size > byteBudget || maxOf(bounds.outWidth, bounds.outHeight) > MAX_LONG_SIDE) {
-                // Try to compress
-                val compressed = compressToFit(context, uri, byteBudget)
-                if (compressed != null) {
-                    finalBytes = compressed
-                    finalType = "image/jpeg"
-                    finalName = name.substringBeforeLast(".", name).take(250) + ".jpg"
-                    warnings.add("$name 已压缩为 JPEG（${compressed.size / 1024}KB）")
-                } else {
-                    warnings.add("$name 无法压缩至图片大小限制，已跳过")
-                    continue
-                }
-            }
+            val finalBytes = rawBytes
+            val finalType = type
+            val finalName = name
 
             // Check total size
             if (totalBytes + finalBytes.size > MAX_TOTAL_BYTES) {
-                warnings.add("$name 加入后超过合计 4MB 限制，已跳过")
+                warnings.add("$name 加入后超过合计 32MB 限制，已跳过")
                 continue
             }
 
@@ -177,7 +128,21 @@ private suspend fun preview(image: ChatImage): ImageBitmap = withContext(Dispatc
     BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
     while (options.outWidth / options.inSampleSize > 1600 || options.outHeight / options.inSampleSize > 1600) options.inSampleSize *= 2
     options.inJustDecodeBounds = false
-    (BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options) ?: error("图片无法解码")).asImageBitmap()
+    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options) ?: error("图片无法解码")
+    val orientation = runCatching { ByteArrayInputStream(bytes).use { ExifInterface(it).getAttributeInt(ExifInterface.TAG_ORIENTATION, 1) } }.getOrDefault(1)
+    val matrix = Matrix().apply {
+        when (orientation) {
+            2 -> setScale(-1f, 1f)
+            3 -> setRotate(180f)
+            4 -> setScale(1f, -1f)
+            5 -> { setRotate(90f); postScale(-1f, 1f) }
+            6 -> setRotate(90f)
+            7 -> { setRotate(270f); postScale(-1f, 1f) }
+            8 -> setRotate(270f)
+        }
+    }
+    if (orientation in 2..8) Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true).asImageBitmap()
+    else bitmap.asImageBitmap()
 }
 
 @Composable

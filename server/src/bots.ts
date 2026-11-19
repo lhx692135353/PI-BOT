@@ -10,7 +10,8 @@ import { taskMessage } from "./task-conversation.js";
 import {targetPrompt} from "./targets.js";
 import { enqueueMessage } from "./push.js";
 import { randomUUID } from "node:crypto";
-import { imageBytes, MAX_IMAGES_BYTES, type ChatImage } from '@pi-bot/agent/images';
+import { compressModelImages, replayModelImages } from './images.js';
+import { imageBytes, MAX_MODEL_IMAGES_BYTES, type ChatImage } from '@pi-bot/agent/images';
 import { UI_INSTRUCTIONS, PROGRESS_CHARS, PROGRESS_SEGMENTS, type SkillSummary } from "@pi-bot/agent";
 import { skillCatalog } from "./skills.js";
 import { z } from "zod";
@@ -688,7 +689,7 @@ export async function buildContext(
   const skills=await skillCatalog(tx,bot.bot_id);
   const instructions=run.task_id && run.lane === "task" ? (await tx.rows("SELECT instruction_id AS id, text FROM agent_task_instructions WHERE task_id=$1 AND delivered_at IS NULL ORDER BY created_at, instruction_id", [run.task_id])) as { id: string; text: string }[] : [];
   const tokens=(text:string)=>estimateTokens({role:"user",content:text,timestamp:0});
-  const questionImages: ChatImage[] = question.images ?? [];
+  const questionImages = await compressModelImages(question.images ?? []);
   const budget = Math.max(0,Math.min(CONTEXT_DEFAULTS.inputTokens,model.context_window-model.max_tokens)-tokens(system+memoryContext+modelMessageContent(question)+JSON.stringify(skills)+JSON.stringify(instructions))-questionImages.length*4096-4096);
   let imageSize = questionImages.reduce((n, image) => n + imageBytes(image), 0);
   let used = 0;
@@ -699,13 +700,14 @@ export async function buildContext(
   let rounds = 0;
   let textUsed = 0;
   for (const r of rows) {
-    round.unshift(...replayPieces(r).map(piece=>({...piece,content:maskForgotten(piece.content,forgotten)})));
+    const replay = await replayModelImages(r);
+    round.unshift(...replayPieces(replay).map(piece=>({...piece,content:maskForgotten(piece.content,forgotten)})));
     covered++;
     if(r.role !== "user") continue;
     const cost=round.reduce((n,piece)=>n+tokens(piece.content)+(piece.images?.length??0)*4096,0);
     const size=round.reduce((n,piece)=>n+(piece.images??[]).reduce((sum,image)=>sum+imageBytes(image),0),0);
     const textCost=round.reduce((n,piece)=>n+tokens(piece.content),0);
-    if(used+cost>budget||textUsed+textCost>CONTEXT_DEFAULTS.historyTokens||imageSize+size>MAX_IMAGES_BYTES){truncated=true;break;}
+    if(used+cost>budget||textUsed+textCost>CONTEXT_DEFAULTS.historyTokens||imageSize+size>MAX_MODEL_IMAGES_BYTES){truncated=true;break;}
     used+=cost;textUsed+=textCost;imageSize+=size;history.unshift(...round);round=[];
     if(++rounds>=CONTEXT_DEFAULTS.historyTurns)break;
   }

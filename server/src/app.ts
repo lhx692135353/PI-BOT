@@ -5,6 +5,7 @@ import { claimExecution } from "./scheduling.js";
 import { buildContext } from "./bots.js";
 import { ensureEnvironment } from "./remote/environments.js";
 import { reportViewer } from "./reports.js";
+import { IMAGE_REQUEST_BYTES } from '@pi-bot/agent/images';
 import {RemoteService} from "./remote/service.js";
 import { firebaseTransport, loadAndroidPushConfig, PushDispatcher } from "./push.js";
 import {remoteWeb} from "./remote/web.js";
@@ -151,7 +152,7 @@ export async function createApp(
     app.route({
       method: route.method,
       url: route.path,
-      bodyLimit: route.path === "/agent/reports" ? 64 * 1024 * 1024 : 16 * 1024 * 1024,
+      bodyLimit: route.path === "/agent/reports" ? 64 * 1024 * 1024 : IMAGE_REQUEST_BYTES,
       handler: async (req, reply) => {
         const raw = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
         let json: unknown = {};

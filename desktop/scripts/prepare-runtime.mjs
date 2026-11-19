@@ -11,7 +11,7 @@ export function run(command,args,cwd) {
 export function prepareRuntime(root,runtime) {
   const require=createRequire(resolve(root,'package.json'));
   const manifests=['package.json','../packages/agent/package.json','../packages/a2ui/package.json'].map(file=>require(resolve(root,file)));
-  const deps=['@earendil-works/pi-ai','@earendil-works/pi-coding-agent','playwright','typebox','ws','zod','@a2ui/web_core','zod-to-json-schema','pdfjs-dist','mammoth','docx','exceljs','jszip'];
+  const deps=['@earendil-works/pi-ai','@earendil-works/pi-coding-agent','playwright','typebox','ws','zod','@a2ui/web_core','zod-to-json-schema','pdfjs-dist','mammoth','docx','exceljs','jszip','sharp'];
   rmSync(runtime,{recursive:true,force:true});
   mkdirSync(resolve(runtime,'bin'),{recursive:true}); mkdirSync(resolve(runtime,'licenses'));
   for (const file of ['LICENSE','NOTICE','THIRD_PARTY_NOTICES.md']) cpSync(resolve(root,'..',file),resolve(runtime,file));

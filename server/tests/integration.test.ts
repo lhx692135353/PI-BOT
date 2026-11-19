@@ -350,6 +350,8 @@ test('image-only messages persist, load with authorization, replay and reach the
   });
   const request = provider.requests.findLast(r => latestUserText(r.body.input) === '继续分析图片')!;
   assert.equal(imageTurns(request.body).length, 1, 'image-only user history is replayed');
+  assert.notEqual(imageTurns(request.body)[0].image_url, `data:${image.mime_type};base64,${image.data}`, 'model sees only a derivative');
+  assert.equal((await api('GET', picturePath, { token: state.alice })).json.data, image.data, 'download remains byte-identical after replay');
   assert.equal((await api('POST', path, { token: state.alice, body: { images: [{ ...image, mime_type: 'text/html' }], request_id: randomUUID() } })).status, 422);
 });
 

@@ -45,3 +45,11 @@
 - JSZip 3.10.1：选用 MIT 许可（上游提供 MIT/GPL-3.0 双许可）；https://github.com/Stuk/jszip 。用于 Office ZIP 格式验证。
 
 文档操作在有超时和堆内存限制的独立 Node 子进程中运行；内置技能为本项目原创说明，不安装或执行第三方 skill 包。
+
+## sharp / libvips
+
+Model-only image derivatives use sharp (Apache-2.0) and its prebuilt libvips
+runtime (LGPL-3.0-or-later and bundled codec licenses). Originals are not modified.
+The optional platform packages include their own LICENSE/NOTICE files; these are
+retained under node_modules in the server and packaged desktop runtime.
+See https://sharp.pixelplumbing.com/ and https://www.libvips.org/.

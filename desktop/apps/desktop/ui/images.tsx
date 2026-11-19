@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { IMAGE_LIMIT_HINT, MAX_IMAGE_BYTES, imageSource, validImages, type ChatImage, type MessageImage } from '@pi-bot/agent/images';
 import { call, errorText } from './bridge.js';
 
+/** Read original bytes. Model-only compression is centralized at the trusted boundary. */
 export async function readImages(files: File[], existing: ChatImage[]): Promise<ChatImage[]> {
   if (files.length + existing.length > 4) throw new Error(IMAGE_LIMIT_HINT);
   const images = await Promise.all(files.map(async file => {

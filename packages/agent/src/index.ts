@@ -6,6 +6,7 @@ import { mkdirSync } from "node:fs";
 import { MODEL_TIMEOUT_MS } from "./timeouts.js";
 export { CONVERSATION_TIMEOUT_MS, MODEL_TIMEOUT_MS } from "./timeouts.js";
 import { modelImages, type ChatImage } from './images.js';
+import { compressModelImages, modelImageExtension } from './model-images.js';
 import {
   createAgentSession,
   createCodemodeExtension,
@@ -250,7 +251,7 @@ export class PiAgent implements AgentHandle {
       if (event.type === "agent_settled") settled = true;
     });
     try {
-      await this.session.prompt(text, { expandPromptTemplates: false, images: modelImages(images) });
+      await this.session.prompt(text, { expandPromptTemplates: false, images: modelImages(await compressModelImages(images)) });
       if (!settled) await this.session.waitForIdle();
       // Reasoning can consume the whole output budget before any answer; give it one more turn to conclude.
       if (exhausted && !this.cancelled && !timedOut && !renderedUi && !this.replies.length && reportSummary === undefined) {
@@ -354,7 +355,7 @@ export const createBotAgent: AgentFactory = async (o) => {
   for (const m of o.history)
     sessionManager.appendMessage(
       m.role === "user"
-        ? { role: "user", content: m.images?.length ? [{ type: 'text', text: m.content }, ...modelImages(m.images)] : m.content, timestamp: Date.now() }
+        ? { role: "user", content: m.images?.length ? [{ type: 'text', text: m.content }, ...modelImages(await compressModelImages(m.images))] : m.content, timestamp: Date.now() }
         : {
             role: "assistant",
             content: [{ type: "text", text: m.content }],
@@ -376,7 +377,7 @@ export const createBotAgent: AgentFactory = async (o) => {
     cwd: o.cwd, agentDir: o.agentDir, settingsManager, systemPrompt: o.systemPrompt,
     noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true,
     appendSystemPromptOverride: () => [],
-    extensionFactories: [{name:"report-context",factory:reportContextExtension},{name:"context-budget",factory:contextBudgetExtension()},...(supervision?[{name:"task-supervision",factory:supervision.extension}]:[]),...(o.skills ? [{ name: "bot-skills", factory: skillsExtension(o.skills) }] : []),...(o.memory?[{name:"bot-memory",factory:memoryExtension(o.memory)}]:[]),...(o.runId?[{name:"bot-observation",factory:observationExtension(o.runId,o.onObservation)}]:[]),{name:"codemode",factory:createCodemodeExtension({mode:"on",models:false,inlineBudget:0})},{name:"tool-search",factory:createToolSearchExtension()}],
+    extensionFactories: [{name:"model-images",factory:modelImageExtension},{name:"report-context",factory:reportContextExtension},{name:"context-budget",factory:contextBudgetExtension()},...(supervision?[{name:"task-supervision",factory:supervision.extension}]:[]),...(o.skills ? [{ name: "bot-skills", factory: skillsExtension(o.skills) }] : []),...(o.memory?[{name:"bot-memory",factory:memoryExtension(o.memory)}]:[]),...(o.runId?[{name:"bot-observation",factory:observationExtension(o.runId,o.onObservation)}]:[]),{name:"codemode",factory:createCodemodeExtension({mode:"on",models:false,inlineBudget:0})},{name:"tool-search",factory:createToolSearchExtension()}],
   });
   await resourceLoader.reload();
   if (resourceLoader.getExtensions().errors.length) throw new Error("内部能力插件加载失败");

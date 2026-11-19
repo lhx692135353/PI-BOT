@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isChatImage, validImages, MAX_IMAGE_BYTES, imageBytes } from '../src/images.js';
+import { isChatImage, validImages, MAX_IMAGE_BYTES, MAX_IMAGES_BYTES, imageBytes } from '../src/images.js';
 import { schemas } from '../../../desktop/packages/protocol/src/index.js';
 import { routes } from '../../../server/src/routes.js';
 import { messageOut } from '../../../server/src/bots.js';
@@ -16,8 +16,13 @@ test('image validation checks MIME, signature, base64, count, individual and tot
   Buffer.from(image.data, 'base64').copy(bytes);
   const large = { ...image, data: bytes.toString('base64') };
   assert.equal(imageBytes(large), MAX_IMAGE_BYTES);
-  assert.ok(validImages([large, large]));
-  assert.equal(validImages([large, large, image]), false);
+  assert.ok(validImages([large]));
+  assert.equal(validImages([large, large]), false);
+  const halfBytes = Buffer.alloc(MAX_IMAGES_BYTES / 2);
+  Buffer.from(image.data, 'base64').copy(halfBytes);
+  const half = { ...image, data: halfBytes.toString('base64') };
+  assert.ok(validImages([half, half]));
+  assert.equal(validImages([half, half, image]), false);
   assert.equal(isChatImage({ ...image, data: Buffer.concat([bytes, Buffer.from([0])]).toString('base64') }), false);
 });
 

@@ -3,15 +3,14 @@ import PhotosUI
 import UniformTypeIdentifiers
 import PiBotKit
 
-let imageLimitHint = "最多 4 张图片，单张不超过 2 MB，合计不超过 4 MB；支持 JPEG、PNG、WebP、GIF"
-private let maxImageBytes = 2 * 1024 * 1024
-private let maxTotalBytes = 4 * 1024 * 1024
+let imageLimitHint = "最多 4 张图片，单张原图不超过 20 MB，合计不超过 32 MB；原图保存，模型仅使用压缩副本；支持 JPEG、PNG、WebP、GIF"
+private let maxImageBytes = 20 * 1024 * 1024
+private let maxTotalBytes = 32 * 1024 * 1024
 private let allowedTypes: [(UTType, String)] = [(.jpeg, "image/jpeg"), (.png, "image/png"), (.webP, "image/webp"), (.gif, "image/gif")]
 
 struct ImageLimitError: LocalizedError { var errorDescription: String? { imageLimitHint } }
 
-/// Photos are often HEIC or larger than the server allows; those are re-encoded as JPEG
-/// instead of being rejected.
+/// Keep supported originals byte-for-byte; only the model boundary resizes images.
 func readChatImages(_ items: [PhotosPickerItem], existing: [ChatImage]) async throws -> [ChatImage] {
     guard existing.count + items.count <= 4 else { throw ImageLimitError() }
     var added: [ChatImage] = []
@@ -19,11 +18,12 @@ func readChatImages(_ items: [PhotosPickerItem], existing: [ChatImage]) async th
         guard let data = try await item.loadTransferable(type: Data.self) else { throw ImageLimitError() }
         let type = item.supportedContentTypes.first
         let name = "图片\(existing.count + index + 1)"
+        guard !data.isEmpty, data.count <= maxImageBytes else { throw ImageLimitError() }
         if let match = allowedTypes.first(where: { type?.conforms(to: $0.0) == true }), data.count <= maxImageBytes, !data.isEmpty {
             added.append(ChatImage(name: name + "." + (match.0.preferredFilenameExtension ?? "img"), mimeType: match.1, data: data.base64EncodedString()))
         } else {
-            let jpeg = try await Task.detached(priority: .userInitiated) { try reencode(data) }.value
-            added.append(ChatImage(name: name + ".jpg", mimeType: "image/jpeg", data: jpeg.base64EncodedString()))
+            let png = try await Task.detached(priority: .userInitiated) { try reencode(data) }.value
+            added.append(ChatImage(name: name + ".png", mimeType: "image/png", data: png.base64EncodedString()))
         }
     }
     let all = existing + added
@@ -33,7 +33,8 @@ func readChatImages(_ items: [PhotosPickerItem], existing: [ChatImage]) async th
 
 func appendCameraImage(_ image: UIImage, existing: [ChatImage]) throws -> [ChatImage] {
     guard existing.count < 4, let raw = image.jpegData(compressionQuality: 0.9) else { throw ImageLimitError() }
-    let data = raw.count <= maxImageBytes ? raw : try reencode(raw)
+    guard raw.count <= maxImageBytes else { throw ImageLimitError() }
+    let data = raw
     let result = existing + [ChatImage(name: "拍照.jpg", mimeType: "image/jpeg", data: data.base64EncodedString())]
     guard result.reduce(0, { $0 + decodedSize($1.data) }) <= maxTotalBytes else { throw ImageLimitError() }
     return result
@@ -45,27 +46,9 @@ private func decodedSize(_ base64: String) -> Int {
 
 private func reencode(_ data: Data) throws -> Data {
     guard let image = UIImage(data: data) else { throw ImageLimitError() }
-    var side: CGFloat = 2048
-    while side >= 512 {
-        let scaled = image.scaled(maxSide: side)
-        for quality in [0.85, 0.7, 0.55] {
-            if let out = scaled.jpegData(compressionQuality: quality), out.count <= maxImageBytes { return out }
-        }
-        side *= 0.75
-    }
-    throw ImageLimitError()
-}
-
-private extension UIImage {
-    func scaled(maxSide: CGFloat) -> UIImage {
-        let longest = max(size.width, size.height)
-        guard longest > maxSide else { return self }
-        let ratio = maxSide / longest
-        let target = CGSize(width: (size.width * ratio).rounded(), height: (size.height * ratio).rounded())
-        let format = UIGraphicsImageRendererFormat.default()
-        format.scale = 1
-        return UIGraphicsImageRenderer(size: target, format: format).image { _ in draw(in: CGRect(origin: .zero, size: target)) }
-    }
+    // Unsupported picker formats (e.g. HEIC) need a lossless upload representation.
+    guard let output = image.pngData(), output.count <= maxImageBytes else { throw ImageLimitError() }
+    return output
 }
 
 /// Bounded preview decoded off the main thread, even for high resolution uploads.
