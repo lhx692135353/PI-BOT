@@ -1,0 +1,54 @@
+THIRD_PARTY_NOTICES.md
+  h_395c29b857facd 48-55
+android/app/src/main/java/dev/pibot/android/ui/ChatImages.kt
+  h_395c29b857facd 5-8,38-40,96-99,102-104,108,131-145
+desktop/apps/desktop/ui/images.tsx
+  h_395c29b857facd 5
+desktop/packages/service/src/server.ts
+  h_395c29b857facd 44
+desktop/runtime-package-lock.json
+  h_395c29b857facd 18,577-586,652-1164,2200-2208,4058-4069,4467-4510
+desktop/scripts/prepare-runtime.mjs
+  h_395c29b857facd 14
+ios/PiBot/Conversation/ChatImages.swift
+  h_395c29b857facd 6-8,13,21,25-26,36-37,49-51
+package-lock.json
+  h_395c29b857facd 3084-3093,4301-4813,14665-14708,16712
+packages/agent/package.json
+  h_395c29b857facd 20
+packages/agent/src/images.ts
+  h_395c29b857facd 6-15
+packages/agent/src/index.ts
+  h_395c29b857facd 9,254,358,380
+packages/agent/src/model-images.ts
+  h_395c29b857facd 1-86
+packages/agent/tests/images.test.ts
+  h_395c29b857facd 3,19-25
+packages/agent/tests/model-images.test.ts
+  h_395c29b857facd 1-78
+server/openapi.json
+  h_395c29b857facd 3055
+server/src/app.ts
+  h_395c29b857facd 8,155
+server/src/bots.ts
+  h_395c29b857facd 13-14,692,703-704,710
+server/src/images.ts
+  h_395c29b857facd 2,9-16
+server/src/runner.ts
+  h_395c29b857facd 68
+server/tests/image-replay.test.ts
+  h_395c29b857facd 1-19
+server/tests/integration.test.ts
+  h_395c29b857facd 353-354
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "150aadd5f3c131cf68816541ec291e03c6a263ba",
+  "prompts": {},
+  "humans": {
+    "h_395c29b857facd": {
+      "author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
