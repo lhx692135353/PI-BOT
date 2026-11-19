@@ -49,7 +49,7 @@ test('real agent command loop sends screenshot image to Responses, operates the 
   const stream=new ResponseStream(res,body.model);
   if(!count)stream.tool('run_command',{command:'phone-adb exec-out screencap -p'},'screenshot');
   else {
-   const images = (body.input ?? []).flatMap((item:any) => Array.isArray(item.content) ? item.content : []).filter((part:any) => part.type === 'input_image');
+   const images = (body.input ?? []).flatMap((item:any) => Array.isArray(item.content) ? item.content : Array.isArray(item.output) ? item.output : []).filter((part:any) => part.type === 'input_image');
    sawImage = images.length > 0;
    for (const image of images) {
     assert.match(image.image_url, /^data:image\/webp;base64,/);
