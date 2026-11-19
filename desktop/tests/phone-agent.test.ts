@@ -1,4 +1,5 @@
 import test from 'node:test';
+import sharp from 'sharp';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
@@ -48,7 +49,16 @@ test('real agent command loop sends screenshot image to Responses, operates the 
   const stream=new ResponseStream(res,body.model);
   if(!count)stream.tool('run_command',{command:'phone-adb exec-out screencap -p'},'screenshot');
   else {
-   sawImage=JSON.stringify(body.input).includes('data:image/jpeg;base64,');
+   const images = (body.input ?? []).flatMap((item:any) => Array.isArray(item.content) ? item.content : []).filter((part:any) => part.type === 'input_image');
+   sawImage = images.length > 0;
+   for (const image of images) {
+    assert.match(image.image_url, /^data:image\/webp;base64,/);
+    const data = image.image_url.split(',')[1];
+    assert.notEqual(data, jpeg, 'model must not receive the original screenshot bytes');
+    const meta = await sharp(Buffer.from(data, 'base64')).metadata();
+    assert.equal(meta.format, 'webp');
+    assert.ok(meta.width! <= 1568 && meta.height! <= 1568);
+   }
    if(count===1)stream.tool('run_command',{command:'phone-adb shell input keyevent 3'},'home');
    else stream.text(sawImage?'已看到手机画面并返回桌面。':'没有收到图片');
   }
