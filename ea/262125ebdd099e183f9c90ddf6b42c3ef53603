@@ -1,0 +1,14 @@
+desktop/tests/phone-agent.test.ts
+  h_395c29b857facd 52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ea262125ebdd099e183f9c90ddf6b42c3ef53603",
+  "prompts": {},
+  "humans": {
+    "h_395c29b857facd": {
+      "author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
