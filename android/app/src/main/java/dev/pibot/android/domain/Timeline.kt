@@ -14,7 +14,7 @@ data class Timeline(val messages: List<Message> = emptyList(), val hasMore: Bool
     fun merge(incoming: List<Message>, hasMore: Boolean = this.hasMore): Timeline {
         val byId = LinkedHashMap<String, Message>()
         for (m in messages) byId[m.id] = m
-        for (m in incoming) byId[m.id] = m
+        for (m in incoming) if((m.streamSeq ?: -1)>=(byId[m.id]?.streamSeq ?: -1)) byId[m.id] = m
         return copy(messages = byId.values.sortedBy { it.seq }, hasMore = hasMore, loaded = true)
     }
 
@@ -35,7 +35,7 @@ data class Timeline(val messages: List<Message> = emptyList(), val hasMore: Bool
     /** Streaming text for a running reply; ignored once the message has finished. */
     fun applyDelta(messageId: String, content: String): Timeline {
         val i = messages.indexOfFirst { it.id == messageId }
-        if (i < 0 || messages[i].status != "running") return this
+        if (i < 0 || messages[i].status != "running" || messages[i].streamSeq!=null) return this
         return copy(messages = messages.toMutableList().also { it[i] = it[i].copy(content = content) })
     }
 
@@ -100,4 +100,16 @@ private val TASK_STATES = mapOf("queued" to "排队中", "running" to "进行中
 fun delegationLabel(task: AgentTaskRef): String {
     val state = if (task.mode == "report" && task.status == "running") "完成后回报" else TASK_STATES[task.status] ?: task.status
     return "交给了 ${task.botName} · $state"
+}
+
+fun Timeline.applyStream(message:Message,seq:Long):Timeline {
+ if(seq<0 || message.role!="assistant")return this
+ val prev=messages.find {it.id==message.id}
+ if(prev!=null && ((prev.streamSeq ?: -1)>=seq || (prev.status!="running" && message.status=="running")))return this
+ return copy(messages=(messages.filterNot {it.id==message.id}+message.copy(streamSeq=seq)).sortedBy {it.seq})
+}
+val Message.liveReplySegments:List<dev.pibot.android.data.ReplySegment> get() {
+ if(status!="running" || content.isBlank())return replySegments
+ val last=replySegments.lastOrNull {it.phase=="answer"}
+ return if(last!=null)replySegments.map {if(it.id==last.id)it.copy(text=content) else it} else replySegments+dev.pibot.android.data.ReplySegment(id=id+":stream",phase="answer",text=content,createdAt=createdAt)
 }

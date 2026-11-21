@@ -16,7 +16,7 @@ public struct Timeline: Hashable, Sendable {
         var byId: [String: Message] = [:]
         for m in messages + incoming {
             if byId[m.id] == nil { order.append(m.id) }
-            byId[m.id] = m
+            if (m.streamSeq ?? -1)>=(byId[m.id]?.streamSeq ?? -1) {byId[m.id] = m}
         }
         let merged = order.compactMap { byId[$0] }.enumerated().sorted { a, b in
             a.element.seq != b.element.seq ? a.element.seq < b.element.seq : a.offset < b.offset
@@ -41,7 +41,7 @@ public struct Timeline: Hashable, Sendable {
 
     /// Streaming text for a running reply; ignored once the message has finished.
     public func applyDelta(messageId: String, content: String) -> Timeline {
-        guard let i = messages.firstIndex(where: { $0.id == messageId }), messages[i].status == "running" else { return self }
+        guard let i = messages.firstIndex(where: { $0.id == messageId }), messages[i].status == "running", messages[i].streamSeq == nil else { return self }
         var copy = self
         copy.messages[i].content = content
         return copy
@@ -51,7 +51,7 @@ public struct Timeline: Hashable, Sendable {
 
     /// Tool the bot is running right now, for the character's mood.
     public var runningTool: String? {
-        messages.last { $0.status == "running" }?.tools.last { $0.state == "running" }?.name
+        messages.last { $0.status == "running" && $0.streamSeq == nil }?.tools.last { $0.state == "running" }?.name
     }
 }
 
@@ -164,4 +164,27 @@ public func humanSize(_ bytes: Int64) -> String {
     if bytes < 1024 { return "\(bytes) B" }
     if bytes < 1024 * 1024 { return String(format: "%.1f KB", Double(bytes) / 1024) }
     return String(format: "%.1f MB", Double(bytes) / 1024 / 1024)
+}
+
+extension Timeline {
+ public mutating func applyStream(_ e:JSONValue) {
+  guard e["reset"]?.boolValue == true,e["offset"]?.intValue == 0,
+    let seq=e["seq"]?.intValue,seq>=0,let id=e["message_id"]?.stringValue,
+    let raw=e["message"],let data=try? JSONEncoder().encode(raw),var message=try? JSONDecoder().decode(Message.self,from:data),
+    message.id==id,message.role=="assistant",let text=e["text"]?.stringValue,let status=e["status"]?.stringValue else {return}
+  if let prev=messages.first(where:{$0.id==id}) {
+   guard (prev.streamSeq ?? -1)<seq, !(prev.status != "running" && status=="running") else {return}
+  }
+  message.content=text;message.status=status;message.streamSeq=seq
+  messages.removeAll{$0.id==id};messages.append(message);messages.sort{$0.seq<$1.seq}
+ }
+}
+extension Message {
+ public var liveReplySegments:[ReplySegment] {
+  guard status=="running",!content.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty else {return replySegments}
+  if let answer=replySegments.lastIndex(where:{$0.phase=="answer"}) {
+   var list=replySegments;list[answer].text=content;return list
+  }
+  return replySegments+[ReplySegment(id:id+":stream",text:content,phase:"answer",createdAt:createdAt)]
+ }
 }
