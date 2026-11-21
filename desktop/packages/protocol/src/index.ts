@@ -82,7 +82,7 @@ export interface FromBot { id: string; name: string; avatar: Avatar | null; kind
 export interface ReplySegment { id: string; text: string; phase: 'opening' | 'update' | 'answer'; created_at: string; generated_at: string }
 export interface TaskConversation { execution_label?:string; operation_target?:string; task_id: string; status: RunStatus; bots: { id: string; name: string; avatar: Avatar }[]; messages: { id: string; seq: number; from_bot_id: string; to_bot_id: string; kind: string; content: string; created_at: string | null }[]; total: number; has_more: boolean; next_after: number }
 export interface AgentTaskRef { message_count?: number; operation_target?:string; id: string; bot_id: string; bot_name: string; status: 'queued' | 'running' | 'waiting_approval' | 'completed' | 'failed' | 'cancelled'; mode: 'wait' | 'report'; kind?: 'background' | 'delegation'; title?: string; updated_at?: string; activity?: string | null }
-export interface Message { attachments?: ArtifactRef[]; reply_segments?: ReplySegment[]; task_id?: string | null; id: string; bot_id: string; run_id: string | null; seq: number; role: 'user' | 'assistant'; content: string; images?: MessageImage[]; status: 'completed' | 'running' | 'failed' | 'cancelled'; executor: 'device' | 'cloud' | null; tools: ToolEntry[]; progress?: string[]; ui?: UiDocument | null; from_bot?: FromBot | null; agent_tasks?: AgentTaskRef[]; created_at: string; updated_at: string }
+export interface Message { stream_seq?: number; attachments?: ArtifactRef[]; reply_segments?: ReplySegment[]; task_id?: string | null; id: string; bot_id: string; run_id: string | null; seq: number; role: 'user' | 'assistant'; content: string; images?: MessageImage[]; status: 'completed' | 'running' | 'failed' | 'cancelled'; executor: 'device' | 'cloud' | null; tools: ToolEntry[]; progress?: string[]; ui?: UiDocument | null; from_bot?: FromBot | null; agent_tasks?: AgentTaskRef[]; created_at: string; updated_at: string }
 export interface Approval { id: string; run_id: string; bot_id: string; kind: 'outside_access' | 'browser_access' | 'browser_login'; path: string; reason: string; status: string; expires_at: string; access?: string; scope?: string; can_remember?: boolean }
 export interface SavedAuthorization { id: string; target: string; target_label: string; resource: string; resource_type: string; operation: string; created_at: string; last_used_at: string | null }
 export interface AuthorizationLog { id: number; action: string; resource: string; operation: string; target: string; created_at: string }
@@ -111,6 +111,7 @@ export type AppEvent =
   | { type: 'account'; state: AccountState }
   | { type: 'bots' }
   | { type: 'bot'; bot_id: string }
+  | {type:'stream';bot_id:string;message_id:string;stream_id:string;seq:number;offset:number;reset:boolean;text:string;status:Message['status'];message:Message}
   | { type: 'delta'; bot_id: string; message_id: string; content: string }
   | { type: 'activity'; activity: LocalActivity | null; botId: string }
   | { type: 'bot.mood'; bot_id: string; name: string; mood: Mood };

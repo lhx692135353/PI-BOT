@@ -1,3 +1,4 @@
+import {liveReplySegments} from './timeline-cache.js';
 import {uploadDocument} from './documents.js';
 import { AttachmentMenu } from './attachment-menu.js';
 import type {ArtifactRef} from '../../../packages/protocol/src/index.js';
@@ -108,7 +109,7 @@ function ReportFiles({ message }: { message: Message }) {
 }
 
 function ReplyBubbles({ message }: { message: Message }) {
-  const segments = uniqueById(message.reply_segments ?? []);
+  const segments = uniqueById(liveReplySegments(message));
   const legacy = segments.length ? [] : (message.progress ?? []);
   const tail = segments.some(s=>s.phase === 'answer') ? '' : message.content;
   return <>

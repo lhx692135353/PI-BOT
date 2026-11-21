@@ -97,6 +97,7 @@ public final class AppStore {
         stopEvents()
         storage.clear()
         let userId = session?.user.id
+        confirmedReads.removeAll();readRequests.removeAll()
         session = nil
         bots = nil
         persistTask?.cancel(); persistTask = nil
@@ -385,6 +386,10 @@ public final class AppStore {
 
     public func handleEvent(_ event: JSONValue) {
         switch event["type"]?.stringValue {
+        case "stream":
+            guard let id=event["bot_id"]?.stringValue else {return}
+            var timeline=timelines[id] ?? Timeline();timeline.applyStream(event);timelines[id]=timeline
+
         case "delta":
             guard let botId = event["bot_id"]?.stringValue, let messageId = event["message_id"]?.stringValue,
                   let content = event["content"]?.stringValue, let current = timelines[botId] else { return }

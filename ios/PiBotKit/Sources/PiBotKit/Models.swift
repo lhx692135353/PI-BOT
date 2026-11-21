@@ -473,6 +473,7 @@ public struct ReplySegment: Codable, Hashable, Identifiable, Sendable {
 }
 
 public struct Message: Codable, Hashable, Identifiable, Sendable {
+    public var streamSeq: Int? = nil
     public var id: String
     public var botId: String
     public var runId: String?
@@ -493,6 +494,7 @@ public struct Message: Codable, Hashable, Identifiable, Sendable {
     public var createdAt: String
 
     enum CodingKeys: String, CodingKey {
+        case streamSeq = "stream_seq"
         case id, botId = "bot_id", runId = "run_id", taskId = "task_id", seq, role, content, images, attachments, status
         case executor, tools, progress, replySegments = "reply_segments", ui, fromBot = "from_bot"
         case agentTasks = "agent_tasks", createdAt = "created_at"
@@ -507,6 +509,7 @@ public struct Message: Codable, Hashable, Identifiable, Sendable {
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        streamSeq = try c.decodeIfPresent(Int.self,forKey:.streamSeq)
         id = try c.decode(String.self, forKey: .id)
         botId = try c.decode(String.self, forKey: .botId)
         runId = try c.decodeIfPresent(String.self, forKey: .runId)

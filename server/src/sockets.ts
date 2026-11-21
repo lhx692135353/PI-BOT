@@ -1,3 +1,4 @@
+import {publicStreams} from "./streams.js";
 import { CAPABILITIES } from "./targets.js";
 import type { FastifyInstance } from "fastify";
 import type { WebSocket } from "ws";
@@ -41,13 +42,25 @@ export async function sockets(
   };
   const listener = await db.pool.connect();
   await listener.query(`LISTEN ${CHANNEL}`);
+  const pending=new Map<string,{event:Row,dirty:boolean}>();
+  const publishStream=(c:Row)=>{
+    if(!hub.hasSubscribers(c.user_id))return;
+    const key=`${c.user_id}:${c.bot_id}:${c.message_id ?? "latest"}`;
+    const existing=pending.get(key);if(existing){existing.dirty=true;return;}
+    const job={event:c,dirty:false};pending.set(key,job);
+    void (async()=>{do {
+      job.dirty=false;
+      const frames=await publicStreams(db,c.user_id,c.bot_id,c.message_id,false);
+      for(const frame of frames){hub.publish(c.user_id,frame);hub.publish(c.user_id,{type:"delta",bot_id:frame.bot_id,message_id:frame.message_id,content:frame.text});}
+      if(!job.dirty){pending.delete(key);return;}
+    }while(true);})().catch(error=>{pending.delete(key);app.log.error({err:error},"stream snapshot publication failed");});
+  };
   listener.on("notification", (n) => {
     try {
       const c = JSON.parse(n.payload ?? "{}") as Row;
       if (typeof c.user_id !== "string") return;
-      if (c.message_id && typeof c.content === "string")
-        hub.publish(c.user_id, { type: "delta", bot_id: c.bot_id, message_id: c.message_id, content: c.content });
-      else {
+      if(c.stream || c.message_id || c.bot_id) publishStream(c);
+      if (!c.stream) {
         dispatcher?.kick();
         if (c.bot_id) hub.publish(c.user_id, { type: "bot", bot_id: c.bot_id });
         else hub.publish(c.user_id, { type: "bots" });
@@ -173,6 +186,9 @@ export async function sockets(
         if (ws.readyState !== 1) return;
         unsubscribe = hub.subscribe(u.user_id, (event) => send(ws, { type: "event", event }));
         send(ws, { type: "hello", user_id: u.user_id, device_online: hub.online(u.user_id) });
+        void publicStreams(db,u.user_id,undefined,undefined,true).then(frames=>{
+          for(const event of frames){send(ws,{type:"event",event});send(ws,{type:"event",event:{type:"delta",bot_id:event.bot_id,message_id:event.message_id,content:event.text}});}
+        }).catch(()=>{});
       })
       .catch(() => ws.close(4401));
     ws.on("message", (raw) => {

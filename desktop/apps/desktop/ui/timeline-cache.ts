@@ -48,7 +48,7 @@ export function mergeTail(old: TimelinePage | undefined, page: MessagePage): Tim
     return { messages: [...page.messages].sort(bySeq), hasMore: page.has_more };
   }
   const byId = new Map(old.messages.map(m => [m.id, m]));
-  for (const m of page.messages) byId.set(m.id, m);
+  for (const m of page.messages) {const prev=byId.get(m.id);if(!prev || (m.stream_seq ?? -1)>=(prev.stream_seq ?? -1))byId.set(m.id,m);}
   return { messages: [...byId.values()].sort(bySeq), hasMore: first && first.seq <= old.messages[0].seq ? page.has_more : old.hasMore };
 }
 
@@ -58,4 +58,21 @@ export function mergeOlder(old: TimelinePage | undefined, before: string, page: 
   const byId = new Map(page.messages.map(m => [m.id, m]));
   for (const m of old.messages) byId.set(m.id, m);
   return { messages: [...byId.values()].sort(bySeq), hasMore: page.has_more };
+}
+
+export type StreamFrame={type:'stream';bot_id:string;message_id:string;stream_id:string;seq:number;offset:number;reset:boolean;text:string;status:Message["status"];message:Message};
+export function applyStream(old:TimelinePage|undefined,e:StreamFrame):TimelinePage|undefined {
+ if(!e.reset || e.offset!==0 || !Number.isSafeInteger(e.seq) || e.seq<0 || e.message?.id!==e.message_id || e.message.role!=='assistant')return old;
+ const prev=old?.messages.find(m=>m.id===e.message_id);
+ if(prev && (prev.stream_seq ?? -1)>=e.seq)return old;
+ if(prev && prev.status!=='running' && e.status==='running')return old;
+ const message={...e.message,content:e.text,status:e.status,stream_seq:e.seq};
+ const byId=new Map((old?.messages ?? []).map(m=>[m.id,m]));byId.set(message.id,message);
+ return {messages:[...byId.values()].sort(bySeq),hasMore:old?.hasMore ?? true};
+}
+export function liveReplySegments(message:Message) {
+ const segments=message.reply_segments ?? [];
+ if(message.status!=='running' || !message.content.trim())return segments;
+ const answer=[...segments].reverse().find(s=>s.phase==='answer');
+ return answer?segments.map(s=>s.id===answer.id?{...s,text:message.content}:s):[...segments,{id:`${message.id}:stream`,phase:'answer' as const,text:message.content,created_at:message.created_at,generated_at:message.created_at}];
 }

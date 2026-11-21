@@ -13,6 +13,7 @@ export interface DeviceConnection {
 export type CallPhase = "connecting" | "listening" | "speaking" | "thinking" | "ended";
 export type UserEvent =
   | { type: "bot"; bot_id: string }
+  | {type:"stream";bot_id:string;message_id:string;run_id:string;stream_id:string;seq:number;offset:number;reset:boolean;text:string;status:string;message:Row}
   | { type: "delta"; bot_id: string; message_id: string; content: string }
   | { type: "presence"; online: boolean; device_id: string; device_online: boolean }
   | { type: "bots" }
@@ -112,6 +113,7 @@ export class Hub {
       if (!set!.size) this.listeners.delete(userId);
     };
   }
+  hasSubscribers(userId:string){return !!this.listeners.get(userId)?.size || [...this.devices.values()].some(c=>c.userId===userId);}
   publish(userId: string, event: UserEvent) {
     for (const listener of this.listeners.get(userId) ?? []) {
       try {

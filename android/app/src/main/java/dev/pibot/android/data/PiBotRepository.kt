@@ -1,5 +1,8 @@
 package dev.pibot.android.data
 
+import dev.pibot.android.domain.applyStream
+import kotlinx.serialization.json.longOrNull
+
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.intOrNull
@@ -158,6 +161,7 @@ class PiBotRepository(
         val previous = _session.value
         stopEvents()
         storage.clear()
+        confirmedReads.clear()
         _session.value = null
         _bots.value = null
         _timelines.value = emptyMap()
@@ -437,6 +441,17 @@ class PiBotRepository(
 
     internal fun handleEvent(event: JsonObject) {
         when (event["type"]?.jsonPrimitive?.contentOrNull) {
+            "stream" -> {
+                val id=event["bot_id"]?.jsonPrimitive?.contentOrNull ?: return
+                val messageId=event["message_id"]?.jsonPrimitive?.contentOrNull ?: return
+                val seq=event["seq"]?.jsonPrimitive?.longOrNull ?: return
+                if(event["reset"]?.jsonPrimitive?.booleanOrNull!=true || event["offset"]?.jsonPrimitive?.intOrNull!=0)return
+                val message=runCatching {kotlinx.serialization.json.Json {ignoreUnknownKeys=true}.decodeFromString<Message>((event["message"] ?: return).toString())}.getOrNull() ?: return
+                if(message.id!=messageId)return
+                val text=event["text"]?.jsonPrimitive?.contentOrNull ?: return
+                val status=event["status"]?.jsonPrimitive?.contentOrNull ?: return
+                _timelines.update {all->all+(id to (all[id] ?: Timeline()).applyStream(message.copy(content=text,status=status),seq))}
+            }
             "delta" -> {
                 val botId = event["bot_id"]?.jsonPrimitive?.contentOrNull ?: return
                 val messageId = event["message_id"]?.jsonPrimitive?.contentOrNull ?: return
