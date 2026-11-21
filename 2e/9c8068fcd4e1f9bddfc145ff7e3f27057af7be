@@ -1,0 +1,14 @@
+server/src/hub.ts
+  h_395c29b857facd 116
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2e9c8068fcd4e1f9bddfc145ff7e3f27057af7be",
+  "prompts": {},
+  "humans": {
+    "h_395c29b857facd": {
+      "author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
