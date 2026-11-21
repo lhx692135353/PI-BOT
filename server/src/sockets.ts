@@ -52,7 +52,8 @@ export async function sockets(
       job.dirty=false;
       const frames=await publicStreams(db,c.user_id,c.bot_id,c.message_id,false);
       for(const frame of frames){hub.publish(c.user_id,frame);hub.publish(c.user_id,{type:"delta",bot_id:frame.bot_id,message_id:frame.message_id,content:frame.text});}
-    }while(job.dirty);})().catch(()=>{}).finally(()=>pending.delete(key));
+      if(!job.dirty){pending.delete(key);return;}
+    }while(true);})().catch(error=>{pending.delete(key);app.log.error({err:error},"stream snapshot publication failed");});
   };
   listener.on("notification", (n) => {
     try {
@@ -60,6 +61,7 @@ export async function sockets(
       if (typeof c.user_id !== "string") return;
       if(c.stream || c.message_id || c.bot_id) publishStream(c);
       if (!c.stream) {
+        dispatcher?.kick();
         if (c.bot_id) hub.publish(c.user_id, { type: "bot", bot_id: c.bot_id });
         else hub.publish(c.user_id, { type: "bots" });
       }
