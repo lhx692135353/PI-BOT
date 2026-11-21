@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
-import Fastify from 'fastify';
+import Fastify,{type FastifyInstance} from 'fastify';
 import websocket from '@fastify/websocket';
 import {Database} from '../src/db.js';
 import {migrate} from '../src/migrate.js';
@@ -17,7 +17,7 @@ test('two actual websocket replicas deliver long public resets and cancellation;
  let bot:any;await db.tx(async tx=>{await tx.insert('users',user);bot=await createBot(tx,user.user_id,{name:'WS',persona:''});});
  const s=settings({PI_BOT_DATABASE_URL:TEST_DB!,PI_BOT_JWT_SECRET:'j'.repeat(40),PI_BOT_REMOTE_BACKEND:'none'});
  const token=await issueToken(user,s);
- const replicas=[];for(let i=0;i<2;i++){
+ const replicas:FastifyInstance[]=[];for(let i=0;i<2;i++){
   const app=Fastify();await app.register(websocket);await sockets(app,new Database(TEST_DB!),s,new Hub());await app.listen({host:'127.0.0.1',port:0});replicas.push(app);
  }
  const connections:any[]=[];t.after(async()=>{for(const c of connections)c.ws.terminate();for(const app of replicas)await app.close();await db.close();});
