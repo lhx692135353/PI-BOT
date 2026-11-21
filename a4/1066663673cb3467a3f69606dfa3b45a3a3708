@@ -1,0 +1,14 @@
+ios/PiBotKit/Sources/PiBotKit/Timeline.swift
+  h_395c29b857facd 54
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a41066663673cb3467a3f69606dfa3b45a3a3708",
+  "prompts": {},
+  "humans": {
+    "h_395c29b857facd": {
+      "author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
