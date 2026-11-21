@@ -42,8 +42,8 @@ export async function sockets(
   };
   const listener = await db.pool.connect();
   await listener.query(`LISTEN ${CHANNEL}`);
-  const pending=new Map<string,{event:DbEvent,dirty:boolean}>();
-  const publishStream=(c:DbEvent)=>{
+  const pending=new Map<string,{event:Row,dirty:boolean}>();
+  const publishStream=(c:Row)=>{
     if(!hub.hasSubscribers(c.user_id))return;
     const key=`${c.user_id}:${c.bot_id}:${c.message_id ?? "latest"}`;
     const existing=pending.get(key);if(existing){existing.dirty=true;return;}
@@ -59,7 +59,8 @@ export async function sockets(
       const c = JSON.parse(n.payload ?? "{}") as Row;
       if (typeof c.user_id !== "string") return;
       if(c.stream || c.message_id || c.bot_id) publishStream(c);
-      if (c.bot_id) hub.publish(c.user_id, { type: "bot", bot_id: c.bot_id });
+      if (!c.stream) {
+        if (c.bot_id) hub.publish(c.user_id, { type: "bot", bot_id: c.bot_id });
         else hub.publish(c.user_id, { type: "bots" });
       }
     } catch {

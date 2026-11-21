@@ -148,13 +148,6 @@ export async function handleRunEvent(
       return r;
     });
     if (!run) live.delete(runId);
-    if (run && run.lane !== "task")
-      hub.publish(run.user_id, {
-        type: "delta",
-        bot_id: run.bot_id,
-        message_id: run.assistant_message_id,
-        content: e.text,
-      });
     return;
   }
   if (e.kind === "instruction_ack") {
