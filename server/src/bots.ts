@@ -984,9 +984,10 @@ export async function markBotRead(tx: Tx, userId: string, botId: string, seq: nu
     WHERE bot_id=$1 AND visibility='public' AND status<>'running' AND seq<=$2
     AND seq<coalesce((SELECT min(seq) FROM bot_messages WHERE bot_id=$1
       AND role='assistant' AND status='running'),9223372036854775807)`,[botId,seq]);
-  await tx.rows(`INSERT INTO bot_reads(user_id,bot_id,last_read_seq) VALUES($1,$2,$3)
-    ON CONFLICT(user_id,bot_id) DO UPDATE SET last_read_seq=greatest(bot_reads.last_read_seq,excluded.last_read_seq)`,
+  const changed = await tx.rows(`INSERT INTO bot_reads(user_id,bot_id,last_read_seq) VALUES($1,$2,$3)
+    ON CONFLICT(user_id,bot_id) DO UPDATE SET last_read_seq=greatest(bot_reads.last_read_seq,excluded.last_read_seq)
+    WHERE bot_reads.last_read_seq<excluded.last_read_seq RETURNING last_read_seq`,
     [userId,botId,last!.seq]);
-  await tx.notify({user_id:userId,bot_id:botId});
+  if(changed.length) await tx.notify({user_id:userId,bot_id:botId});
   return unreadState(tx,userId,botId);
 }

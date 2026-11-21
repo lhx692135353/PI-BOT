@@ -23,6 +23,8 @@ public struct LiveCall: Hashable, Sendable {
 @MainActor
 @Observable
 public final class AppStore {
+    private var readRequests: [String:Int] = [:]
+    private var confirmedReads: [String:Int] = [:]
     public private(set) var session: Session?
     /// nil until the first load finishes.
     public private(set) var bots: [Bot]?
@@ -171,7 +173,7 @@ public final class AppStore {
             return bot
         }
         let ids = Set(incoming.map(\.id))
-        bots = incoming + previous.filter { !ids.contains($0.id) && (botRefreshVersions[$0.id] ?? 0) > version }
+        bots = conversationOrder(incoming + previous.filter { !ids.contains($0.id) && (botRefreshVersions[$0.id] ?? 0) > version })
         computer = list.computer
         devices = list.devices
         cloudComputer = list.cloudComputer
@@ -193,7 +195,7 @@ public final class AppStore {
     private func upsert(_ bot: Bot) {
         var list = bots ?? []
         if let i = list.firstIndex(where: { $0.id == bot.id }) { list[i] = bot } else { list.insert(bot, at: 0) }
-        bots = list.sorted { $0.lastActiveAt > $1.lastActiveAt }
+        bots = conversationOrder(list)
     }
 
     private func remove(_ id: String) {
@@ -514,5 +516,18 @@ public final class AppStore {
             guard let self, !Task.isCancelled, self.wantEvents, self.socket == nil else { return }
             self.connect()
         }
+    }
+}
+
+extension AppStore {
+    public func markRead(_ botId:String) async throws {
+        guard session != nil else {return}
+        guard bot(botId)?.unreadCount != nil else {return}
+        let seq=timeline(botId).messages.filter{$0.status != "running"}.map(\.seq).max() ?? 0
+        guard seq > (confirmedReads[botId] ?? 0), readRequests[botId] == nil else {return}
+        readRequests[botId]=seq
+        defer {readRequests[botId]=nil}
+        let result = try await authed { try await self.api.markRead($0,token:$1,botId:botId,seq:seq) }
+        if let value=result["last_read_seq"]?.intValue {confirmedReads[botId]=max(confirmedReads[botId] ?? 0,value)}
     }
 }

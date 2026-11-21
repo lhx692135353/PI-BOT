@@ -175,8 +175,9 @@ private struct BotRow: View {
             VStack(alignment: .leading, spacing: 5) {
                 HStack {
                     Text(bot.name).font(.system(size: 16, weight: .semibold)).foregroundStyle(Palette.ink).lineLimit(1)
+                    if let count=bot.unreadCount, count>0 {Text("\(count)").font(.caption.bold()).foregroundStyle(Palette.accent)}
                     Spacer(minLength: 8)
-                    Text(conversationTime(bot.lastMessage?.createdAt ?? bot.lastActiveAt, now: now))
+                    Text(conversationTime(bot.lastMessageAt ?? bot.lastMessage?.createdAt ?? bot.lastActiveAt, now: now))
                         .font(.system(size: 11)).foregroundStyle(Palette.muted)
                 }
                 Text(bot.statusLine(now: now))

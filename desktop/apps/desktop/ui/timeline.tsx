@@ -235,9 +235,21 @@ export function Timeline({ bot, messages, hasMore, mood, online, onLoadMore, onS
       })
       .finally(() => { loadingOlderRef.current = false; setLoadingOlder(false); });
   };
+  const readSeq = useRef({bot:'',seq:0});
+  const markVisibleRead = () => {
+    const el=scroller.current;
+    if(!online || bot.unread_count===undefined || !el || document.visibilityState!=='visible' || el.scrollHeight-el.scrollTop-el.clientHeight>=80)return;
+    const seq=Math.max(0,...messages.filter(m=>m.status!=='running').map(m=>m.seq));
+    if(readSeq.current.bot===bot.id && readSeq.current.seq>=seq)return;
+    const id=bot.id;
+    readSeq.current={bot:id,seq};
+    void call('markRead',{botId:id,seq}).catch(()=>{if(readSeq.current.bot===id && readSeq.current.seq===seq)readSeq.current.seq=0;});
+  };
+  useEffect(()=>{markVisibleRead();document.addEventListener('visibilitychange',markVisibleRead);return()=>document.removeEventListener('visibilitychange',markVisibleRead);},[bot.id,bot.unread_count,messages,online]);
   const onScroll = () => {
     const el = scroller.current;
     if (!el) return;
+    markVisibleRead();
     const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
     stick.current = gap < 80;
     setFarFromBottom(gap > el.clientHeight);

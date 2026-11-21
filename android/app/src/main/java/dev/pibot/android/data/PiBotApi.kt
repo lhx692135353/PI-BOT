@@ -6,6 +6,8 @@ import dev.pibot.android.push.PushConfigResponse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -118,6 +120,9 @@ data class Bot(
     val avatar: Avatar = Avatar(),
     @SerialName("is_main") val isMain: Boolean = false,
     @SerialName("last_active_at") val lastActiveAt: String,
+    @SerialName("last_message_at") val lastMessageAt: String? = null,
+    @SerialName("unread_count") val unreadCount: Int? = null,
+    @SerialName("last_read_seq") val lastReadSeq: Long? = null,
     @SerialName("latest_run") val latestRun: Run? = null,
     @SerialName("last_message") val lastMessage: LastMessage? = null,
     @SerialName("active_tasks") val activeTasks: List<AgentTaskRef> = emptyList(),
@@ -329,6 +334,9 @@ class PiBotApi(private val http: OkHttpClient, private val json: Json = API_JSON
 
     fun archiveBot(url: ServerUrl, token: String, id: String): JsonObject = call(url, "DELETE", "/bots/$id", token)
 
+    fun markRead(url:ServerUrl, token:String, botId:String, seq:Int):JsonObject =
+        call(url,"POST","/bots/$botId/read",token,body=buildJsonObject {put("seq",seq)})
+
     fun messages(url: ServerUrl, token: String, botId: String, before: Int? = null): MessagePage =
         call(url, "GET", "/bots/$botId/messages", token, query = listOfNotNull("limit" to MESSAGE_PAGE.toString(), before?.let { "before" to it.toString() }))
 
@@ -437,3 +445,6 @@ fun errorMessage(status: Int, body: String): String {
 private val JSON_TYPE = "application/json".toMediaType()
 
 val API_JSON: Json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+
+fun conversationOrder(bots:List<Bot>):List<Bot> = if(bots.any {it.lastMessageAt==null}) bots else
+    bots.sortedWith(compareByDescending<Bot>{it.isMain}.thenByDescending {java.time.Instant.parse(it.lastMessageAt)}.thenBy {it.id})

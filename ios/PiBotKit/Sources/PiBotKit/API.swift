@@ -116,6 +116,10 @@ public final class PiBotAPI: @unchecked Sendable {
         let _: JSONValue = try await call(url, "DELETE", "/bots/\(id)", token: token)
     }
 
+    public func markRead(_ url:ServerURL, token:String, botId:String, seq:Int) async throws -> JSONValue {
+        try await call(url,"POST","/bots/\(botId)/read",token:token,body: ["seq":seq])
+    }
+
     public func messages(_ url: ServerURL, token: String, botId: String, before: Int? = nil) async throws -> MessagePage {
         var query = [("limit", String(messagePageSize))]
         if let before { query.append(("before", String(before))) }

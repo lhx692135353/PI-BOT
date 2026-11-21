@@ -236,7 +236,8 @@ private fun BotConversationRow(bot: Bot, now: Long, selected: Boolean, onClick: 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(bot.name, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, lineHeight = 22.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(8.dp))
-                Text(conversationTime(bot.lastMessage?.createdAt ?: bot.lastActiveAt, now), color = Muted, fontSize = 11.sp, lineHeight = 16.sp)
+                if((bot.unreadCount ?: 0)>0) Text("${bot.unreadCount}",color=Accent,fontSize=12.sp)
+                Text(conversationTime(bot.lastMessageAt ?: bot.lastMessage?.createdAt ?: bot.lastActiveAt, now), color = Muted, fontSize = 11.sp, lineHeight = 16.sp)
             }
             Text(bot.statusLine(now), color = if (waiting) Accent else Muted, fontSize = 13.sp, lineHeight = 19.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }

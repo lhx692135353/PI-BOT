@@ -2,6 +2,7 @@ import SwiftUI
 import PiBotKit
 
 struct ConversationView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(AppStore.self) private var store
     @Environment(VoiceCallController.self) private var voice
     @Environment(\.openURL) private var openURL
@@ -51,6 +52,11 @@ struct ConversationView: View {
                 store.clearVoiceNotice()
             }
         }
+    }
+
+    private func markVisibleRead() {
+        guard scenePhase == .active, bottomGap<40, reachedBottom else {return}
+        Task {try? await store.markRead(botId)}
     }
 
     private func load() async {
@@ -149,7 +155,9 @@ struct ConversationView: View {
                 .coordinateSpace(name: Self.scrollSpace)
                 .defaultScrollAnchor(.bottom)
                 .scrollDismissesKeyboard(.interactively)
-                .onChange(of: reachedBottom) { loadMore(proxy: proxy, viewport: viewport) }
+                .onChange(of: reachedBottom) { markVisibleRead(); loadMore(proxy: proxy, viewport: viewport) }
+                .onChange(of: timeline.messages) {markVisibleRead()}
+                .onChange(of: scenePhase) {markVisibleRead()}
                 .onChange(of: tailKey) {
                     guard !loadingMore else { return }
                     // Reading older history is not interrupted by a streaming reply; sending always returns to it.
@@ -242,6 +250,7 @@ struct ConversationView: View {
             settling = true
             Task { try? await Task.sleep(nanoseconds: 400_000_000); reachedBottom = true }
         }
+        markVisibleRead()
         loadMore(proxy: proxy, viewport: viewport)
     }
 

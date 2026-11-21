@@ -1,3 +1,4 @@
+import { orderBots } from './conversation-order.js';
 import { confirmAction, showNotice } from './dialogs.js';
 import { StrictMode, useCallback, useEffect, useRef, useState, type FormEvent, type MouseEvent } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -273,7 +274,7 @@ function App() {
       if (request !== botsRequest.current) return;
       setDevices(uniqueById(r.devices ?? []));
       setCloud(r.cloud_computer ?? null);
-      setBots(r.bots); setLoadError('');
+      setBots(orderBots(r.bots)); setLoadError('');
       setSelected(s => (s && r.bots.some(b => b.id === s) ? s : r.bots[0]?.id ?? null));
     } catch (e) { if (request === botsRequest.current) setLoadError(errorText(e)); }
     finally { botsInFlight.current--; }

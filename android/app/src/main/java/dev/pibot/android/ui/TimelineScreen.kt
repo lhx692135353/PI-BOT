@@ -1,5 +1,9 @@
 package dev.pibot.android.ui
 
+import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+
 import android.graphics.Rect
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.gestures.scrollBy
@@ -246,6 +250,12 @@ fun TimelineScreen(
                     list.firstVisibleItemIndex > 2 ||
                         (list.firstVisibleItemIndex > 0 && list.firstVisibleItemScrollOffset > list.layoutInfo.viewportSize.height / 2)
                 }
+            }
+            val lifecycle=LocalLifecycleOwner.current.lifecycle
+            val lifecycleState by lifecycle.currentStateFlow.collectAsState()
+            val atBottom by remember(list) {derivedStateOf {list.firstVisibleItemIndex==0 && list.firstVisibleItemScrollOffset<40}}
+            LaunchedEffect(botId,atBottom,timeline.messages,lifecycleState) {
+                if(atBottom && timeline.loaded && lifecycleState.isAtLeast(Lifecycle.State.RESUMED)) runCatching {repository.markRead(botId)}
             }
             LaunchedEffect(botId, nearTop, timeline.hasMore, loadingMore, olderError, selection.active) {
                 if (selection.active == null && nearTop && timeline.hasMore && !loadingMore && olderError == null) {

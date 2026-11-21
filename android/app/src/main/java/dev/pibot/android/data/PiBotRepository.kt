@@ -1,5 +1,9 @@
 package dev.pibot.android.data
 
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.json.intOrNull
+
 import dev.pibot.android.domain.ServerUrl
 import dev.pibot.android.domain.Timeline
 import dev.pibot.android.domain.parseServerUrl
@@ -207,7 +211,7 @@ class PiBotRepository(
                 if (counter.get() > version) current[bot.id] ?: bot
                 else { counter.updateAndGet { maxOf(it, version) }; bot }
             }
-            incoming + previous.orEmpty().filter { old -> incoming.none { it.id == old.id } && (botRefreshVersions[old.id]?.get() ?: 0) > version }
+            conversationOrder(incoming + previous.orEmpty().filter { old -> incoming.none { it.id == old.id } && (botRefreshVersions[old.id]?.get() ?: 0) > version })
         }
         _computer.value = list.computer
         _devices.value = list.devices.distinctBy { it.id }
@@ -221,7 +225,7 @@ class PiBotRepository(
         if (_session.value?.pushBindingId != bindingId) return
         _bots.update { current ->
             if (_session.value?.pushBindingId != bindingId) current
-            else current?.filterNot { it.id == botId }?.plus(result)?.sortedByDescending { it.lastActiveAt }
+            else current?.map {if(it.id==botId)result else it}?.let(::conversationOrder)
         }
         if (visibleBotId != botId) return
         val page = withContext(io) { api.messages(ServerUrl(session.serverUrl), session.token, botId) }
@@ -295,6 +299,18 @@ class PiBotRepository(
     suspend fun archiveBot(id: String) {
         authed { u, t -> api.archiveBot(u, t, id) }
         remove(id)
+    }
+
+    private val readMutex=Mutex()
+    private val confirmedReads=mutableMapOf<String,Int>()
+    suspend fun markRead(botId:String) {
+      readMutex.withLock {
+        if(_bots.value?.find {it.id==botId}?.unreadCount==null)return
+        val seq=_timelines.value[botId]?.messages?.filter {it.status!="running"}?.maxOfOrNull {it.seq} ?: 0
+        if(seq<=(confirmedReads[botId] ?: 0))return
+        val result=authed {u,t -> api.markRead(u,t,botId,seq)}
+        result["last_read_seq"]?.jsonPrimitive?.intOrNull?.let {confirmedReads[botId]=maxOf(confirmedReads[botId] ?: 0,it)}
+      }
     }
 
     suspend fun loadTail(botId: String) {
