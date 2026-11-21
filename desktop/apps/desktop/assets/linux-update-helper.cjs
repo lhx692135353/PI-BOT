@@ -1,6 +1,6 @@
 // Runs on bundled Node after the parent Electron and its owned service exit.
 // Arguments are generated in the trusted main process, never by the renderer.
-const { rename, rm, writeFile } = require('node:fs/promises');
+const { rename, rm, writeFile, readdir, stat } = require('node:fs/promises');
 const { join } = require('node:path');
 const { spawn } = require('node:child_process');
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -8,6 +8,15 @@ async function launch(executable, cwd) {
   const child = spawn(executable, [], { cwd, detached: true, stdio: 'ignore' });
   await new Promise((resolve, reject) => { child.once('error', reject); child.once('spawn', resolve); });
   child.unref();
+}
+async function linuxBundleInStaging(staging) {
+  const bundles = [];
+  for (const name of await readdir(staging)) {
+    if (!name.startsWith('Pi Bot-linux-')) continue;
+    if ((await stat(join(staging, name))).isDirectory()) bundles.push(name);
+  }
+  if (bundles.length !== 1) throw new Error('Expected one Linux bundle in staging');
+  return bundles[0];
 }
 async function apply(root, staging, pid) {
   if (!Number.isSafeInteger(pid) || pid <= 1 || pid === process.pid) throw new Error('Invalid parent pid');
@@ -20,7 +29,7 @@ async function apply(root, staging, pid) {
   if (!stopped) throw new Error('Client did not exit; original installation untouched');
   await rename(root, backup);
   try {
-    await rename(join(staging, 'Pi Bot-linux-x64'), root);
+    await rename(join(staging, await linuxBundleInStaging(staging)), root);
     await launch(join(root, 'Pi Bot'), root);
   } catch (error) {
     // Preserve failed new bytes for inspection; restore and restart the old app.

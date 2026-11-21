@@ -4,12 +4,15 @@ import { access, constants, copyFile, mkdtemp, readFile, realpath, rm, stat } fr
 import { basename, dirname, join, relative, resolve } from 'node:path';
 const exec = promisify(execFile);
 export const LINUX_MARKER = 'pi-bot-linux-tar-v1\n';
+export function linuxBundleDir(arch: string = process.arch): string {
+  if (arch !== 'x64' && arch !== 'arm64') throw new Error(`不支持的 Linux 架构: ${arch}`);
+  return `Pi Bot-linux-${arch}`;
+}
 // Validate every member BEFORE extracting; links cannot escape the bundle or be
 // used as ancestors. Python is a runtime prerequisite, never installed for users.
 export const EXTRACT_SCRIPT = String.raw`
 import tarfile, pathlib, posixpath, sys
-archive, destination = sys.argv[1:]
-root = 'Pi Bot-linux-x64'
+archive, destination, root = sys.argv[1:]
 with tarfile.open(archive, 'r:gz') as t:
     members = t.getmembers()
     if len(members) > 100000 or sum(m.size for m in members) > 4*1024**3:
@@ -44,7 +47,7 @@ export async function linuxInstallRoot(executable: string): Promise<string> {
   const root = await realpath(dirname(executable));
   let marker = '';
   try { marker = await readFile(join(root, '.pi-bot-linux-tar'), 'utf8'); } catch { /* unmarked/unsupported install */ }
-  if (marker !== LINUX_MARKER) throw new Error('此安装格式不支持原位更新，请手动安装官方 Linux x64 tar.gz 桌面包');
+  if (marker !== LINUX_MARKER) throw new Error('此安装格式不支持原位更新，请手动安装官方 Linux tar.gz 桌面包');
   if (basename(executable) !== 'Pi Bot') throw new Error('Linux 启动路径无效');
   if ((await stat(root)).uid !== process.getuid?.()) throw new Error('安装目录不属于当前用户，请手动更新；不自动提权');
   try {
@@ -63,12 +66,13 @@ export async function checkLinuxDataPaths(root: string, paths: string[]) {
 }
 export async function prepareLinuxUpdate(archive: string, executable: string, helper: string, node: string, parentPid: number): Promise<void> {
   const root = await linuxInstallRoot(executable);
+  const bundle = linuxBundleDir();
   // Same filesystem for rename. Existing installation is untouched during staging.
   const staging = await mkdtemp(join(dirname(root), '.pi-bot-update-'));
   let handedOff = false;
   try {
-    await exec('python3', ['-c', EXTRACT_SCRIPT, archive, staging], { timeout: 120000, maxBuffer: 1024 * 1024 });
-    const next = join(staging, 'Pi Bot-linux-x64');
+    await exec('python3', ['-c', EXTRACT_SCRIPT, archive, staging, bundle], { timeout: 120000, maxBuffer: 1024 * 1024 });
+    const next = join(staging, bundle);
     if (await readFile(join(next, '.pi-bot-linux-tar'), 'utf8') !== LINUX_MARKER) throw new Error('Linux 更新包缺少安装标识');
     for (const file of ['Pi Bot', 'resources/runtime/bin/node', 'resources/app.asar']) {
       if (!(await stat(join(next, file))).isFile()) throw new Error('Linux 更新包不完整');

@@ -19,8 +19,11 @@ test('manifest requires all complete platform packages and hashes exact bytes', 
     writeFileSync(join(dir, 'Pi-Bot-Android.apk'), 'abc'); writeFileSync(join(dir, 'Pi-Bot-Windows-x64-Setup.exe'), 'def');
     assert.throws(() => makeManifest(info, dir));
     writeFileSync(join(dir, 'pi-bot-desktop-linux-x64.tar.gz'), 'linux');
+    assert.throws(() => makeManifest(info, dir));
+    writeFileSync(join(dir, 'pi-bot-desktop-linux-arm64.tar.gz'), 'arm64');
     const result = makeManifest(info, dir);
     assert.equal(result.platforms['linux-x64'].size, 5);
+    assert.equal(result.platforms['linux-arm64'].size, 5);
     assert.equal(result.platforms.android.size, 3);
     assert.equal(result.platforms.android.sha256, 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
     assert.throws(() => makeManifest({ ...info, channel: 'stable' }, dir));

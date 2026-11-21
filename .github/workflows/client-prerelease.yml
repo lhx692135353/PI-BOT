@@ -141,7 +141,15 @@ jobs:
 
   linux:
     needs: identity
-    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            arch: x64
+          - os: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
@@ -157,13 +165,13 @@ jobs:
       - run: npm run pack:linux --workspace=pi-bot-desktop
       - name: Verify complete Linux update bundle
         run: |
-          tar -tzf desktop/out/linux/pi-bot-desktop-linux-x64.tar.gz | grep -F 'Pi Bot-linux-x64/.pi-bot-linux-tar'
-          test -f 'desktop/apps/desktop/out/Pi Bot-linux-x64/resources/runtime/bin/node'
+          tar -tzf desktop/out/linux/pi-bot-desktop-linux-${{ matrix.arch }}.tar.gz | grep -F "Pi Bot-linux-${{ matrix.arch }}/.pi-bot-linux-tar"
+          test -f "desktop/apps/desktop/out/Pi Bot-linux-${{ matrix.arch }}/resources/runtime/bin/node"
       - uses: actions/upload-artifact@v4
         with:
-          name: client-linux-desktop
+          name: client-linux-desktop-${{ matrix.arch }}
           if-no-files-found: error
-          path: desktop/out/linux/pi-bot-desktop-linux-x64.tar.gz
+          path: desktop/out/linux/pi-bot-desktop-linux-${{ matrix.arch }}.tar.gz
 
   publish:
     needs: [checks, identity, android, windows, linux]
@@ -195,8 +203,9 @@ jobs:
           path: release-assets
       - uses: actions/download-artifact@v4
         with:
-          name: client-linux-desktop
+          pattern: client-linux-desktop-*
           path: release-assets
+          merge-multiple: true
       - run: node scripts/client-update/manifest.mjs release-assets
       - name: Publish complete immutable test release
         env:
@@ -216,6 +225,7 @@ jobs:
           Android: Pi-Bot-Android.apk (fixed signing key, increasing versionCode).
           Windows x64: Pi-Bot-Windows-x64-Setup.exe (unsigned; Windows may display a warning).
           Linux x64: pi-bot-desktop-linux-x64.tar.gz (in-app verified replacement; python3 and writable installation required).
+          Linux arm64: pi-bot-desktop-linux-arm64.tar.gz (in-app verified replacement; python3 and writable installation required).
           Install only after finishing tasks, calls and phone control. Keep existing app data; do not uninstall first.
           Server compatibility: no new Server change is required by the update feature; see update-manifest.json.
           Download SHA256SUMS.txt to verify packages. This is a test prerelease, not a stable release.

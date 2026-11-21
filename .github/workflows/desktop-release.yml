@@ -52,8 +52,9 @@ jobs:
           path: downloads/windows
       - uses: actions/download-artifact@v4
         with:
-          name: pi-bot-linux-x64
+          pattern: pi-bot-linux-*
           path: downloads/linux
+          merge-multiple: true
       - name: Prepare assets and download-friendly checksums
         run: |
           python3 - <<'PY'
@@ -67,6 +68,15 @@ jobs:
                           if p.is_file() and p.name.endswith(('.exe', '.zip', '.tar.gz')))
           if not all(any(p.name.endswith(ext) for p in assets) for ext in ('.exe', '.zip', '.tar.gz')):
               raise SystemExit('Missing desktop release assets')
+          names = {p.name for p in assets}
+          for required in (
+              'pi-bot-desktop-linux-x64.tar.gz',
+              'pi-bot-service-linux-x64.tar.gz',
+              'pi-bot-desktop-linux-arm64.tar.gz',
+              'pi-bot-service-linux-arm64.tar.gz',
+          ):
+              if required not in names:
+                  raise SystemExit(f'Missing Linux release asset: {required}')
           checksums = []
           for source in assets:
               target = output / source.name
@@ -84,11 +94,11 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           cat > release-notes.md <<'EOF'
-          Windows 11 x64 beta (unsigned) and Linux x64 packages.
+          Windows 11 x64 beta (unsigned) and Linux x64 / arm64 packages.
 
           Windows: download Pi-Bot-Windows-x64-Setup.exe for user-level installation, or the Windows ZIP. The installer is unsigned; interactive installation, upgrade/uninstall and second-user isolation still require manual acceptance.
 
-          Linux: download the desktop or service-only .tar.gz package.
+          Linux: download the desktop or service-only .tar.gz package for your CPU (x64 or arm64).
 
           Download SHA256SUMS.txt alongside the packages to verify their hashes. macOS packages and automatic updates are not included in this release workflow.
 

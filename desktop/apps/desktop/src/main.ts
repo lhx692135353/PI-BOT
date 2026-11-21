@@ -1,6 +1,6 @@
 import { linuxInstallRoot, checkLinuxDataPaths, prepareLinuxUpdate } from './linux-updater.js';
 import { ClientUpdater } from './client-updater.js';
-import { hasActiveWork } from './update-policy.js';
+import { hasActiveWork, type UpdatePlatform } from './update-policy.js';
 import { errorInfo, httpErrorInfo } from "@pi-bot/runtime-contracts";
 import { protectWindowsDirectory } from '../../../packages/service/src/windows.js';
 import { app, BrowserWindow, ipcMain, shell, dialog, nativeImage, nativeTheme } from 'electron';
@@ -38,11 +38,15 @@ const client = new ServiceClient(event => { if(event.type==='service.status')dia
 function validSender(event: Electron.IpcMainInvokeEvent) { if (!window || event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame || event.senderFrame.url !== page) throw new Error('不受信任的 IPC 来源'); }
 declare const __PI_BOT_BUILD__: { version: string; buildNumber: number };
 const identity = typeof __PI_BOT_BUILD__ === 'undefined' ? { version: app.getVersion(), buildNumber: 0 } : __PI_BOT_BUILD__;
-const updater = new ClientUpdater(join(dataDir, 'updates'), identity.version, identity.buildNumber, process.platform === 'linux' ? 'linux-x64' : 'windows-x64',
+const updatePlatform: UpdatePlatform = process.platform === 'linux' && process.arch === 'arm64' ? 'linux-arm64'
+  : process.platform === 'linux' && process.arch === 'x64' ? 'linux-x64'
+  : 'windows-x64';
+const updater = new ClientUpdater(join(dataDir, 'updates'), identity.version, identity.buildNumber, updatePlatform,
   process.platform === 'linux' && app.isPackaged ? archive => prepareLinuxUpdate(archive, process.execPath, join(__dirname, '../assets/linux-update-helper.cjs'), join(process.resourcesPath, 'runtime/bin/node'), process.pid) : undefined);
-const updatesSupported = process.arch === 'x64' && (process.platform === 'win32' || process.platform === 'linux');
+const updatesSupported = (process.platform === 'win32' && process.arch === 'x64') ||
+  (process.platform === 'linux' && (process.arch === 'x64' || process.arch === 'arm64'));
 async function ensureUpdatesSupported() {
-  if (!updatesSupported) throw new Error('当前仅支持 Windows / Linux x64 在线更新');
+  if (!updatesSupported) throw new Error('当前仅支持 Windows x64 / Linux x64 / Linux arm64 在线更新');
   if (process.platform === 'linux') {
     if (!app.isPackaged) throw new Error('开发模式不执行在线更新，请安装官方 Linux tar.gz 桌面包');
     const root = await linuxInstallRoot(process.execPath);

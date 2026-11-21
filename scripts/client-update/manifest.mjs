@@ -4,7 +4,12 @@ import { resolve } from 'node:path';
 export function makeManifest(info, directory) {
   if (info.schemaVersion !== 1 || info.channel !== 'test' || !Number.isSafeInteger(info.buildNumber) || info.buildNumber <= 0 || info.version !== `0.3.${info.buildNumber}` || !/^[a-f0-9]{40}$/.test(info.commit)) throw new Error('Invalid build metadata');
   const platforms = {};
-  for (const [platform, file] of Object.entries({ android: 'Pi-Bot-Android.apk', 'windows-x64': 'Pi-Bot-Windows-x64-Setup.exe', 'linux-x64': 'pi-bot-desktop-linux-x64.tar.gz' })) {
+  for (const [platform, file] of Object.entries({
+    android: 'Pi-Bot-Android.apk',
+    'windows-x64': 'Pi-Bot-Windows-x64-Setup.exe',
+    'linux-x64': 'pi-bot-desktop-linux-x64.tar.gz',
+    'linux-arm64': 'pi-bot-desktop-linux-arm64.tar.gz',
+  })) {
     const path = resolve(directory, file), size = statSync(path).size;
     if (!size) throw new Error(`Empty ${file}`);
     platforms[platform] = { file, size, sha256: createHash('sha256').update(readFileSync(path)).digest('hex') };

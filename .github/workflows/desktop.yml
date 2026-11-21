@@ -30,7 +30,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-15]
+        include:
+          - os: ubuntu-24.04
+            arch: x64
+          - os: ubuntu-24.04-arm
+            arch: arm64
+          - os: macos-15
+            arch: arm64
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     steps:
@@ -54,7 +60,7 @@ jobs:
           PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/pibot-playwright
         run: |
           bash .github/scripts/install-ci-chromium.sh
-          node desktop/scripts/smoke-browser-runtime.mjs desktop/out/linux/pi-bot-service-linux-x64
+          node desktop/scripts/smoke-browser-runtime.mjs desktop/out/linux/pi-bot-service-linux-${{ matrix.arch }}
       - if: runner.os == 'macOS'
         name: Verify browser tests in the macOS runtime
         run: |
@@ -66,18 +72,18 @@ jobs:
           PI_BOT_DATA_DIR: ${{ runner.temp }}/pi-bot-smoke
           PI_BOT_LIBRARY_ROOT: ${{ runner.temp }}/pi-bot-library
         run: |
-          desktop/out/linux/pi-bot-service-linux-x64/pi-bot --help
+          desktop/out/linux/pi-bot-service-linux-${{ matrix.arch }}/pi-bot --help
           mkdir -p "$RUNNER_TEMP/pi bot bin"
-          ln -s "$PWD/desktop/out/linux/pi-bot-service-linux-x64/pi-bot" "$RUNNER_TEMP/pi bot bin/pi-bot"
+          ln -s "$PWD/desktop/out/linux/pi-bot-service-linux-${{ matrix.arch }}/pi-bot" "$RUNNER_TEMP/pi bot bin/pi-bot"
           "$RUNNER_TEMP/pi bot bin/pi-bot" --help
-          desktop/out/linux/pi-bot-service-linux-x64/pi-bot serve &
+          desktop/out/linux/pi-bot-service-linux-${{ matrix.arch }}/pi-bot serve &
           service_pid=$!
           trap 'kill "$service_pid"; wait "$service_pid" || true' EXIT
           "$RUNNER_TEMP/pi bot bin/pi-bot" status
       - if: runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
-          name: pi-bot-linux-x64
+          name: pi-bot-linux-${{ matrix.arch }}
           path: desktop/out/linux/*.tar.gz
       - if: runner.os == 'macOS'
         uses: actions/upload-artifact@v4
