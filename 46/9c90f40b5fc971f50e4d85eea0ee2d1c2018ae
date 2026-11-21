@@ -1,0 +1,14 @@
+desktop/tests/harness-e2e.test.ts
+  h_395c29b857facd 447
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "469c90f40b5fc971f50e4d85eea0ee2d1c2018ae",
+  "prompts": {},
+  "humans": {
+    "h_395c29b857facd": {
+      "author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
