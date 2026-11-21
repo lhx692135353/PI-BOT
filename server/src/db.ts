@@ -42,6 +42,7 @@ export interface Change {
   bot_id?: string;
   message_id?: string;
   content?: string;
+  stream?: boolean;
   presence?: boolean;
 }
 export class Tx {

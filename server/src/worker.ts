@@ -160,7 +160,7 @@ export class Worker {
                 const r = await tx.get("bot_runs", job.run_id);
                 if (!ours(r)) return void (lost = true);
                 await setContent(tx, r, content);
-                await tx.notify(r.lane === "task" ? { user_id: r.user_id, bot_id: r.bot_id } : { user_id: r.user_id, bot_id: r.bot_id, message_id: r.assistant_message_id, content });
+                if(r.lane === "task") await tx.notify({user_id:r.user_id,bot_id:r.bot_id});
               });
             }
           } else if(e.type === "observation") {

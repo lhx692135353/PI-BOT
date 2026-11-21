@@ -115,6 +115,7 @@ export const messageOut = (m: Row, tasks: Row[] = []) => ({
   seq: m.seq,
   role: m.role,
   content: m.content,
+  stream_seq: Number(m.stream_seq ?? 0),
   provenance:m.provenance??{client:"unknown"},
   attachments: m.attachments ?? [],
   images: (m.images ?? []).map((image: ChatImage & { id: string }) => ({ id: image.id, name: image.name, mime_type: image.mime_type })),
@@ -791,6 +792,7 @@ export async function setContent(tx: Tx, run: Row, content: string) {
     "UPDATE bot_messages SET content=$2, updated_at=now() WHERE message_id=$1 AND status='running'",
     [run.assistant_message_id, content],
   );
+  if(run.lane!=="task") await tx.notify({user_id:run.user_id,bot_id:run.bot_id,message_id:run.assistant_message_id,stream:true});
   if (content.trim() && run.origin !== "automation") await tx.rows("UPDATE bot_runs SET first_reply_at=coalesce(first_reply_at,now()) WHERE run_id=$1", [run.run_id]);
 }
 export interface ToolEvent {
