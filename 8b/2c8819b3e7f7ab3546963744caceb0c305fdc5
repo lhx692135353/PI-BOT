@@ -1,0 +1,21 @@
+desktop/scripts/smoke-browser-runtime.mjs
+  s_989d5a43a6107d::t_e19a141c187524 1,15-32
+.github/scripts/install-ci-chromium.sh
+  s_989d5a43a6107d::t_0f56eb20db7453 5-9,25-27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8b2c8819b3e7f7ab3546963744caceb0c305fdc5",
+  "prompts": {},
+  "sessions": {
+    "s_989d5a43a6107d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "3b8b4ca5-cfe9-45be-b225-302c1d34035b",
+        "model": "default"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
