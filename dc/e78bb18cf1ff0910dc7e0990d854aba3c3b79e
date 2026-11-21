@@ -1,0 +1,14 @@
+server/src/sockets.ts
+  h_395c29b857facd 55-56,64
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "dce78bb18cf1ff0910dc7e0990d854aba3c3b79e",
+  "prompts": {},
+  "humans": {
+    "h_395c29b857facd": {
+      "author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
