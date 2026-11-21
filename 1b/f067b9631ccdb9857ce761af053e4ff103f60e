@@ -1,0 +1,14 @@
+desktop/packages/service/src/application.ts
+  h_395c29b857facd 181
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1bf067b9631ccdb9857ce761af053e4ff103f60e",
+  "prompts": {},
+  "humans": {
+    "h_395c29b857facd": {
+      "author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
