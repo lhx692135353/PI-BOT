@@ -164,6 +164,7 @@ data class MessageImage(val id: String, val name: String, @SerialName("mime_type
 
 @Serializable
 data class Message(
+    @SerialName("stream_seq") val streamSeq: Long? = null,
     val attachments: List<ReportAttachment> = emptyList(),
     val id: String,
     @SerialName("bot_id") val botId: String,

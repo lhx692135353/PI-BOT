@@ -1,5 +1,7 @@
 package dev.pibot.android.ui
 
+import dev.pibot.android.domain.liveReplySegments
+
 import androidx.compose.runtime.collectAsState
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -392,8 +394,8 @@ private fun MessageItem(message: Message, onOpenBot: (String) -> Unit, repositor
             RelayItem(message, from, onOpenBot, bubbleWidth)
         } else {
             val user = message.role == "user"
-            val remarks = if (message.replySegments.isEmpty()) message.progress else emptyList()
-            val showContent = message.content.isNotBlank() && message.replySegments.none { it.phase == "answer" }
+            val remarks = if (message.liveReplySegments.isEmpty()) message.progress else emptyList()
+            val showContent = message.content.isNotBlank() && message.liveReplySegments.none { it.phase == "answer" }
             Column(Modifier.fillMaxWidth(), horizontalAlignment = if (user) Alignment.End else Alignment.Start) {
                 val bubble = Modifier
                     .widthIn(max = bubbleWidth)
@@ -405,7 +407,7 @@ private fun MessageItem(message: Message, onOpenBot: (String) -> Unit, repositor
                     }
                     Spacer(Modifier.height(6.dp))
                 }
-                if (!user) for (segment in message.replySegments.distinctBy { it.id }) {
+                if (!user) for (segment in message.liveReplySegments.distinctBy { it.id }) {
                     CopyableMessage(text = segment.text, modifier = bubble)
                     Text(clockTime(segment.createdAt), color = Muted, fontSize = 11.sp, modifier = Modifier.padding(vertical = 3.dp))
                     Spacer(Modifier.height(3.dp))
@@ -455,7 +457,7 @@ private fun MessageItem(message: Message, onOpenBot: (String) -> Unit, repositor
                     }
                     Spacer(Modifier.height(6.dp))
                 }
-                if (user && message.content.isNotBlank() || !user && (showContent || message.replySegments.isEmpty())) {
+                if (user && message.content.isNotBlank() || !user && (showContent || message.liveReplySegments.isEmpty())) {
                     when {
                         message.content.isNotBlank() -> CopyableMessage(
                             text = message.content, modifier = bubble,
@@ -475,7 +477,7 @@ private fun MessageItem(message: Message, onOpenBot: (String) -> Unit, repositor
                     "cancelled" -> "已停止"
                     else -> null
                 }
-                if (message.replySegments.isEmpty() || note != null) Text(listOfNotNull((dayLabel(message.createdAt) + " " + clockTime(message.createdAt)).takeIf { message.replySegments.isEmpty() }, note).joinToString(" · "), fontSize = 11.sp, color = if (message.status == "failed") Danger else Muted)
+                if (message.liveReplySegments.isEmpty() || note != null) Text(listOfNotNull((dayLabel(message.createdAt) + " " + clockTime(message.createdAt)).takeIf { message.liveReplySegments.isEmpty() }, note).joinToString(" · "), fontSize = 11.sp, color = if (message.status == "failed") Danger else Muted)
             }
         }
     }

@@ -47,13 +47,13 @@ struct MessageRow: View {
 
     private var regular: some View {
         let user = message.role == "user"
-        let remarks = message.replySegments.isEmpty ? message.progress : []
-        let showContent = !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !message.replySegments.contains { $0.phase == "answer" }
+        let remarks = message.liveReplySegments.isEmpty ? message.progress : []
+        let showContent = !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !message.liveReplySegments.contains { $0.phase == "answer" }
         let tasks = message.agentTasks.filter { $0.kind != "background" }
         return VStack(alignment: user ? .trailing : .leading, spacing: 6) {
             if !user {
                 ForEach(Array(remarks.enumerated()), id: \.offset) { _, line in bubble(line) }
-                ForEach(message.replySegments) { segment in
+                ForEach(message.liveReplySegments) { segment in
                     bubble(segment.text)
                     Text(clockTime(segment.createdAt)).font(.system(size: 11)).foregroundStyle(Palette.muted)
                 }
@@ -74,7 +74,7 @@ struct MessageRow: View {
                 }
                 .frame(maxWidth: bubbleWidth, alignment: user ? .trailing : .leading)
             }
-            if (user && !message.content.isEmpty) || (!user && (showContent || message.replySegments.isEmpty)) {
+            if (user && !message.content.isEmpty) || (!user && (showContent || message.liveReplySegments.isEmpty)) {
                 if !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     bubble(message.content, user: user, markdown: !user)
                 } else if message.status == "running" {
@@ -104,8 +104,8 @@ struct MessageRow: View {
         case "cancelled": "已停止"
         default: nil
         }
-        if message.replySegments.isEmpty || note != nil {
-            let time = message.replySegments.isEmpty ? dayLabel(message.createdAt) + " " + clockTime(message.createdAt) : nil
+        if message.liveReplySegments.isEmpty || note != nil {
+            let time = message.liveReplySegments.isEmpty ? dayLabel(message.createdAt) + " " + clockTime(message.createdAt) : nil
             Text([time, note].compactMap { $0 }.joined(separator: " · "))
                 .font(.system(size: 11))
                 .foregroundStyle(message.status == "failed" ? Palette.danger : Palette.muted)
