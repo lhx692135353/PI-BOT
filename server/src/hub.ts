@@ -113,7 +113,7 @@ export class Hub {
       if (!set!.size) this.listeners.delete(userId);
     };
   }
-  hasSubscribers(userId:string){return !!this.listeners.get(userId)?.size;}
+  hasSubscribers(userId:string){return !!this.listeners.get(userId)?.size || [...this.devices.values()].some(c=>c.userId===userId);}
   publish(userId: string, event: UserEvent) {
     for (const listener of this.listeners.get(userId) ?? []) {
       try {
