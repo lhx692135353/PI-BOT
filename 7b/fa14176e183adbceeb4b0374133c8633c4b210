@@ -1,0 +1,30 @@
+server/migrations/0034-stream-version.sql
+  h_395c29b857facd 1-12
+server/src/bots.ts
+  h_395c29b857facd 118,795
+server/src/db.ts
+  h_395c29b857facd 45
+server/src/hub.ts
+  h_395c29b857facd 16,116
+server/src/migrate.ts
+  h_395c29b857facd 11
+server/src/sockets.ts
+  h_395c29b857facd 1,45-56,61-62,186-188
+server/src/streams.ts
+  h_395c29b857facd 1-20
+server/src/worker.ts
+  h_395c29b857facd 163
+server/tests/streams.test.ts
+  h_395c29b857facd 1-25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7bfa14176e183adbceeb4b0374133c8633c4b210",
+  "prompts": {},
+  "humans": {
+    "h_395c29b857facd": {
+      "author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
