@@ -229,6 +229,8 @@ export async function botOut(tx: Tx, b: Row) {
     created_at: b.created_at,
     updated_at: b.updated_at,
     last_active_at: b.last_active_at,
+    last_message_at: b.last_message_at,
+    ...await unreadState(tx, b.user_id, b.bot_id),
     latest_run: runOut(run),
     active_tasks: tasks.map(taskOut),
     activity,
@@ -965,4 +967,26 @@ export async function messagesPage(
   const tasks = await messageTasks(tx, page);
   const attachments = await messageAttachments(tx, page.map(m => m.message_id));
   return { messages: page.map((m) => messageOut({...m,attachments:attachments.get(m.message_id)??[]}, tasks)), has_more: rows.length > limit };
+}
+
+/** Completed public assistant replies only; failed/cancelled turns are not unread. */
+export async function unreadState(tx: Tx, userId: string, botId: string) {
+  const row = await tx.one(`SELECT count(*)::int AS unread_count,
+    coalesce((SELECT last_read_seq FROM bot_reads WHERE user_id=$2 AND bot_id=$1),0) AS last_read_seq
+    FROM bot_messages WHERE bot_id=$1 AND visibility='public' AND role='assistant' AND status='completed'
+    AND seq>coalesce((SELECT last_read_seq FROM bot_reads WHERE user_id=$2 AND bot_id=$1),0)`, [botId,userId]);
+  return { unread_count: row!.unread_count, last_read_seq: Number(row!.last_read_seq) };
+}
+export async function markBotRead(tx: Tx, userId: string, botId: string, seq: number) {
+  await ownBot(tx,userId,botId);
+  // Do not allow a client to pre-read future replies or a running placeholder.
+  const last = await tx.one(`SELECT coalesce(max(seq),0) AS seq FROM bot_messages
+    WHERE bot_id=$1 AND visibility='public' AND status<>'running' AND seq<=$2
+    AND seq<coalesce((SELECT min(seq) FROM bot_messages WHERE bot_id=$1
+      AND role='assistant' AND status='running'),9223372036854775807)`,[botId,seq]);
+  await tx.rows(`INSERT INTO bot_reads(user_id,bot_id,last_read_seq) VALUES($1,$2,$3)
+    ON CONFLICT(user_id,bot_id) DO UPDATE SET last_read_seq=greatest(bot_reads.last_read_seq,excluded.last_read_seq)`,
+    [userId,botId,last!.seq]);
+  await tx.notify({user_id:userId,bot_id:botId});
+  return unreadState(tx,userId,botId);
 }

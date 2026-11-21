@@ -80,7 +80,7 @@ async function ownTask(tx: Tx, userId: string, claims: LlmClaims, taskId: string
   return { ...t!, attachments:reports.map(artifactOut),status: t!.run_status ?? t!.status };
 }
 async function resolveTarget(tx: Tx, userId: string, name: string, selfId: string) {
-  const bots = await tx.rows("SELECT * FROM bots WHERE user_id=$1 AND archived_at IS NULL ORDER BY is_main DESC, last_active_at DESC", [userId]);
+  const bots = await tx.rows("SELECT * FROM bots WHERE user_id=$1 AND archived_at IS NULL ORDER BY is_main DESC, last_message_at DESC, bot_id", [userId]);
   const key = name.trim(),
     lower = key.toLowerCase();
   const partial = bots.filter((b) => String(b.name).toLowerCase().includes(lower));

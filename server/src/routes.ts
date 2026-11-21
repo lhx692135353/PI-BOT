@@ -1,3 +1,4 @@
+import { markBotRead } from "./bots.js";
 import { endpointExperience, resolveExperienceConflict } from './endpoint-experience.js';
 import {documentRoutes,readableDocument} from './documents.js';
 import { isCliRuntime } from "./cli.js";
@@ -525,7 +526,7 @@ export const routes: Route[] = [
     method: "GET", path: "/bots", auth: "actor", tag: "bots", summary: "我的 Bot 列表",
     handler: async ({ tx, hub, s, user }) => {
       await ensureMainBot(tx, user.user_id);
-      const rows = await tx.rows("SELECT * FROM bots WHERE user_id=$1 AND archived_at IS NULL ORDER BY is_main DESC,last_active_at DESC", [user.user_id]);
+      const rows = await tx.rows("SELECT * FROM bots WHERE user_id=$1 AND archived_at IS NULL ORDER BY is_main DESC,last_message_at DESC,bot_id", [user.user_id]);
       const bots = [];
       for (const b of rows) bots.push(await botOut(tx, b));
       return { bots, computer: await computerStatus(tx, hub, user.user_id), devices: await deviceList(tx, hub, user.user_id), cloud_computer: await cloudComputer(tx, s, user.user_id) };
@@ -542,6 +543,11 @@ export const routes: Route[] = [
   {
     method: "GET", path: "/bots/:id", auth: "actor", tag: "bots", summary: "Bot 详情",
     handler: async ({ tx, user, params }) => botOut(tx, await ownBot(tx, user.user_id, params.id)),
+  },
+  {
+    method: "POST", path: "/bots/:id/read", auth: "actor", tag: "bots", summary: "推进多端共享的已读游标",
+    body: z.object({ seq: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER) }),
+    handler: async ({ tx, user, params, body }) => markBotRead(tx,user.user_id,params.id,body.seq),
   },
   {
     method: "GET", path: "/bots/:id/goals", auth: "actor", tag: "bots", summary: "这个 Bot 自己记下的目标",
