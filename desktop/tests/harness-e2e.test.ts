@@ -444,6 +444,7 @@ test('the Mac harness logs in, binds itself and runs bots against its library', 
   assert.equal(readFileSync(join(dir, 'pi-bot', 'writer', 'notes', 'hello.md'), 'utf8'), '# Hello from Pi Bot');
   assert.ok(events.some(e => e.type === 'bot.mood' && e.mood === 'working'), 'boards and UI see the bot working');
   assert.ok(events.some(e => e.type === 'delta'), 'streaming text reaches the UI');
+  assert.ok(events.some(e => e.type === 'stream' && e.reset && e.offset === 0), 'versioned streams pass through Application.emit to UI');
 
   const bobToken = (await http('POST', '/auth/login', { username: 'bob', password: 'bob-password' }, '')).json.access_token;
   const files = await http('GET', `/bots/${bot.id}/files?path=notes`, undefined, bobToken);
