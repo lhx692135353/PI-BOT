@@ -178,7 +178,7 @@ export class Application {
       case 'event': {
         const e = m.event ?? {};
         if (e.type === 'presence') { this.o.emit({type:'bots'}); return; }
-        if (e.type === 'bot' || e.type === 'delta' || e.type === 'bots') this.o.emit(e as AppEvent);
+        if (e.type === 'bot' || e.type === 'delta' || e.type === 'stream' || e.type === 'bots') this.o.emit(e as AppEvent);
         return;
       }
     }
