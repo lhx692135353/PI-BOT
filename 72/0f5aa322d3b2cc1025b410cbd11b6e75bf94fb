@@ -1,0 +1,42 @@
+android/app/src/main/java/dev/pibot/android/data/PiBotApi.kt
+  h_395c29b857facd 167
+android/app/src/main/java/dev/pibot/android/data/PiBotRepository.kt
+  h_395c29b857facd 3-5,164,444-454
+android/app/src/main/java/dev/pibot/android/domain/Timeline.kt
+  h_395c29b857facd 17,38,104-115
+android/app/src/main/java/dev/pibot/android/ui/TimelineScreen.kt
+  h_395c29b857facd 3-4,397-398,410,460,480
+android/app/src/test/java/dev/pibot/android/StreamTest.kt
+  h_395c29b857facd 1-21
+desktop/apps/desktop/ui/main.tsx
+  h_395c29b857facd 12,333,337
+desktop/apps/desktop/ui/timeline-cache.ts
+  h_395c29b857facd 51,62-78
+desktop/apps/desktop/ui/timeline.tsx
+  h_395c29b857facd 1,112
+desktop/packages/protocol/src/index.ts
+  h_395c29b857facd 85,114
+desktop/tests/stream.test.ts
+  h_395c29b857facd 1-17
+ios/PiBot/Conversation/MessageRow.swift
+  h_395c29b857facd 50-51,56,77,107-108
+ios/PiBotKit/Sources/PiBotKit/AppStore.swift
+  h_395c29b857facd 100,389-392
+ios/PiBotKit/Sources/PiBotKit/Models.swift
+  h_395c29b857facd 476,497,512
+ios/PiBotKit/Sources/PiBotKit/Timeline.swift
+  h_395c29b857facd 19,44,54,168-190
+ios/PiBotKit/Tests/PiBotKitTests/StreamTests.swift
+  h_395c29b857facd 1-18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "720f5aa322d3b2cc1025b410cbd11b6e75bf94fb",
+  "prompts": {},
+  "humans": {
+    "h_395c29b857facd": {
+      "author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
