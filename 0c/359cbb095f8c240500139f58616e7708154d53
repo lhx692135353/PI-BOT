@@ -1,0 +1,14 @@
+server/tests/stream-subscribers.test.ts
+  h_395c29b857facd 1-9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0c359cbb095f8c240500139f58616e7708154d53",
+  "prompts": {},
+  "humans": {
+    "h_395c29b857facd": {
+      "author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
