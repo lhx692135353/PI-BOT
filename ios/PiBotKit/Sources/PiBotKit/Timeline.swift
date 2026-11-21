@@ -51,7 +51,7 @@ public struct Timeline: Hashable, Sendable {
 
     /// Tool the bot is running right now, for the character's mood.
     public var runningTool: String? {
-        messages.last { $0.status == "running" && $0.streamSeq == nil }?.tools.last { $0.state == "running" }?.name
+        messages.last { $0.status == "running" }?.tools.last { $0.state == "running" }?.name
     }
 }
 
