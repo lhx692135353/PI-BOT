@@ -1,0 +1,14 @@
+desktop/apps/desktop/ui/timeline.tsx
+  h_395c29b857facd 238,243,245-249
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "16bc0f0232f5ab6eb77830b0d7ddb9ced4bdcdf3",
+  "prompts": {},
+  "humans": {
+    "h_395c29b857facd": {
+      "author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
