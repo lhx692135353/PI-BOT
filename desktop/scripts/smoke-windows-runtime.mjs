@@ -9,7 +9,7 @@ if (process.platform !== 'win32') throw new Error('Windows-only smoke test');
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 // Stage outside the repository so ancestor node_modules cannot hide missing runtime dependencies.
 const stage = mkdtempSync(join(tmpdir(), 'Pi Bot runtime 中文 '));
-let service;
+let service, serviceClosed;
 try {
   const runtime = join(stage, 'runtime');
   // Node's native cpSync can misencode non-ASCII Windows destinations; the
@@ -23,10 +23,19 @@ try {
   const node = join(runtime, 'bin/node.exe');
   const documentJob = (job,bytes) => new Promise((resolve,reject) => {
     const child=fork(join(runtime,'document-worker.mjs'),[],{execPath:node,execArgv:[],serialization:'advanced',windowsHide:true,stdio:['ignore','ignore','pipe','ipc'],cwd:stage});
-    let diagnostic='';child.stderr.on('data',b=>{diagnostic=(diagnostic+b).slice(-2000);});
-    const timer=setTimeout(()=>{child.kill();reject(new Error('Packaged document worker timed out'));},30000);
-    child.once('error',reject);child.once('exit',code=>{clearTimeout(timer);if(code)reject(new Error(`Packaged document worker failed: ${diagnostic}`));});
-    child.once('message',message=>{clearTimeout(timer);child.kill();message.ok?resolve(message.result):reject(new Error(message.error));});child.send({job,bytes});
+    let diagnostic='', message, failure;
+    child.stderr.on('data',b=>{diagnostic=(diagnostic+b).slice(-2000);});
+    const timer=setTimeout(()=>{failure=new Error('Packaged document worker timed out');child.kill();},30000);
+    child.once('error',error=>{failure=error;});
+    // Windows keeps executables and pipes open until close, not merely until a result or exit.
+    child.once('close',code=>{
+      clearTimeout(timer);
+      if(failure)reject(failure);
+      else if(message)message.ok?resolve(message.result):reject(new Error(message.error));
+      else reject(new Error(`Packaged document worker exited without a result (${code}): ${diagnostic}`));
+    });
+    child.once('message',result=>{message=result;child.kill();});
+    child.send({job,bytes},error=>{if(error){failure=error;child.kill();}});
   });
   for(const [name,content] of [['测试.docx',{paragraphs:[{text:'随包文档验证'}]}],['测试.xlsx',{sheets:[{name:'验证',rows:[['随包文档验证']]}]}]]){
     const generated=await documentJob({action:'write',name,content});
@@ -34,6 +43,7 @@ try {
     if(!JSON.stringify(read).includes('随包文档验证'))throw new Error('Packaged document roundtrip lost Chinese content');
   }
   service = spawn(node, [join(runtime, 'server.mjs')], { cwd: stage, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+  serviceClosed = new Promise(resolve => service.once('close', resolve));
   service.stdin.on('error', () => {});
   let stderr = ''; service.stderr.on('data', b => { stderr = (stderr + b).slice(-4000); });
   await new Promise((resolve, reject) => {
@@ -44,17 +54,15 @@ try {
   });
   const cli = spawn(node, [join(runtime, 'cli.mjs'), 'status'], { cwd: stage, env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
   let output = ''; cli.stdout.on('data', b => { output += b; }); cli.stderr.on('data', b => { stderr += b; });
-  await new Promise((resolve, reject) => { cli.once('error', reject); cli.once('exit', code => code === 0 ? resolve() : reject(new Error(`Standalone CLI failed: ${stderr}`))); });
+  await new Promise((resolve, reject) => { cli.once('error', reject); cli.once('close', code => code === 0 ? resolve() : reject(new Error(`Standalone CLI failed: ${stderr}`))); });
   JSON.parse(output);
-  const exit = new Promise(resolve => service.once('exit', resolve));
   service.stdin.end();
-  const code = await exit;
+  const code = await serviceClosed;
   if (code !== 0) throw new Error(`Standalone shutdown failed (${code})`);
   console.log('Standalone Windows runtime and authenticated IPC smoke passed.');
 } finally {
-  if (service && service.exitCode === null) {
-    service.kill();
-    await new Promise(resolve => service.once('exit', resolve));
-  }
-  rmSync(stage, { recursive: true, force: true });
+  if (service && service.exitCode === null && service.signalCode === null) service.kill();
+  if (serviceClosed) await serviceClosed;
+  // Antivirus/indexing may briefly retain handles even after all child processes close.
+  rmSync(stage, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
 }
