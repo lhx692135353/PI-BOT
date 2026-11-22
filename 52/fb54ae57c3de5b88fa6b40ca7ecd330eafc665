@@ -1,0 +1,97 @@
+server/tests/device-connection.test.ts
+  s_bcd85f7e415fb9::t_dd3909ce048139 1-103,105-169,220-353
+  s_bcd85f7e415fb9::t_e6d026d5c33b4a 104
+  s_bcd85f7e415fb9::t_ae71e611e7b56d 170-185,188,192-219
+  s_bcd85f7e415fb9::t_5a9b87122575bd 186-187,189-191
+server/src/bots.ts
+  s_c61a47933d555a::t_98c848b959bc47 618
+desktop/packages/service/src/log.ts
+  s_243a52f58022fa::t_3950d3b02224e5 4-7
+packages/runtime-contracts/src/index.ts
+  s_c61a47933d555a::t_90fb1252df1642 135
+server/tests/device-status.test.ts
+  s_c61a47933d555a::t_2fa6b6971e05d8 1-5,7-30
+  s_c61a47933d555a::t_34db49025275f8 6
+  s_c61a47933d555a::t_0d8953b52ed38e 31-44
+server/tests/integration.test.ts
+  s_c61a47933d555a::t_bf99d48fb29d00 296
+desktop/packages/protocol/src/index.ts
+  s_c61a47933d555a::t_3e4ceb0fd9ddf4 39
+desktop/packages/service/src/cloud.ts
+  s_243a52f58022fa::t_893fa6c1b49782 68-73,76,78-80,82-96
+  s_243a52f58022fa::t_78d1f094164fec 102-103,107,110,112-118,121,124,127-138,140-142,144-145,147,149-152
+packages/agent/src/tasks.ts
+  s_c61a47933d555a::t_9ffa4e12a580cd 6
+  s_c61a47933d555a::t_49d662198f7a09 22-34
+  s_c61a47933d555a::t_82f5022faedd85 21
+server/src/routes.ts
+  s_c61a47933d555a::t_edea56b7f96c55 371-377
+  s_c61a47933d555a::t_bf4a2a48ff274a 49
+  s_c61a47933d555a::t_8b799ef5966698 370
+server/src/targets.ts
+  s_c61a47933d555a::t_41fda9a49c1100 212
+server/src/runs.ts
+  s_bcd85f7e415fb9::t_55245c245e602f 298-299
+  s_bcd85f7e415fb9::t_c8ef9f661887e2 314
+  s_c61a47933d555a::t_8d0265b8b0c457 30-31
+desktop/tests/cloud.test.ts
+  s_243a52f58022fa::t_0e2614eef62ef3 9-11
+  s_243a52f58022fa::t_807ae9655899b5 5-8
+  s_243a52f58022fa::t_4b7b06e0ab1b6f 272-295
+  s_243a52f58022fa::t_fc4c111abe98ef 99-271
+server/src/sockets.ts
+  s_bcd85f7e415fb9::t_29bd669614eb06 136
+  s_bcd85f7e415fb9::t_4d9234fbc4945c 126-127
+  s_bcd85f7e415fb9::t_6d7199ba7b54dc 143-160,164-168
+  s_bcd85f7e415fb9::t_939a9b08d16dd2 172,176-177
+  s_bcd85f7e415fb9::t_126f884d8b569c 85-101,104-106
+  s_bcd85f7e415fb9::t_2e7103258b06d0 9
+  s_bcd85f7e415fb9::t_7c5d6cf832d170 171
+  s_bcd85f7e415fb9::t_cb2ae5c9ff76d4 174
+desktop/packages/service/src/application.ts
+  s_243a52f58022fa::t_d52338179824ce 253
+  s_243a52f58022fa::t_28e964befc6b24 106
+server/src/voice.ts
+  s_c61a47933d555a::t_dfbae0ec5d6bf6 575-578
+  s_c61a47933d555a::t_13a01d0de0e978 2
+  s_c61a47933d555a::t_3e6a9e4ce3f184 63
+packages/agent/tests/device-status.test.ts
+  s_c61a47933d555a::t_cdf19bb12f8646 1-24
+desktop/apps/desktop/src/main.ts
+  s_c61a47933d555a::t_9ee8ccf1efa320 177-180
+  s_c61a47933d555a::t_9bddf4f7958c34 6
+server/src/devices.ts
+  s_c61a47933d555a::t_9aea54d9aef5c2 16-29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "52fb54ae57c3de5b88fa6b40ca7ecd330eafc665",
+  "prompts": {},
+  "sessions": {
+    "s_243a52f58022fa": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "1e0118be-6820-4510-b8a9-4717978d0129",
+        "model": "litellm-gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    },
+    "s_bcd85f7e415fb9": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f344bcf4-4746-418b-ba9a-f30ea1cb8ab5",
+        "model": "litellm-gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    },
+    "s_c61a47933d555a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "8c74d3ab-86ef-4b6d-962b-5b010dc53958",
+        "model": "litellm-gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
