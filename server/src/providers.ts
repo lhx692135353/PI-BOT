@@ -14,7 +14,7 @@ export interface CatalogModel {
 /** Server-side search tools for the search backend's own request; xAI re-sends results on every server-side turn. */
 export function providerSearchTools(provider: string): { type: string }[] {
   if (provider === "xai") return [{ type: "web_search" }, { type: "x_search" }];
-  if (provider === "bailian") return [{ type: "web_search" }];
+  if (provider === "bailian" || provider === "custom") return [{ type: "web_search" }];
   return [];
 }
 

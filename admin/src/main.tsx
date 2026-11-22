@@ -387,13 +387,11 @@ function ModelForm({ model, onClose, onSaved }: { model?: Model; onClose: () => 
           </label>
         )}
         {known && <p className="muted small">语音模型可以不选。不选则这个模型不能打电话。</p>}
-        {known && (
-          <label className="check">
-            <input type="checkbox" checked={form.provider_search} onChange={(e) => set({ provider_search: e.target.checked })} />
-            用作联网搜索
-          </label>
-        )}
-        {known && <p className="muted small">{form.provider === "xai" ? "打开后，未配置 Tavily 时，web_search 由这个模型调用 xAI 检索网页和 X，只把精简结果交给任务。建议选便宜的模型。" : "打开后，未配置 Tavily 时，web_search 由这个模型调用百炼网页检索，只把精简结果交给任务。模型需要支持这项能力。"}</p>}
+        <label className="check">
+          <input type="checkbox" checked={form.provider_search} onChange={(e) => set({ provider_search: e.target.checked })} />
+          用作联网搜索
+        </label>
+        <p className="muted small">{form.provider === "xai" ? "打开后，未配置 Tavily 时，web_search 由这个模型调用 xAI 检索网页和 X，只把精简结果交给任务。建议选便宜的模型。" : form.provider === "bailian" ? "打开后，未配置 Tavily 时，web_search 由这个模型调用百炼网页检索，只把精简结果交给任务。模型需要支持这项能力。" : "仅在模型及网关支持 Responses API 原生 web_search 时开启。默认搜索模式下，未配置 Tavily 时由这个模型检索，只把精简结果交给任务；用量计入该模型。"}</p>
         <label className="check"><input type="checkbox" checked={form.capabilities?.vision ?? true} onChange={e=>set({capabilities:{chat:true,voice:false,tools:true,reasoning:"unknown",...form.capabilities,vision:e.target.checked}})}/>支持图片输入</label>
         <label className="check"><input type="checkbox" checked={form.capabilities?.tools ?? true} onChange={e=>set({capabilities:{chat:true,vision:true,voice:false,reasoning:"unknown",...form.capabilities,tools:e.target.checked}})}/>支持原生工具调用</label>
         <label>推理模式
@@ -475,8 +473,8 @@ function ModelsPage() {
               <dd>{m.provider_model}</dd>
               <dt>语音</dt>
               <dd>{m.voice_model || "未开通"}</dd>
-              {(m.provider === "xai" || m.provider === "bailian") && <><dt>搜索</dt>
-              <dd>{m.provider_search ? "用作联网搜索" : "关闭"}</dd></>}
+              <dt>搜索</dt>
+              <dd>{m.provider_search ? "用作联网搜索" : "关闭"}</dd>
               {m.provider === "custom" && <><dt>接口</dt>
               <dd className="mono">{m.base_url}</dd></>}
               <dt>上下文</dt>

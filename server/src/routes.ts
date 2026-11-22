@@ -163,7 +163,7 @@ function normalizeModel(body: { provider?: string; base_url?: string; voice_mode
     provider,
     base_url: fixed ?? raw,
     voice_model: typeof voice === "string" && voice.trim() ? voice.trim() : null,
-    provider_search: (provider === "xai" || provider === "bailian") && requested,
+    provider_search: requested,
   };
 }
 async function computerStatus(tx: Tx, hub: Hub, userId: string) {

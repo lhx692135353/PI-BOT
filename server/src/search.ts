@@ -16,7 +16,7 @@ export function selectBackend(s: Settings, providerModel?: Row | null): Backend 
 /** Every web_search goes through one backend; Tavily wins in auto mode because it returns snippets only. */
 export async function searchBackend(tx: Tx, s: Settings) {
   const model = s.searchBackend === "tavily" ? null : await tx.one(
-    "SELECT * FROM models WHERE enabled AND provider_search AND provider IN ('xai','bailian') ORDER BY is_default DESC, created_at LIMIT 1",
+    "SELECT * FROM models WHERE enabled AND provider_search AND provider IN ('xai','bailian','custom') ORDER BY is_default DESC, created_at LIMIT 1",
   );
   return selectBackend(s, model);
 }
@@ -252,6 +252,7 @@ export class ProviderSearch {
             { role: "user", content: ["auto", "all"].includes(language) ? query : `${query}\n（结果语言：${language}）` },
           ],
           tools: providerSearchTools(model.provider),
+          ...(model.provider === "custom" ? { tool_choice: "required" } : {}),
           ...(model.provider === "xai" ? { max_turns: this.s.providerSearchMaxTurns } : {}),
           max_output_tokens: Math.min(4000, model.max_tokens),
           stream: false, store: false,
@@ -260,15 +261,22 @@ export class ProviderSearch {
     } catch {
       return fail(502, "联网搜索超时或连接失败，请稍后重试");
     }
-    if (response.status === 429) fail(503, "搜索请求过于频繁，请稍后重试");
     if (!response.ok) {
       await response.body?.cancel().catch(() => {});
-      fail(502, "搜索服务暂时不可用，请稍后重试");
+      if (response.status === 429) fail(503, "搜索请求过于频繁，请稍后重试");
+      if ([401, 403].includes(response.status)) fail(502, `搜索模型认证或访问被拒绝（HTTP ${response.status}），请管理员检查模型密钥和权限`);
+      if ([400, 422].includes(response.status)) fail(502, `搜索模型拒绝原生联网搜索请求（HTTP ${response.status}），请确认模型及接口支持 Responses API 的 web_search`);
+      fail(502, `搜索服务暂时不可用（HTTP ${response.status}），请稍后重试`);
     }
     const data = await response.json().catch(() => null) as Row | null;
     if (who) await recordUsage(this.db, who, model.model_id, usageFrom(data));
-    if (!data || data.status === "failed") fail(502, "搜索服务返回格式异常");
-    const page = providerPage(data!);
+    if (!data || typeof data !== "object" || Array.isArray(data)) return fail(502, "搜索服务返回格式异常");
+    if (data.error || ["failed", "incomplete", "cancelled"].includes(data.status)) fail(502, "搜索模型返回失败或未完成，请检查模型的原生联网搜索能力");
+    if (model.provider === "custom" && (!Array.isArray(data.output)
+      || !data.output.some((item: Row) => item?.type === "web_search_call" && item.status === "completed"))) {
+      fail(502, "自定义模型未完成原生联网搜索，请确认模型及接口支持 Responses API 的 web_search");
+    }
+    const page = providerPage(data);
     if (page.results.length) {
       this.cache.delete(key);
       this.cache.set(key, { until: this.now() + 300000, page });
