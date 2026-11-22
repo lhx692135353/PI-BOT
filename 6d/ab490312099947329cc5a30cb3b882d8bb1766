@@ -1,0 +1,27 @@
+desktop/tests/windows-smoke-cleanup.test.ts
+  s_c61a47933d555a::t_4e1860dd698a6b 1-57,59-68
+  s_c61a47933d555a::t_595f37a41ccad1 58
+desktop/scripts/smoke-windows-runtime.mjs
+  s_c61a47933d555a::t_20d5a5d06caa3c 57
+  s_c61a47933d555a::t_8bd71c0b01cb42 26-38
+  s_c61a47933d555a::t_2ff4b131511116 46
+  s_c61a47933d555a::t_fb0eab29ca29b3 12
+  s_c61a47933d555a::t_ffec423d506c75 60
+  s_c61a47933d555a::t_c0a950f072abf6 64-67
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6dab490312099947329cc5a30cb3b882d8bb1766",
+  "prompts": {},
+  "sessions": {
+    "s_c61a47933d555a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "8c74d3ab-86ef-4b6d-962b-5b010dc53958",
+        "model": "litellm-gpt-6.1-sol"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
