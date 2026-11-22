@@ -36,6 +36,7 @@ export const schemas = {
   reportOpen:z.object({id}),
   remoteDesktop:z.object({botId:id}),
   status: z.object({}),
+  'connection.check': z.object({}),
   login: z.object({ serverUrl: z.string().url(), username: z.string().trim().min(1).max(64), password: z.string().min(1).max(200), label: z.string().trim().min(1).max(80) }),
   logout: z.object({}),
   models: z.object({}),

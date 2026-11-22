@@ -3,7 +3,7 @@ import { ClientUpdater } from './client-updater.js';
 import { hasActiveWork, type UpdatePlatform } from './update-policy.js';
 import { errorInfo, httpErrorInfo } from "@pi-bot/runtime-contracts";
 import { protectWindowsDirectory } from '../../../packages/service/src/windows.js';
-import { app, BrowserWindow, ipcMain, shell, dialog, nativeImage, nativeTheme } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, dialog, nativeImage, nativeTheme, powerMonitor } from 'electron';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { join, basename, dirname } from 'node:path';
 import { mkdirSync, existsSync, readFileSync, writeFileSync, appendFileSync, statSync } from 'node:fs';
@@ -174,6 +174,10 @@ else {
       void window.loadURL(page);
     };
     createWindow(); client.start(); void startBundledService();
+    powerMonitor.on('resume', () => {
+      diagnostic('system-resume');
+      void client.call('connection.check', {}).catch(() => diagnostic('resume-connection-check-failed'));
+    });
     app.on('activate', () => { if (!window) createWindow(); else present(window); });
   }).catch(() => { dialog.showErrorBox('启动失败', '无法启动 Pi Bot，请查看开发终端'); app.quit(); });
   app.on('before-quit', event => {

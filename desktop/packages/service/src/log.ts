@@ -1,8 +1,10 @@
 import { appendFileSync, mkdirSync, renameSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-export type LogEvent = 'service.started' | 'service.stopping' | 'cloud.online' | 'cloud.offline' | 'cloud.revoked' | 'run.started' | 'run.finished';
-// Only fixed event names, ids and timestamps are accepted; no prompts, file contents or credentials.
+import type { SocketDiagnosticEvent } from './cloud.js';
+
+export type LogEvent = 'service.started' | 'service.stopping' | 'cloud.online' | 'cloud.offline' | 'cloud.revoked' | 'run.started' | 'run.finished' | SocketDiagnosticEvent;
+// Only fixed events, ids, timestamps and allowlisted socket codes/timings; never URLs, error messages or credentials.
 export function createLog(dataDir: string) {
   const directory = join(dataDir, 'logs'), path = join(directory, 'service.log');
   mkdirSync(directory, { recursive: true, mode: 0o700 });

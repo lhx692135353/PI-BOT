@@ -27,6 +27,8 @@ import { browserTestOrigin } from "./targets.js";
 import { PROGRESS_CHARS, PROGRESS_SEGMENTS } from "@pi-bot/agent";
 
 export const DEVICE_OFFLINE = "执行电脑已离线，本次运行已中断；请核实结果后重新安排任务";
+export const SERVER_RESTARTED = "SERVER_RESTARTED：服务端重启，之前的电脑任务已中断；这不代表电脑当前离线，请核实结果和实时连接后重新安排";
+export const DEVICE_CONNECTION_REPLACED = "DEVICE_CONNECTION_REPLACED：电脑连接被新连接替换，本次运行已中断；请核实结果，不要自动重放未知操作";
 
 /** Recheck queued strategies before claiming; running and legacy task destinations stay fixed. */
 export async function dispatchDevice(db: Database, s: Settings, hub: Hub, runId: string) {
@@ -293,8 +295,8 @@ export async function failDeviceRuns(db: Database, deviceId: string, reason = DE
 /** Preserve queued local work after a restart, and fail interrupted device runs. */
 export async function failOrphanedDeviceRuns(db: Database) {
   await db.tx(async (tx) => {
-    const tasks=await tx.rows("UPDATE agent_tasks SET status='failed',error=$1,finished_at=now(),updated_at=now() WHERE execution='device' AND status='queued' AND child_run_id IS NULL RETURNING *",[DEVICE_OFFLINE]);
-    for(const task of tasks){await taskMessage(tx,task,"terminal","error",DEVICE_OFFLINE);await tx.notify({user_id:task.user_id,bot_id:task.parent_bot_id});}
+    const tasks=await tx.rows("UPDATE agent_tasks SET status='failed',error=$1,finished_at=now(),updated_at=now() WHERE execution='device' AND status='queued' AND child_run_id IS NULL RETURNING *",[SERVER_RESTARTED]);
+    for(const task of tasks){await taskMessage(tx,task,"terminal","error",SERVER_RESTARTED);await tx.notify({user_id:task.user_id,bot_id:task.parent_bot_id});}
 
     const runs = await tx.rows(
       "SELECT run_id FROM bot_runs WHERE executor='device' AND status = ANY($1)",
@@ -309,7 +311,7 @@ export async function failOrphanedDeviceRuns(db: Database) {
           await tx.rows("UPDATE bot_automations SET status='waiting_device' WHERE automation_id=$1 AND status='enabled'", [current.automation_id]);
           continue;
         }
-        await finishRun(tx, r.run_id, "failed", current.execution_policy === "device_only" ? "AUTOMATION_DEVICE_OFFLINE" : DEVICE_OFFLINE);
+        await finishRun(tx, r.run_id, "failed", current.execution_policy === "device_only" ? "AUTOMATION_DEVICE_OFFLINE" : SERVER_RESTARTED);
       }
     }
   });

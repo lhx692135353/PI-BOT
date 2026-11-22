@@ -103,6 +103,7 @@ export class Application {
     });
     this.socket = new CloudSocket(account.serverUrl, this.sign, {
       features,
+      diagnostics: (event, detail) => { if (generation === this.connectionGeneration) this.o.log?.(event, { ...detail }); },
       open: () => {
         if (generation !== this.connectionGeneration) return;
         void this.phone.call('phone.status', {}).then((status: any) => {
@@ -249,6 +250,7 @@ export class Application {
       case 'reportOpen': { const result=await this.cloud<{url:string}>('POST',`/reports/${input.id}/open`,{}); return {url:this.account!.serverUrl.replace(/\/$/,'')+result.url}; }
       case 'remoteArtifact':{const result=await this.cloud<{url:string}>('POST',`/remote/artifacts/${input.id}/open`,{});return {url:this.account!.serverUrl.replace(/\/+$/,'')+result.url};}
       case 'remoteDesktop': {const result=await this.cloud<{url:string}>('POST','/remote/desktop/open',{bot_id:input.botId});return {url:this.account!.serverUrl.replace(/\/+$/,'')+result.url};}
+      case 'connection.check': this.socket?.reconnectNow(); return this.state();
       case 'status': return { ...this.state(), activities: [...this.activities.values()] };
       case 'login': return this.login(input);
       case 'logout': return this.logout();

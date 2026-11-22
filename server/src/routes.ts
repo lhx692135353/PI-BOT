@@ -46,7 +46,7 @@ import {
 } from "./bots.js";
 import { cancelRun, decideApproval, dispatchDevice, failDeviceRuns } from "./runs.js";
 import { cancelTask, createTask, readTask, reportLater, TERMINAL, listTasks, messageTask, callerRun } from "./agents.js";
-import { registerDevice, deviceOut, deviceList, cloudComputer, libraryFileId } from './devices.js';
+import { registerDevice, deviceOut, deviceList, deviceStatus, cloudComputer, libraryFileId } from './devices.js';
 import { ensureEnvironment } from './remote/environments.js';
 import { posix } from 'node:path';
 import { complete, findModel, proxyResponses, proxySystemOne, recordUsage } from "./llm.js";
@@ -365,6 +365,14 @@ export const routes: Route[] = [
       const { task, run } = await createTask(tx, hub, user.user_id, llm!, body, s);
       if (run?.executor === "device") after(() => dispatchDevice(db, s, hub, run.run_id));
       return task;
+    },
+  },
+  {
+    method: "GET", path: "/agent/devices", auth: "llm", tag: "agents", summary: "只读查询当前账号电脑实时连接状态", internal: true,
+    query: z.object({ run_id: uuid, device_id: uuid.optional() }).strict(),
+    handler: async ({ tx, hub, user, llm, query }) => {
+      await callerRun(tx, user.user_id, llm!, query.run_id);
+      return deviceStatus(tx, hub, user.user_id, query.device_id);
     },
   },
   {

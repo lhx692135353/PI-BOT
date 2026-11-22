@@ -293,7 +293,7 @@ test("Mac offline: runs fall back to the cloud runner through the proxy, with me
   const forwarded = provider.requests.findLast(r => r.body.stream && latestUserText(r.body.input).includes("记住蓝鲸"))!.body;
   assert.equal(forwarded.model, "upstream-model");
   assert.match(forwarded.input[0].content, /对话由云端统一处理，智能体没有绑定的电脑/);
-  assert.deepEqual(forwarded.tools.map((t: any) => t.name), ["endpoint_experience", "start_task", "task_status", "task_message", "cancel_task", "goal_manage", "ask_agent", "file_bytes", "document_read", "report_read", "get_ui_catalog", "show_ui", "send_reply", "skill_manage", "skill_load", "memory_manage", "history_search", "agent_directory", "resume_task", "codemode", "tool_search"], "cloud conversation runs get memory, collaboration, and attached document reading, never filesystem or shell tools");
+  assert.deepEqual(forwarded.tools.map((t: any) => t.name), ["device_status", "endpoint_experience", "start_task", "task_status", "task_message", "cancel_task", "goal_manage", "ask_agent", "file_bytes", "document_read", "report_read", "get_ui_catalog", "show_ui", "send_reply", "skill_manage", "skill_load", "memory_manage", "history_search", "agent_directory", "resume_task", "codemode", "tool_search"], "cloud conversation runs get memory, collaboration, and attached document reading, never filesystem or shell tools");
   const second = await send("之前说了什么？");
   assert.equal(second.content, "你之前说的是蓝鲸。");
   assert.deepEqual(second.progress, [], "direct answers have no extra acknowledgement");

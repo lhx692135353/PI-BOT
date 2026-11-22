@@ -3,7 +3,7 @@ import { RuntimeError, errorInfo, httpErrorInfo } from "@pi-bot/runtime-contract
 import { Type } from "typebox";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 
-export const TASK_TOOL_NAMES = new Set(["endpoint_experience", "start_task", "task_status", "task_message", "cancel_task"]);
+export const TASK_TOOL_NAMES = new Set(["device_status", "endpoint_experience", "start_task", "task_status", "task_message", "cancel_task"]);
 
 /** Conversation-only tools: every operation returns without waiting for work. */
 export function taskTools(baseUrl: string, token: () => string, runId: string): ToolDefinition[] {
@@ -18,6 +18,20 @@ export function taskTools(baseUrl: string, token: () => string, runId: string): 
   };
   const result = (data: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(data) }], details: data });
   return [
+    {
+      name: "device_status", label: "查询电脑实时连接",
+      description: "只读查询当前账号电脑在服务器上的实时连接状态、检查时间和能力。用户问电脑现在是否在线时调用此工具，不用创建任务试探，不从历史任务失败或上下文快照推断当前状态。online 仅代表服务器当前持有连接，不保证文件权限、资源或命令可用；离线不代表已确认断线原因。",
+      parameters: Type.Object({ device_id: Type.Optional(Type.String({ format: "uuid", description: "指定电脑；省略则列出当前账号的电脑。" })) }),
+      execute: async (_id, args: any) => {
+        const query = new URLSearchParams({ run_id: runId, ...(args.device_id ? { device_id: args.device_id } : {}) });
+        const response = await fetch(`${baseUrl.replace(/\/+$/, "")}/agent/devices?${query}`, {
+          headers: { Authorization: `Bearer ${token()}` }, redirect: "error", signal: AbortSignal.timeout(15000),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new RuntimeError(errorInfo(data) ?? httpErrorInfo(response.status, data.detail ?? "电脑状态查询失败", "device"));
+        return result(data);
+      },
+    },
     {
       name:"endpoint_experience",label:"核查执行端经验",
       description:"读取本智能体历史执行证据；经验不代表当前权限或文件仍存在。出现冲突先在原执行端核查，再用更新的成功证据解决冲突，旧证据保留。",

@@ -13,6 +13,20 @@ export async function deviceList(tx: Tx, hub: Hub, userId: string) {
   return (await tx.rows('SELECT * FROM devices WHERE user_id=$1 ORDER BY created_at,device_id', [userId]))
     .map(d => deviceOut(d, !!hub.device(userId, d.device_id)));
 }
+/** A server connection snapshot, not a command/resource probe or a last-seen inference. */
+export async function deviceStatus(tx: Tx, hub: Hub, userId: string, deviceId?: string) {
+  const rows = await tx.rows('SELECT * FROM devices WHERE user_id=$1 ORDER BY created_at,device_id', [userId]);
+  const selected = deviceId ? rows.filter(d => d.device_id === deviceId) : rows;
+  if (deviceId && !selected.length) fail(404, '电脑不存在或不属于当前账号');
+  return {
+    checked_at: new Date().toISOString(),
+    source: 'server_connection',
+    devices: selected.map(d => {
+      const conn = d.revoked_at ? undefined : hub.device(userId, d.device_id);
+      return { ...deviceOut(d, !!conn), target: `device:${d.device_id}`, capabilities: conn?.capabilities ?? [], connection_state: d.revoked_at ? 'revoked' : conn ? 'online' : 'offline' };
+    }),
+  };
+}
 export const CLOUD_COMPUTER_LABEL = '云端电脑';
 /** The server-side machine every client shows as an always-available computer next to the user's own. */
 export async function cloudComputer(tx: Tx, s: Settings, userId: string) {

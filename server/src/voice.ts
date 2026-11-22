@@ -1,5 +1,5 @@
 import { endpointExperience, resolveExperienceConflict } from './endpoint-experience.js';
-import { messageProvenance } from './devices.js';
+import { messageProvenance, deviceStatus } from './devices.js';
 import { randomUUID } from "node:crypto";
 import type { FastifyRequest } from "fastify";
 import WebSocket, { type RawData } from "ws";
@@ -60,6 +60,7 @@ const voiceRouting = {
   resource_key:{type:"string"},decision_reason:{type:"string"},
 };
 const VOICE_TOOLS = [
+  fn("device_status", "只读查询电脑当前在服务器上的连接状态和检查时间。问是否在线时直接调用，不创建任务试探；连接在线不保证资源可用。", { device_id: { type: "string", format: "uuid" } }, []),
   fn("endpoint_experience","查看端经验，先核查，再用同一资源更新的成功证据解决冲突。",{action:{type:"string",enum:["list","resolve"]},conflict_id:{type:"string"},confirmation_id:{type:"string"}},["action"]),
   fn("start_task", "立刻安排后台任务并返回，不要等待它做完。需要搜索、读写文件、执行命令或较长推理时使用。纯联网用 execution=cloud，本机文件或命令用 device。", {
     ...voiceRouting, title: { type: "string" }, task: { type: "string" }, execution: { type: "string", enum: ["device", "cloud", "remote"] }, device_id:{type:"string"},
@@ -570,6 +571,10 @@ class VoiceSession {
         },this.s));
         if (created.run?.executor === "device") await dispatchDevice(this.db, this.s, this.hub, created.run.run_id);
         return JSON.stringify({ title: created.task.title, status: created.task.status, task_id: created.task.id });
+      }
+      if (tool.name === "device_status") {
+        if (args.device_id !== undefined && (typeof args.device_id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(args.device_id))) fail(422, '电脑标识无效');
+        return JSON.stringify(await this.db.tx(tx => deviceStatus(tx, this.hub, this.userId, args.device_id)));
       }
       if (tool.name === "task_status") {
         const status = await this.db.tx(async (tx) => args.task_id ? readTask(tx, this.userId, claims, String(args.task_id)) : listTasks(tx, this.userId, claims, this.call.runId));

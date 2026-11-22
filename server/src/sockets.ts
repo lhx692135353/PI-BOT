@@ -6,7 +6,7 @@ import { CHANNEL, type Database, type Row } from "./db.js";
 import type { Settings } from "./config.js";
 import { user, device } from "./security.js";
 import type { DeviceConnection, Hub } from "./hub.js";
-import { failDeviceRuns, handleRunEvent } from "./runs.js";
+import { DEVICE_CONNECTION_REPLACED, failDeviceRuns, handleRunEvent } from "./runs.js";
 import type { AgentDispatcher } from "./agents.js";
 import type { VoiceHub } from "./voice.js";
 
@@ -82,9 +82,28 @@ export async function sockets(
     let conn: DeviceConnection | undefined;
     let seen = 0;
     let lastMessageAt = Date.now();
+    let validation: Promise<void> | undefined;
+    const currentConnection = () => conn && ws.readyState === 1 &&
+      !lifecycles.has(conn.deviceId) && hub.device(conn.userId, conn.deviceId) === conn ? conn : undefined;
+    // Heartbeat validation has its own bounded lane, not the slow run-event queue.
+    const validateHeartbeat = () => {
+      const current = currentConnection();
+      if (!current || validation || Date.now() - seen <= 30000) return;
+      seen = Date.now();
+      validation = db.tx(tx => tx.one(
+        'UPDATE devices SET last_seen_at=now() WHERE device_id=$1 AND key_version=$2 AND revoked_at IS NULL RETURNING device_id',
+        [current.deviceId, current.keyVersion],
+      )).then(active => {
+        if (!active && currentConnection() === current) hub.kick(current.deviceId);
+      }).catch(() => {
+        if (currentConnection() === current) ws.close(4401);
+      }).finally(() => { validation = undefined; });
+    };
     // A sleeping computer can retain a TCP connection without being able to execute.
     const heartbeat = setInterval(() => {
-      if (conn && Date.now() - lastMessageAt > 60000) ws.terminate();
+      if (!currentConnection()) return;
+      if (Date.now() - lastMessageAt > 60000) ws.terminate();
+      else validateHeartbeat();
     }, 15000);
     let connectionKeyVersion = -1;
     let queue = Promise.resolve();
@@ -104,7 +123,8 @@ export async function sockets(
             previous.close(4409);
           }
           // Cleanup may still be pending even after the previous socket detached.
-          await failDeviceRuns(db, d.device_id);
+          await failDeviceRuns(db, d.device_id, DEVICE_CONNECTION_REPLACED);
+          if (ws.readyState !== 1) return;
           connectionKeyVersion = d.key_version;
           conn = {
             deviceId: d.device_id,
@@ -113,44 +133,48 @@ export async function sockets(
             send: (m) => send(ws, m),
             close: (code) => ws.close(code),
           };
+          lastMessageAt = Date.now();
           hub.attach(conn);
           send(ws, { type: "hello", user_id: u.user_id, device_id: d.device_id });
         });
       }))
       .catch(() => ws.close(4401));
     ws.on("message", (raw) => {
+      let m: Row;
+      try {
+        m = JSON.parse(raw.toString());
+        if (!m || typeof m !== "object" || Array.isArray(m)) return;
+      } catch {
+        return;
+      }
+      if (m.type === "ping") {
+        // Never acknowledge an unauthenticated, detached or replacing socket.
+        // ready includes signed authentication AND serialized attachment cleanup.
+        void ready.then(() => {
+          if (!currentConnection()) return;
+          lastMessageAt = Date.now();
+          send(ws, { type: "pong" });
+          validateHeartbeat();
+        }).catch(() => {});
+        return;
+      }
       queue = queue
         .then(async () => {
           await ready;
-          if (!conn || hub.device(conn.userId, conn.deviceId) !== conn) return;
-          const active = await db.tx(tx => tx.one('SELECT 1 FROM devices WHERE device_id=$1 AND key_version=$2 AND revoked_at IS NULL',[conn!.deviceId, connectionKeyVersion]));
-          if (!active) { hub.kick(conn.deviceId); return; }
-          let m: Row;
-          try {
-            m = JSON.parse(raw.toString());
-          } catch {
-            return;
-          }
+          const current = currentConnection();
+          if (!current) return;
+          const active = await db.tx(tx => tx.one('SELECT 1 FROM devices WHERE device_id=$1 AND key_version=$2 AND revoked_at IS NULL',[current.deviceId, connectionKeyVersion]));
+          if (currentConnection() !== current) return;
+          if (!active) { hub.kick(current.deviceId); return; }
           lastMessageAt = Date.now();
           if (m.type === "capabilities") {
-            conn.capabilities = Array.isArray(m.features) ? m.features.filter((x: unknown) => typeof x === "string" && CAPABILITIES.includes(x as typeof CAPABILITIES[number])) : [];
-            await db.tx(tx => tx.rows("UPDATE bot_automations SET next_wake_at=now() WHERE user_id=$1 AND status='waiting_device'",[conn!.userId]));
+            current.capabilities = Array.isArray(m.features) ? m.features.filter((x: unknown) => typeof x === "string" && CAPABILITIES.includes(x as typeof CAPABILITIES[number])) : [];
+            await db.tx(tx => tx.rows("UPDATE bot_automations SET next_wake_at=now() WHERE user_id=$1 AND status='waiting_device'",[current.userId]));
             dispatcher?.kick();
-          } else if (m.type === "ping") {
-            send(ws, { type: "pong" });
-            if (Date.now() - seen > 30000) {
-              seen = Date.now();
-              const revoked = await db.tx(async (tx) => {
-                const d = await tx.get("devices", conn!.deviceId);
-                if (!d || d.revoked_at) return true;
-                await tx.rows("UPDATE devices SET last_seen_at=now() WHERE device_id=$1", [conn!.deviceId]);
-                return false;
-              });
-              if (revoked) ws.close(4401);
-            }
-          } else if (m.type === "run_event") await handleRunEvent(db, s, hub, conn, m);
+          } else if (m.type === "run_event") await handleRunEvent(db, s, hub, current, m);
           else if (m.type === "rpc_result") await db.tx(async tx => {
-            if (await tx.one('SELECT 1 FROM devices WHERE device_id=$1 AND key_version=$2 AND revoked_at IS NULL FOR SHARE',[conn!.deviceId,connectionKeyVersion])) hub.resolveRpc(conn!.deviceId,m);
+            const active = await tx.one('SELECT 1 FROM devices WHERE device_id=$1 AND key_version=$2 AND revoked_at IS NULL FOR SHARE',[current.deviceId,connectionKeyVersion]);
+            if (active && currentConnection() === current) hub.resolveRpc(current.deviceId,m);
           });
         })
         .catch(() => {});

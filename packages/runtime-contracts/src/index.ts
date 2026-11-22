@@ -132,6 +132,7 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolDescriptor>> =
     ask_agent: tool("联系智能体", "delegate", "public", "waiting"),
     endpoint_experience: tool("核查执行端经验", "read", "internal"),
     start_task: tool("安排后台任务", "delegate", "internal"),
+    device_status: tool("查询电脑实时连接", "read", "internal"),
     task_status: tool("查看任务", "read", "internal"),
     task_message: tool("补充任务", "control", "internal"),
     cancel_task: tool("取消任务", "control", "internal"),
