@@ -11,6 +11,7 @@ struct ConversationView: View {
     let onFiles: () -> Void
     let onOpenBot: (String) -> Void
     @State private var error: String?
+    @State private var historyLoad = HistoryLoadState()
     @State private var loadingMore = false
     @State private var olderError: String?
     /// Distances from the viewport edges to the oldest loaded and the newest message.
@@ -28,12 +29,10 @@ struct ConversationView: View {
                 content(bot)
             } else {
                 VStack(spacing: 12) {
-                    if let failure = error {
-                        Text(failure).foregroundStyle(Palette.danger)
-                        Button("重试") { error = nil; Task { await load() } }
-                    } else {
-                        ProgressView()
+                    if historyLoad.showsSkeleton {
+                        HistorySkeleton()
                     }
+                    historyStatus
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -43,8 +42,18 @@ struct ConversationView: View {
         .toolbarBackground(Palette.paper, for: .navigationBar)
         .task(id: botId) {
             reachedBottom = false; settling = false; firstRow = nil; olderError = nil
+            historyLoad = HistoryLoadState()
             store.hydrate(botId)
             await load()
+        }
+        .task(id: historyLoad.requestID) {
+            guard let requestID = historyLoad.requestID else { return }
+            do {
+                try await Task.sleep(nanoseconds: 200_000_000)
+                historyLoad.reveal(requestID)
+                try await Task.sleep(nanoseconds: 4_800_000_000)
+                historyLoad.markSlow(requestID)
+            } catch { /* Leaving the conversation or completing the request cancels the timer. */ }
         }
         .onChange(of: store.voiceNotice, initial: true) {
             if let notice = store.voiceNotice, !notice.trimmingCharacters(in: .whitespaces).isEmpty {
@@ -60,12 +69,33 @@ struct ConversationView: View {
     }
 
     private func load() async {
+        guard !historyLoad.isLoading else { return }
+        let requestID = historyLoad.begin()
+        let requestedBotId = botId
         do {
-            try await store.refreshBot(botId)
-            try await store.loadTail(botId)
-        } catch is CancellationError {
+            try await store.refreshBot(requestedBotId)
+            try Task.checkCancellation()
+            try await store.loadTail(requestedBotId)
+            try Task.checkCancellation()
+            historyLoad.finish(requestID)
         } catch {
-            self.error = errorText(error)
+            // URLSession cancellation may be URLError.cancelled rather than CancellationError.
+            historyLoad.finish(requestID, error: Task.isCancelled || error is CancellationError ? nil : errorText(error))
+        }
+    }
+
+    @ViewBuilder private var historyStatus: some View {
+        if let failure = historyLoad.error {
+            VStack(spacing: 8) {
+                Text("历史消息加载失败：\(failure)").foregroundStyle(Palette.danger)
+                Button("重试") { Task { await load() } }
+            }
+            .font(.footnote)
+            .multilineTextAlignment(.center)
+            .padding(16)
+        } else if historyLoad.isSlow {
+            Text("加载较慢，仍在努力…")
+                .font(.footnote).foregroundStyle(Palette.muted).padding(12)
         }
     }
 
@@ -75,7 +105,20 @@ struct ConversationView: View {
             if let call, call.local, call.botId == botId {
                 CallOverlay(bot: bot, call: call, onMute: voice.setMuted, onHangup: voice.hangup)
             } else {
-                messages(bot)
+                if store.timeline(botId).messages.isEmpty && historyLoad.isLoading {
+                    VStack(spacing: 0) {
+                        if historyLoad.showsSkeleton {
+                            HistorySkeleton()
+                        } else {
+                            Color.clear
+                        }
+                        historyStatus
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    messages(bot)
+                    historyStatus
+                }
                 if let error {
                     Text(error).font(.footnote).foregroundStyle(Palette.danger)
                         .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).padding(.vertical, 4)
@@ -185,7 +228,7 @@ struct ConversationView: View {
                 }
                 .frame(maxWidth: .infinity)
             }
-            if timeline.loaded && timeline.messages.isEmpty {
+            if timeline.loaded && timeline.messages.isEmpty && historyLoad.error == nil {
                 Intro(bot: bot)
             }
             ForEach(timeline.messages) { message in
@@ -257,7 +300,7 @@ struct ConversationView: View {
     /// Older pages are prepended; keep the previously first message where it was on screen.
     private func loadMore(proxy: ScrollViewProxy, viewport: CGFloat) {
         let timeline = store.timeline(botId)
-        guard reachedBottom, !loadingMore, olderError == nil, timeline.hasMore, topGap < Self.loadAhead,
+        guard !historyLoad.isLoading, reachedBottom, !loadingMore, olderError == nil, timeline.hasMore, topGap < Self.loadAhead,
               let anchor = timeline.messages.first?.id else { return }
         let before = firstRow?.id == anchor ? firstRow?.frame : nil
         loadingMore = true
@@ -316,5 +359,29 @@ private struct Intro: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 40)
+    }
+}
+
+/// Static bubbles respect Reduce Motion and do not affect real message scrolling or read receipts.
+private struct HistorySkeleton: View {
+    var body: some View {
+        GeometryReader { geometry in
+            VStack(spacing: 16) {
+                Spacer(minLength: 0)
+                ForEach(0..<5) { index in
+                    HStack {
+                        if index.isMultiple(of: 2) { Spacer(minLength: 40) }
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color.gray.opacity(0.15))
+                            .frame(width: min(geometry.size.width * (index.isMultiple(of: 2) ? 0.55 : 0.72), 420),
+                                   height: index.isMultiple(of: 2) ? 44 : 72)
+                        if !index.isMultiple(of: 2) { Spacer(minLength: 40) }
+                    }
+                }
+            }
+            .padding(20)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("正在加载历史消息")
     }
 }
