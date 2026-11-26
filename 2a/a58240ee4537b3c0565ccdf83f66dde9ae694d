@@ -1,0 +1,18 @@
+ios/PiBot/Conversation/ConversationView.swift
+  h_395c29b857facd 14,32-33,35,45,49-57,72-74,76-80,82-98,108-121,231,303,364-387
+ios/PiBotKit/Sources/PiBotKit/HistoryLoadState.swift
+  h_395c29b857facd 1-39
+ios/PiBotKit/Tests/PiBotKitTests/HistoryLoadTests.swift
+  h_395c29b857facd 1-50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2aa58240ee4537b3c0565ccdf83f66dde9ae694d",
+  "prompts": {},
+  "humans": {
+    "h_395c29b857facd": {
+      "author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
