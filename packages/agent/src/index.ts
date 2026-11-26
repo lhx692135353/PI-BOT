@@ -23,7 +23,7 @@ import {
   InMemoryModelsStore,
 } from "@earendil-works/pi-ai";
 
-import { replyTool, replyAnswer, type ReplyEvent } from "./replies.js";
+import { ReplyPreview, replyTool, replyAnswer, type ReplyEvent } from "./replies.js";
 export { replyAnswer, type ReplyEvent, type ReplySegment } from "./replies.js";
 import { TASK_TOOL_NAMES } from "./tasks.js";
 import { isInternalTool, SKILL_TOOLS, skillsExtension, type SkillOptions } from "./skills.js";
@@ -153,6 +153,10 @@ export class PiAgent implements AgentHandle {
     private replies: ReplyEvent[] = [],
     private replyClock = { started: 0 },
     private executionCwd = process.cwd(),
+    private previewReply?: (reply: ReplyEvent) => void,
+    private streamHoldback = 0,
+    private redactPreview: (text: string) => string = text => text,
+    private flushReplies: (discard?: boolean) => Promise<void> = async () => {},
   ) {
     this.tools = session.getActiveToolNames();
   }
@@ -170,6 +174,7 @@ export class PiAgent implements AgentHandle {
       settled = false,
       renderedUi = false,
       exhausted = false;
+    const preview = new ReplyPreview(r => this.previewReply?.(r), this.streamHoldback, this.redactPreview);
     const progress: string[] = [];
     let idleTimer: NodeJS.Timeout | undefined, timedOut = false;
     const filePaths = new Map<string,string>();
@@ -211,6 +216,11 @@ export class PiAgent implements AgentHandle {
           resource_id: e.result?.details?.task?.id ?? e.result?.details?.artifact?.id ?? e.result?.details?.id,
           target_id: e.result?.details?.task?.agent?.id ?? e.result?.details?.agent?.id,
         });
+      if (event.type === "message_update" && event.assistantMessageEvent.type === "toolcall_delta") {
+        const update = event.assistantMessageEvent;
+        const block = update.partial.content[update.contentIndex];
+        if (block && !this.cancelled) preview.update(block);
+      }
       if (
         event.type === "message_update" &&
         event.assistantMessageEvent.type === "text_delta"
@@ -253,12 +263,14 @@ export class PiAgent implements AgentHandle {
     try {
       await this.session.prompt(text, { expandPromptTemplates: false, images: modelImages(await compressModelImages(images)) });
       if (!settled) await this.session.waitForIdle();
+      await this.flushReplies(this.cancelled);
       // Reasoning can consume the whole output budget before any answer; give it one more turn to conclude.
       if (exhausted && !this.cancelled && !timedOut && !renderedUi && !this.replies.length && reportSummary === undefined) {
         exhausted = false;
         settled = false;
         await this.session.prompt(THINKING_EXHAUSTED, { expandPromptTemplates: false });
         if (!settled) await this.session.waitForIdle();
+        await this.flushReplies(this.cancelled);
       }
       if (this.cancelled) throw new Error(CANCELLED);
       if (timedOut) throw new RuntimeError({code:"timeout",scope:"model",retryable:true,outcome:"unknown",message:"模型长时间没有响应，已停止本次任务，请稍后重试"});
@@ -270,6 +282,7 @@ export class PiAgent implements AgentHandle {
     } finally {
       clearTimeout(idleTimer);
       unsubscribe();
+      await this.flushReplies(this.cancelled);
     }
   }
   async steer(text: string) {
@@ -295,6 +308,23 @@ export const createBotAgent: AgentFactory = async (o) => {
   const replies: ReplyEvent[] = [];
   const replyClock = { started: 0 };
   const redact = redactor([o.apiKey, ...(o.redactSecrets ?? [])]);
+  let pendingReplies = Promise.resolve();
+  const previews = new Map<string, ReplyEvent>();
+  let previewTimer: NodeJS.Timeout | undefined;
+  const enqueueReply = (reply: ReplyEvent) => {
+    const safe = {...reply, text: redact(reply.text), elapsed_ms: Math.max(0, Math.round(performance.now() - replyClock.started))};
+    const publication = pendingReplies.then(async () => { await o.onReply?.(safe); });
+    // A failed preview must not poison later snapshots or the final publication.
+    // Explicit sends still await the original promise and observe their own failure.
+    pendingReplies = publication.catch(() => {});
+    return publication;
+  };
+  const flushPreviews = (discard = false) => {
+    clearTimeout(previewTimer); previewTimer = undefined;
+    if (!discard) for (const reply of previews.values()) void enqueueReply(reply).catch(() => {});
+    previews.clear();
+    return pendingReplies;
+  };
   const supervision = o.taskWorkflow && o.runId && !o.readonly ? superviseTask({
     ...o.taskWorkflow,
     runId: o.runId,
@@ -319,7 +349,8 @@ export const createBotAgent: AgentFactory = async (o) => {
   const tools = [...(supervision?.tools ?? o.tools), ...(o.onReply ? [replyTool(async reply => {
     const safe = { ...reply, text: redact(reply.text), elapsed_ms: Math.max(0, Math.round(performance.now() - replyClock.started)) };
     if (replies.some(r => r.id === safe.id)) return;
-    await o.onReply!(safe);
+    await flushPreviews();
+    await enqueueReply(safe);
     replies.push(safe);
   })] : [])];
   mkdirSync(o.agentDir, { recursive: true, mode: 0o700 });
@@ -420,6 +451,13 @@ export const createBotAgent: AgentFactory = async (o) => {
     replies,
     replyClock,
     o.cwd,
+    o.onReply ? reply => {
+      previews.set(reply.id, reply);
+      previewTimer ??= setTimeout(() => { void flushPreviews().catch(() => {}); }, 60);
+    } : undefined,
+    Math.max(0, ...[o.apiKey, ...(o.redactSecrets ?? [])].filter(s => s.length >= 6).map(s => s.length - 1)),
+    redact,
+    flushPreviews,
   );
   if (supervision) {
     const prompt = agent.prompt.bind(agent);

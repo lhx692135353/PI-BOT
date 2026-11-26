@@ -66,6 +66,21 @@ export class ResponseStream {
     }
     this.event("response.output_item.done", { output_index, item });
   }
+  /** Keep a function call open so tests can observe public output before completion. */
+  async streamingTool(name: string, args: object, callId: string, beforeDone: () => void) {
+    this.endText();
+    const item = {type: "function_call", id: `fc_${randomUUID()}`, call_id: callId, name, arguments: JSON.stringify(args), status: "completed"};
+    const output_index = this.output.length;
+    this.output.push(item);
+    this.event("response.output_item.added", {output_index, item: {...item, arguments: "", status: "in_progress"}});
+    const split = item.arguments.length - 30;
+    this.event("response.function_call_arguments.delta", {output_index, item_id: item.id, delta: item.arguments.slice(0, split)});
+    await new Promise(resolve => setTimeout(resolve, 180));
+    beforeDone();
+    this.event("response.function_call_arguments.delta", {output_index, item_id: item.id, delta: item.arguments.slice(split)});
+    this.event("response.function_call_arguments.done", {output_index, item_id: item.id, arguments: item.arguments});
+    this.event("response.output_item.done", {output_index, item});
+  }
   reasoning(text: string) {
     this.endText();
     const item = { type: "reasoning", id: `rs_${randomUUID()}`, summary: [], content: [{ type: "reasoning_text", text }] };

@@ -186,6 +186,22 @@ final class DomainTests: XCTestCase {
         XCTAssertEqual(parseInline("**没闭合"), [Span("**没闭合")])
     }
 
+    func testUnclosedLinkMarkersDoNotBlockRendering() {
+        // Unfinished Markdown is common while a reply is streaming.
+        let text = String(repeating: "[", count: 24_000)
+        let start = Date()
+        let document = messageDocument(text, markdown: true)
+        XCTAssertEqual(document.text, text)
+        XCTAssertTrue(document.marks.isEmpty)
+        XCTAssertLessThan(Date().timeIntervalSince(start), 1.0)
+    }
+
+    func testLinkAfterUnclosedMarkerStillRenders() {
+        let document = messageDocument("[unfinished [Pi Bot](https://example.com)", markdown: true)
+        XCTAssertEqual(document.text, "[unfinished Pi Bot")
+        XCTAssertEqual(document.marks.filter { $0.kind == "link" }.map(\.value), ["https://example.com"])
+    }
+
     func testMessageDocumentKeepsLinksAndCodeVerbatim() {
         let doc = messageDocument("# 标题\n看 [文档](https://example.com/a) 和 `a  b`\n```\n  x *y*\n```", markdown: true)
         XCTAssertEqual(doc.text, "标题\n\n看 文档 和 a  b\n\n  x *y*")

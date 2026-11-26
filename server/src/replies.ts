@@ -4,6 +4,7 @@ import type { Row, Tx } from "./db.js";
 import { taskMessage } from "./task-conversation.js";
 
 export const replySchema = z.object({
+  streaming: z.boolean().optional(),
   id: z.string().min(1).max(200), phase: z.enum(["opening", "update", "answer"]),
   text: z.string().min(1).max(12000).refine(text => !!text.trim()), generated_at: z.string().datetime(), elapsed_ms: z.number().min(0).max(86400000).optional(),
 });
@@ -25,22 +26,27 @@ export async function recordReply(tx: Tx, run: Row, input: ReplyEvent, final = f
   run = current;
   const m = await tx.one("SELECT * FROM bot_messages WHERE message_id=$1 FOR UPDATE", [run.assistant_message_id]);
   if (!m || m.status !== "running") return;
-  if ((m.reply_segments ?? []).some((r: ReplySegment) => r.id === reply.id)) return;
+  const previous = (m.reply_segments ?? []).find((r: ReplySegment) => r.id === reply.id);
+  // Final publication is immutable/idempotent; only previews can be replaced.
+  if (previous && !previous.streaming) return;
   const now = new Date().toISOString();
   const segments = withRemarks(m.reply_segments ?? [], m.progress ?? [], now);
-  segments.push({ ...reply, created_at: now });
-  const progress = [...new Set([...(m.progress ?? []), ...segments.filter(r => r.phase !== "answer").map(r => r.text)])];
+  const index = segments.findIndex(r => r.id === reply.id);
+  const next = {...reply, created_at: previous?.created_at ?? now};
+  if (index >= 0) segments[index] = next;
+  else segments.push(next);
+  const progress = [...new Set([...(m.progress ?? []), ...segments.filter(r => r.phase !== "answer" && !r.streaming).map(r => r.text)])];
   await tx.rows("UPDATE bot_messages SET reply_segments=$2,progress=$3,content=$4,updated_at=now() WHERE message_id=$1",
     [m.message_id, JSON.stringify(segments), JSON.stringify(progress), replyAnswer(segments)]);
   await tx.rows(`UPDATE bot_runs SET first_reply_generated_at=CASE WHEN first_reply_at IS NULL THEN $2 ELSE first_reply_generated_at END,
     first_reply_generation_ms=CASE WHEN first_reply_at IS NULL THEN $3 ELSE first_reply_generation_ms END,
     first_reply_at=coalesce(first_reply_at,now()) WHERE run_id=$1`, [run.run_id, final ? null : reply.generated_at, final ? null : reply.elapsed_ms ?? null]);
-  if (run.lane === "task" && run.task_id) {
+  if (!reply.streaming && run.lane === "task" && run.task_id) {
     const task = await tx.get("agent_tasks", run.task_id);
     if (task) {
       await taskMessage(tx, task, `reply:${run.run_id}:${reply.id}`, reply.phase, reply.text);
       await tx.notify({ user_id: run.user_id, bot_id: task.parent_bot_id });
     }
   }
-  await tx.notify({ user_id: run.user_id, bot_id: run.bot_id });
+  await tx.notify({ user_id: run.user_id, bot_id: run.bot_id, message_id: run.assistant_message_id, stream: true });
 }

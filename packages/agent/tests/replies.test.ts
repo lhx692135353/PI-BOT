@@ -60,3 +60,58 @@ test("explicit answers are authoritative independently of final text", () => {
   assert.equal(replyAnswer(replies, "下一步重测。"), "完成了。");
   assert.equal(replyAnswer([], "    print(1)\n"), "    print(1)\n", "Markdown indentation must survive publication");
 });
+
+for (const failPreview of [false, true]) test(`public send_reply streams safely and recovers preview failure=${failPreview}`, async () => {
+  const { ResponseStream, isRealToolResult } = await import("./responses.js");
+  const { createServer } = await import("node:http");
+  const { mkdtempSync, rmSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { createBotAgent } = await import("../src/index.js");
+  const events: ReplyEvent[] = [];
+  let publishedBeforeDone = false;
+  let previewFailed = false;
+  const text = "先输出这一段公共回复，再继续输出后面的内容。".repeat(5);
+  const server = createServer(async (req, res) => {
+    const chunks: Buffer[] = []; for await (const chunk of req) chunks.push(chunk);
+    const request = JSON.parse(Buffer.concat(chunks).toString());
+    const stream = new ResponseStream(res, request.model);
+    if (isRealToolResult(request.input)) { stream.end(); return; }
+    stream.text("INTERNAL-NOT-PUBLIC");
+    // Deliberately produce text before phase: provider argument ordering is not guaranteed.
+    await stream.streamingTool("send_reply", {text, phase:"answer"}, "public-preview", () => {
+      publishedBeforeDone = events.some(e => e.streaming);
+    });
+    stream.end();
+  });
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  const dir = mkdtempSync(join(tmpdir(), "reply-stream-"));
+  const agent = await createBotAgent({model: {id:"stream-test", name:"Stream test", baseUrl:`http://127.0.0.1:${(server.address() as any).port}/v1`, modelId:"test", contextWindow:32000, maxTokens:1000}, apiKey:"secret-test-key", cwd:dir, agentDir:join(dir,"agent"), systemPrompt:"Only public replies via send_reply", history:[], tools:[], onReply: async e => {
+    if (failPreview && e.streaming && !previewFailed) { previewFailed = true; throw new Error("transient preview failure"); }
+    events.push(e);
+  }});
+  try {
+    const deltas: string[] = [];
+    assert.equal(await agent.prompt("reply", t => deltas.push(t)), text);
+    assert.equal(publishedBeforeDone || previewFailed, true);
+    assert.deepEqual(deltas.filter(Boolean), []);
+    if (!failPreview) assert.ok(events.some(e => e.streaming && e.text.length < text.length));
+    assert.equal(previewFailed, failPreview);
+    assert.equal(events.at(-1)?.text, text);
+    assert.equal(events.at(-1)?.phase, "answer");
+    assert.equal(events.at(-1)?.streaming, undefined);
+    assert.ok(events.every(e => !e.text.includes("INTERNAL")));
+  } finally { agent.dispose(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); rmSync(dir,{recursive:true,force:true}); }
+});
+
+test("reply previews withhold split credentials and ignore internal tools", async () => {
+  const { ReplyPreview } = await import("../src/replies.js");
+  const events: ReplyEvent[] = [];
+  const secret = "secret-credential";
+  const preview = new ReplyPreview(e => events.push(e), secret.length - 1, t => t.replaceAll(secret, "[redacted]"));
+  preview.update({type:"toolCall", name:"codemode", id:"private", arguments:{text:"INTERNAL",phase:"answer"}});
+  for (let i=1;i<secret.length;i++) preview.update({type:"toolCall",name:"send_reply",id:"reply",arguments:{phase:"answer",text:"public "+secret.slice(0,i)}});
+  for (let i=0;i<30;i++) preview.update({type:"toolCall",name:"send_reply",id:"reply",arguments:{phase:"answer",text:"public "+secret+" trailing".repeat(i)}});
+  assert.ok(events.every(e => !e.text.includes("secret")));
+  assert.ok(events.every(e => e.id === "reply"));
+});

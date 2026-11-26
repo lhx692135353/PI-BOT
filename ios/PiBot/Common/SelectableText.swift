@@ -14,6 +14,8 @@ struct SelectableText: UIViewRepresentable {
         var key: String?
         var rendered = NSAttributedString()
         var shown: String?
+        var measuredWidth: CGFloat?
+        var measuredSize: CGSize?
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -25,6 +27,8 @@ struct SelectableText: UIViewRepresentable {
         if coordinator.key != key {
             coordinator.key = key
             coordinator.rendered = render()
+            coordinator.measuredWidth = nil
+            coordinator.measuredSize = nil
         }
         return coordinator.rendered
     }
@@ -55,11 +59,17 @@ struct SelectableText: UIViewRepresentable {
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
         let limit = proposal.width.flatMap { $0.isFinite ? $0 : nil } ?? 10_000
-        let bounds = attributed(context.coordinator).boundingRect(
+        let value = attributed(context.coordinator)
+        let coordinator = context.coordinator
+        if coordinator.measuredWidth == limit, let size = coordinator.measuredSize { return size }
+        let bounds = value.boundingRect(
             with: CGSize(width: limit, height: .greatestFiniteMagnitude),
             options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil
         )
-        return CGSize(width: min(limit, ceil(bounds.width)), height: ceil(bounds.height))
+        let size = CGSize(width: min(limit, ceil(bounds.width)), height: ceil(bounds.height))
+        coordinator.measuredWidth = limit
+        coordinator.measuredSize = size
+        return size
     }
 
     private func render() -> NSAttributedString {

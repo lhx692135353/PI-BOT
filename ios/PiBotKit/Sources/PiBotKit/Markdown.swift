@@ -25,7 +25,7 @@ public struct Span: Hashable, Sendable {
 private let headingPattern = try! NSRegularExpression(pattern: "^(#{1,6})\\s+(.*)$")
 private let bulletPattern = try! NSRegularExpression(pattern: "^(\\s*)([-*+]|\\d+[.)])\\s+(.*)$")
 private let tableDivider = try! NSRegularExpression(pattern: "^\\|?\\s*:?-{2,}:?\\s*(\\|\\s*:?-{2,}:?\\s*)*\\|?$")
-private let linkPattern = try! NSRegularExpression(pattern: "\\[([^\\]\\n]+)\\]\\((https?://[^\\s)]+)\\)")
+private let linkPattern = try! NSRegularExpression(pattern: "\\[([^\\[\\]\\n]+)\\]\\((https?://[^\\s)]+)\\)")
 
 private func groups(_ regex: NSRegularExpression, _ s: String) -> [String]? {
     let ns = s as NSString

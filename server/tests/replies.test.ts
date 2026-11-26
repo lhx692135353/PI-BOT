@@ -149,3 +149,29 @@ test("reconciliation clears terminal-task residue and expired runs while preserv
     assert.equal((await tx.get("agent_tasks", orphan.task_id)).status, "failed");
   });
 });
+
+test("public reply previews replace one segment, advance stream seq and finish once", { skip }, async () => {
+  const run = await parent();
+  const generated_at = new Date().toISOString();
+  const publish = (phase: "update" | "answer", text: string, streaming?: boolean) => db.tx(async tx => {
+    await recordReply(tx, await tx.get("bot_runs", run.run_id), {id:"public-stream",phase,text,streaming,generated_at});
+    return tx.get("bot_messages", run.assistant_message_id);
+  });
+  const first = await publish("update", "部分", true);
+  const next = await publish("answer", "部分回复继续", true);
+  assert.equal(next.reply_segments.length, 1);
+  assert.equal(next.content, "部分回复继续");
+  assert.deepEqual(next.progress, []);
+  assert.ok(Number(next.stream_seq) > Number(first.stream_seq));
+  assert.equal(next.reply_segments[0].created_at, first.reply_segments[0].created_at);
+  const final = await publish("answer", "完整回复");
+  assert.equal(final.reply_segments.length, 1);
+  assert.equal(final.content, "完整回复");
+  assert.equal(final.reply_segments[0].streaming, undefined);
+  const late = await publish("answer", "过期部分", true);
+  assert.equal(late.content, "完整回复");
+  await db.tx(tx => finishRun(tx, run.run_id, "completed", null, "完整回复"));
+  const terminal = await db.tx(tx => tx.get("bot_messages", run.assistant_message_id));
+  const after = await publish("answer", "终态后迟到的预览", true);
+  assert.deepEqual(after, terminal);
+});
