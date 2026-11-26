@@ -1,0 +1,16 @@
+.github/scripts/install-ci-electron.sh
+  h_395c29b857facd 1-47
+.github/workflows/ci.yml
+  h_395c29b857facd 46-58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "776c2c8bcd1a9fd58deb866bb28aad519cc82198",
+  "prompts": {},
+  "humans": {
+    "h_395c29b857facd": {
+      "author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
