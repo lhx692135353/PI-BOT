@@ -43,8 +43,19 @@ jobs:
           bash -n server/deploy/ubuntu/install.sh server/deploy/ubuntu/deploy.sh
           python3 -m unittest discover -s server/deploy/ubuntu -p 'test_*.py' -v
       - run: npm run typecheck
-      - name: Install Electron for mounted UI regression tests
-        run: npm rebuild electron
+      - name: Resolve desktop Electron version
+        id: electron
+        run: |
+          node -e 'const { createRequire } = require("node:module"); const fromDesktop = createRequire(process.cwd() + "/desktop/package.json"); console.log("version=" + fromDesktop("electron/package.json").version)' >> "$GITHUB_OUTPUT"
+      - name: Cache Electron downloads
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/pibot-electron-cache
+          key: electron-download-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.electron.outputs.version }}
+      - name: Install and verify desktop Electron for mounted UI regression tests
+        env:
+          electron_config_cache: ${{ runner.temp }}/pibot-electron-cache
+        run: bash .github/scripts/install-ci-electron.sh
       - name: Install Chromium for browser integration tests
         env:
           PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/pibot-playwright
