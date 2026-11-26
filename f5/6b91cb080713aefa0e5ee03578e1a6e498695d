@@ -1,0 +1,32 @@
+ios/PiBot/Common/SelectableText.swift
+  h_395c29b857facd 17-18,30-31,62-65,69-72
+ios/PiBotKit/Sources/PiBotKit/Markdown.swift
+  h_395c29b857facd 28
+ios/PiBotKit/Tests/PiBotKitTests/DomainTests.swift
+  h_395c29b857facd 189-204
+packages/agent/src/index.ts
+  h_395c29b857facd 26,156-159,177,219-223,266,273,285,311-327,352-353,454-460
+packages/agent/src/replies.ts
+  h_395c29b857facd 9-10,21,37-58
+packages/agent/tests/replies.test.ts
+  h_395c29b857facd 63-117
+packages/agent/tests/responses.ts
+  h_395c29b857facd 69-83
+server/src/replies.ts
+  h_395c29b857facd 7,29-31,34-38,44,51
+server/tests/replies.test.ts
+  h_395c29b857facd 152-177
+server/tests/streams-ws.test.ts
+  h_395c29b857facd 11,33-38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f56b91cb080713aefa0e5ee03578e1a6e498695d",
+  "prompts": {},
+  "humans": {
+    "h_395c29b857facd": {
+      "author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
