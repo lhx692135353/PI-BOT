@@ -256,6 +256,7 @@ function App() {
   const [inspector, setInspector] = useState(false);
   const [settings, setSettings] = useState(false);
   const [introKey, setIntroKey] = useState<number | null>(() => (getSkin() === 'ironman' ? 1 : null));
+  const finishIntro = useCallback(() => setIntroKey(null), []);
   const [phoneTarget, setPhoneTarget] = useState<{ botId: string | null; deviceId: string | null } | null>(null);
   const [now, setNow] = useState(Date.now());
   const [loadError, setLoadError] = useState('');
@@ -487,7 +488,7 @@ function App() {
       {phoneTarget && <PhoneDock key={phoneAssociationKey(account.serverUrl, account.user?.id ?? null)} associationKey={phoneAssociationKey(account.serverUrl, account.user?.id ?? null)} botId={phoneTarget.botId ? bot?.id ?? phoneTarget.botId : null} pinnedDeviceId={phoneTarget.deviceId} devices={devices} executionDeviceId={null} onClose={() => setPhoneTarget(null)} />}
       {editor && <BotEditor bot={editor === 'new' ? undefined : editor} models={models} deviceId={account.deviceId} onClose={() => setEditor(null)} onSaved={b => { setEditor(null); setSelected(b.id); void loadBots(); }} />}
       {settings && <Settings state={account} cloud={cloud} onClose={() => setSettings(false)} onOpenPhone={device => { setSettings(false); setPhoneTarget({ botId: null, deviceId: device.id }); }} onPreviewIntro={() => { setSettings(false); setIntroKey(k => (k ?? 0) + 1); }} />}
-      {introKey !== null && <IronManIntro key={introKey} onDone={() => setIntroKey(null)} />}
+      {introKey !== null && <IronManIntro key={introKey} onDone={finishIntro} />}
     </div>
   );
 }
