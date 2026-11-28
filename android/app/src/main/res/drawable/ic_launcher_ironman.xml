@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 深空暗红金属底盘 -->
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:centerX="54"
+                android:centerY="42"
+                android:gradientRadius="72"
+                android:type="radial">
+                <item android:color="#2C131A" android:offset="0" />
+                <item android:color="#140C14" android:offset="0.6" />
+                <item android:color="#080A10" android:offset="1" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 细微 HUD 外环 -->
+    <path
+        android:pathData="M54,18a36,36 0,1 0,0.01 0z"
+        android:strokeColor="#386FE8FF"
+        android:strokeWidth="0.9" />
+
+    <!-- 绯红装甲头盔主体 -->
+    <path
+        android:pathData="M54,23 C71,23 81,34 81,51 L79,66 C77,76 68,83 61,86 L54,88 L47,86 C40,83 31,76 29,66 L27,51 C27,34 37,23 54,23 Z"
+        android:strokeColor="#44FF9096"
+        android:strokeWidth="0.7">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="32"
+                android:startY="23"
+                android:endX="76"
+                android:endY="88"
+                android:type="linear">
+                <item android:color="#D9454E" android:offset="0" />
+                <item android:color="#A7262D" android:offset="0.4" />
+                <item android:color="#5E1016" android:offset="1" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 钛金面甲 -->
+    <path
+        android:pathData="M40,31 L45,41 L63,41 L68,31 C74,36 76,45 75,53 L71,61 L73,67 L67,77 L61,81 L60,78 L48,78 L47,81 L41,77 L35,67 L37,61 L33,53 C32,45 34,36 40,31 Z"
+        android:strokeColor="#241214"
+        android:strokeWidth="1.0"
+        android:strokeLineJoin="round">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="34"
+                android:startY="31"
+                android:endX="74"
+                android:endY="81"
+                android:type="linear">
+                <item android:color="#FAE4A4" android:offset="0" />
+                <item android:color="#DFB968" android:offset="0.4" />
+                <item android:color="#8C6522" android:offset="1" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 绯红下颌甲 -->
+    <path
+        android:fillColor="#8B1A22"
+        android:strokeColor="#241214"
+        android:strokeWidth="0.9"
+        android:pathData="M47,78 L61,78 L62,85 L54,87 L46,85 Z" />
+
+    <!-- 口部装甲缝 -->
+    <path
+        android:fillColor="#221114"
+        android:pathData="M45,74 L50,72.5 L58,72.5 L63,74 L62,75.8 L46,75.8 Z" />
+
+    <!-- 青蓝发光双目（外晕 + 高亮核） -->
+    <path
+        android:fillColor="#6632D5FF"
+        android:pathData="M37,49 L50,52 L49.5,56.5 L38,54.8 Z M71,49 L58,52 L58.5,56.5 L70,54.8 Z" />
+    <path
+        android:fillColor="#D6F9FF"
+        android:strokeColor="#1B2733"
+        android:strokeWidth="0.7"
+        android:pathData="M38.2,50.2 L49.5,52.6 L49.1,55.5 L39.2,54.0 Z M69.8,50.2 L58.5,52.6 L58.9,55.5 L68.8,54.0 Z" />
+</vector>

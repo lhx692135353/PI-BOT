@@ -14,5 +14,6 @@ const bridge: DesktopBridge = {
   openLibrary: slug => ipcRenderer.invoke('agent:openLibrary', slug),
   openExternal: url => ipcRenderer.invoke('agent:openExternal', url),
   pickDirectory: () => ipcRenderer.invoke('agent:pickDirectory'),
+  setAppIcon: skin => ipcRenderer.invoke('agent:setAppIcon', skin),
 };
 contextBridge.exposeInMainWorld('agent', bridge);

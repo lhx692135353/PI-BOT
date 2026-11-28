@@ -133,6 +133,7 @@ export interface DesktopBridge {
   openLibrary(botId: string): Promise<void>;
   openExternal(url: string): Promise<void>;
   pickDirectory?(): Promise<string | null>;
+  setAppIcon?(skin: 'default' | 'ironman'): Promise<void>;
 }
 
 export type UpdateChannel = 'stable' | 'test';

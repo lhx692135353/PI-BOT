@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import SwiftUI
+import UIKit
 import PiBotKit
 
 enum AppSkin: String, CaseIterable, Identifiable {
@@ -91,6 +92,7 @@ final class SkinStore {
     var skin: AppSkin {
         didSet {
             UserDefaults.standard.set(skin.rawValue, forKey: Self.key)
+            syncAppIcon(for: skin)
         }
     }
 
@@ -108,10 +110,21 @@ final class SkinStore {
         let next = AppSkin.fromWire(wire)
         if skin != next {
             skin = next
+        } else {
+            syncAppIcon(for: next)
         }
     }
 
     func previewIntro() {
         introToken = (introToken ?? 0) + 1
+    }
+
+    /// 联动切换 iOS 主屏幕应用图标（仅在目标图标与当前图标不同且支持替换时调用）。
+    func syncAppIcon(for target: AppSkin) {
+        let app = UIApplication.shared
+        guard app.supportsAlternateIcons else { return }
+        let desiredName: String? = (target == .ironman) ? "AppIconIronMan" : nil
+        guard app.alternateIconName != desiredName else { return }
+        app.setAlternateIconName(desiredName) { _ in }
     }
 }
