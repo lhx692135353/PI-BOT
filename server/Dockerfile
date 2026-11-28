@@ -10,7 +10,7 @@ FROM debian:bookworm-slim
 ARG VIRTCTL_VERSION
 ARG TARGETARCH
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      ca-certificates curl bash coreutils findutils grep sed gawk diffutils file less procps \
+      fontconfig fonts-noto-cjk ca-certificates curl bash coreutils findutils grep sed gawk diffutils file less procps \
       tar gzip xz-utils bzip2 zip unzip jq \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 1000 node && useradd --uid 1000 --gid node --shell /bin/bash --create-home node

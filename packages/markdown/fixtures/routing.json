@@ -1,0 +1,18 @@
+[
+  {"source":"普通文字和 **加粗**", "math":false},
+  {"source":"$t_3$", "math":true},
+  {"source":"$$\\frac{30}{130}$$", "math":true},
+  {"source":"\\(x_1\\)", "math":true},
+  {"source":"\\[x^2\\]", "math":true},
+  {"source":"$\\ce{SO4^2-}$", "math":true},
+  {"source":"普通金额 $5 和 $10", "math":false},
+  {"source":"转义 \\$t_3\\$", "math":false},
+  {"source":"`$t_3$`", "math":false},
+  {"source":"```latex\n$$x^2$$\n```", "math":false},
+  {"source":"~~~latex\n\\[x\\]\n~~~", "math":false},
+  {"source":"$t_", "math":true},
+  {"source":"\\[\\frac{", "math":true},
+  {"source":"$5$", "math":true},
+  {"source":"$5", "math":false},
+  {"source":"未闭合代码 ```\n$x$", "math":false}
+]

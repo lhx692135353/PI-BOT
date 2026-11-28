@@ -12,7 +12,7 @@ test('timeline loads older pages near the top, keeps the reading position and ju
   const base = join(here, '..', 'test-results'); mkdirSync(base, { recursive: true });
   const dir = mkdtempSync(join(base, 'paging-ui-'));
   try {
-    await esbuild.build({ entryPoints: [join(here, 'timeline-paging.harness.tsx')], outfile: join(dir, 'paging.js'), bundle: true, format: 'iife', platform: 'browser', jsx: 'automatic', define: { 'process.env.NODE_ENV': '"production"' } });
+    await esbuild.build({ entryPoints: [join(here, 'timeline-paging.harness.tsx')], outfile: join(dir, 'paging.js'), bundle: true, format: 'iife', loader:{".woff2":"file",".woff":"file",".ttf":"file"}, platform: 'browser', jsx: 'automatic', define: { 'process.env.NODE_ENV': '"production"' } });
     writeFileSync(join(dir, 'paging.html'), '<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="paging.css"><div id="root"></div><script src="paging.js"></script>');
     const child = spawn(createRequire(import.meta.url)('electron') as string, ['--no-sandbox', '--disable-gpu', '--headless=new', join(here, 'timeline-paging-runner.mjs')], { env: { ...process.env, PAGING_UI_DIR: dir, ELECTRON_DISABLE_SANDBOX: '1' }, stdio: ['ignore', 'pipe', 'pipe'] });
     let stderr = ''; child.stderr.on('data', chunk => { stderr += chunk; });

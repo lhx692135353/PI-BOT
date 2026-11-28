@@ -12,7 +12,7 @@
   ],
   "scripts": {
     "typecheck": "node packages/generative-ui/scripts/generate-catalog.mjs --check && node scripts/generate-runtime-contracts.mjs --check && tsc --noEmit && npm run typecheck --workspace=pi-bot-desktop && npm run typecheck --workspace=@pi-bot/admin && npm run typecheck --workspace=@pi-bot/a2ui",
-    "test": "node --import tsx --test --test-concurrency=1 --test-timeout=120000 server/tests/*.test.ts packages/agent/tests/*.test.ts packages/a2ui/tests/*.test.ts packages/bot-face/tests/*.test.ts desktop/tests/*.test.ts extras/virtual-phone/tests/*.test.ts",
+    "test": "node --import tsx --test --test-concurrency=1 --test-timeout=120000 server/tests/*.test.ts packages/agent/tests/*.test.ts packages/a2ui/tests/*.test.ts packages/markdown/tests/*.test.ts packages/bot-face/tests/*.test.ts desktop/tests/*.test.ts extras/virtual-phone/tests/*.test.ts",
     "build": "npm run build --workspace=@pi-bot/admin && npm run build --workspace=@pi-bot/server",
     "start": "npm run start --workspace=@pi-bot/server",
     "admin:dev": "npm run dev --workspace=@pi-bot/admin",

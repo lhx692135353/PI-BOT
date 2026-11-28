@@ -11,7 +11,7 @@ test('client settings exposes updater states through the real renderer bridge, s
   const here=dirname(fileURLToPath(import.meta.url)),base=join(here,'../test-results');mkdirSync(base,{recursive:true});
   const directory=mkdtempSync(join(base,'client-settings-'));
   try{
-    await build({entryPoints:[join(here,'client-settings.harness.tsx')],outfile:join(directory,'settings.js'),bundle:true,format:'iife',platform:'browser',jsx:'automatic',define:{'process.env.NODE_ENV':'"production"'}});
+    await build({entryPoints:[join(here,'client-settings.harness.tsx')],outfile:join(directory,'settings.js'),bundle:true,format:'iife', loader:{".woff2":"file",".woff":"file",".ttf":"file"},platform:'browser',jsx:'automatic',define:{'process.env.NODE_ENV':'"production"'}});
     writeFileSync(join(directory,'settings.html'),'<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="settings.css"><div id="root"></div><script src="settings.js"></script>');
     const child=spawn(createRequire(import.meta.url)('electron') as string,['--no-sandbox','--disable-gpu','--headless=new',join(here,'client-settings-runner.mjs')],{windowsHide:true,env:{...process.env,CLIENT_SETTINGS_DIR:directory,ELECTRON_DISABLE_SANDBOX:'1'},stdio:['ignore','pipe','pipe']});
     let errors='';child.stderr.on('data',b=>{errors+=b;});

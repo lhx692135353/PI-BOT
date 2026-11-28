@@ -29,6 +29,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.SideEffect
+import dev.pibot.android.domain.containsMath
 import dev.pibot.android.domain.Block
 import dev.pibot.android.domain.parseInline
 import dev.pibot.android.domain.parseMarkdown
@@ -50,6 +55,10 @@ fun inline(text: String): AnnotatedString = buildAnnotatedString {
 
 @Composable
 fun MarkdownText(source: String, modifier: Modifier = Modifier) {
+    var hasMath by remember { mutableStateOf(false) }
+    val renderMath = hasMath || containsMath(source)
+    SideEffect { if(renderMath) hasMath = true }
+    if(renderMath) { CopyableMessage(source,modifier);return }
     val blocks = remember(source) { parseMarkdown(source) }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         for (block in blocks) {

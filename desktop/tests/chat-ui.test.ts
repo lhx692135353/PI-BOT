@@ -12,7 +12,7 @@ test('chat shows immediate separate replies and scoped details with retry, pagin
   const base = join(here, '..', 'test-results'); mkdirSync(base, { recursive: true });
   const dir = mkdtempSync(join(base, 'chat-ui-'));
   try {
-    await esbuild.build({ entryPoints: [join(here, 'chat.harness.tsx')], outfile: join(dir, 'chat.js'), bundle: true, format: 'iife', platform: 'browser', jsx: 'automatic', define: { 'process.env.NODE_ENV': '"production"' } });
+    await esbuild.build({ entryPoints: [join(here, 'chat.harness.tsx')], outfile: join(dir, 'chat.js'), bundle: true, format: 'iife', loader:{".woff2":"file",".woff":"file",".ttf":"file"}, platform: 'browser', jsx: 'automatic', define: { 'process.env.NODE_ENV': '"production"' } });
     writeFileSync(join(dir, 'chat.html'), '<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="chat.css"><div id="root"></div><script src="chat.js"></script>');
     const child = spawn(createRequire(import.meta.url)('electron') as string, ['--no-sandbox', '--disable-gpu', '--headless=new', join(here, 'chat-ui-runner.mjs')], { env: { ...process.env, CHAT_UI_DIR: dir, ELECTRON_DISABLE_SANDBOX: '1' }, stdio: ['ignore', 'pipe', 'pipe'] });
     let stderr = ''; child.stderr.on('data', chunk => { stderr += chunk; });

@@ -17,7 +17,18 @@ struct PiBotApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView()
+            Group {
+                #if DEBUG
+                if ProcessInfo.processInfo.arguments.contains("--math-smoke"),
+                   let url = Bundle.main.url(forResource: "math-smoke", withExtension: "json", subdirectory: "a2ui"),
+                   let data = try? Data(contentsOf: url), let json = JSONValue.parse(String(decoding: data, as: UTF8.self)),
+                   let source = json["source"]?.stringValue {
+                    ScrollView { SelectableText(text: source).padding() }
+                } else { RootView() }
+                #else
+                RootView()
+                #endif
+            }
                 .environment(store)
                 .environment(voice)
                 .environment(skin)

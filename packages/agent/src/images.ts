@@ -1,5 +1,5 @@
 /** Shared wire format; keep this module usable in the browser. */
-export interface ChatImage { name: string; mime_type: string; data: string }
+export interface ChatImage { id?: string; name: string; mime_type: string; data: string }
 export interface MessageImage { id: string; name: string; mime_type: string }
 export const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] as const;
 export const MAX_MESSAGE_ATTACHMENTS = 10;

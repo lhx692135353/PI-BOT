@@ -109,12 +109,15 @@ async function waitsFor(tx: Tx, botId: string, target: string, seen = new Set<st
   return false;
 }
 
+import { resolveImageSource } from "./image-source.js";
+import type { ImageSource } from "../../packages/agent/src/image-source.js";
+
 export async function createTask(
   tx: Tx,
   hub: Hub,
   userId: string,
   claims: LlmClaims,
-  body: { run_id: string; agent?: string; task: string; wait: boolean; kind?: "background" | "delegation"; title?: string; request_id?: string;resumed_from?:string; execution?: "auto" | "device" | "cloud" | "remote"; device_id?:string; operation_target?:string; requirements?:string[]; resources?:Routing["resources"]; resource_key?:string; decision_reason?:string; browser_test_origin?: string; browser_test_visible?: boolean; electron_test?: Routing["electron_test"]; coding?: boolean },
+  body: { expected_output?: "image"; image_refs?: ImageSource[]; run_id: string; agent?: string; task: string; wait: boolean; kind?: "background" | "delegation"; title?: string; request_id?: string;resumed_from?:string; execution?: "auto" | "device" | "cloud" | "remote"; device_id?:string; operation_target?:string; requirements?:string[]; resources?:Routing["resources"]; resource_key?:string; decision_reason?:string; browser_test_origin?: string; browser_test_visible?: boolean; electron_test?: Routing["electron_test"]; coding?: boolean },
   settings?:Settings,
 ) {
   const parent = await callerRun(tx, userId, claims, body.run_id);
@@ -157,7 +160,13 @@ export async function createTask(
   // Resolve before insertion: ambiguous/offline work is never silently queued.
   const location = await resolveTaskTarget(tx,settings,hub,userId,target.slug,routing);
   if(body.operation_target && body.operation_target !== location.operation_target) fail(409,"原任务的资源所在环境已变化");
+  const previousImageTask = body.resumed_from ? await tx.one("SELECT expected_output,image_refs FROM agent_tasks WHERE task_id=$1 AND user_id=$2", [body.resumed_from,userId]) : null;
+  const imageRefs = body.image_refs ?? previousImageTask?.image_refs ?? parent.image_refs ?? [];
+  const sourceScope = previousImageTask ? { ...parent, image_refs: previousImageTask.image_refs } : parent;
+  for (const source of imageRefs) await resolveImageSource(tx, sourceScope, source);
   const task = await tx.insert("agent_tasks", {
+    expected_output: body.expected_output ?? previousImageTask?.expected_output ?? parent.expected_output ?? null,
+    image_refs: imageRefs,
     ...location,
     routing,
     task_id: randomUUID(),

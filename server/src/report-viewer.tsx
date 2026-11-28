@@ -1,7 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { Markdown } from "@pi-bot/markdown/react";
+import "@pi-bot/markdown/styles";
 
 const target = document.getElementById("content")!;
 const id = location.pathname.split("/").at(-1)!;
@@ -42,17 +42,7 @@ try {
   } else {
   const text = await blob.text();
   createRoot(target).render(
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      skipHtml
-      components={{
-        a: (props) => (
-          <a {...props} target="_blank" rel="noopener noreferrer" />
-        ),
-      }}
-    >
-      {text}
-    </ReactMarkdown>,
+    <Markdown source={text}/>,
   );
   }
 } catch (error) {

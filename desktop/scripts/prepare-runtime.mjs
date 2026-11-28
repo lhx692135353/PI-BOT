@@ -17,6 +17,7 @@ export function prepareRuntime(root,runtime) {
   for (const file of ['LICENSE','NOTICE','THIRD_PARTY_NOTICES.md']) cpSync(resolve(root,'..',file),resolve(runtime,file));
   cpSync(resolve(root,'../packages/agent/src/hermes-memory/LICENSE'),resolve(runtime,'licenses/pi-hermes-memory-LICENSE'));
   cpSync(resolve(root,'../packages/agent/src/pstack-LICENSE'),resolve(runtime,'licenses/pstack-LICENSE'));
+  cpSync(resolve(root,'../packages/markdown/licenses'),resolve(runtime,'licenses/markdown'),{recursive:true});
   cpSync(process.execPath,resolve(runtime,process.platform==='win32'?'bin/node.exe':'bin/node'));
   for (const file of ['server.mjs','cli.mjs','document-worker.mjs']) cpSync(resolve(root,'packages/service/dist',file),resolve(runtime,file));
   if (process.platform==='win32') cpSync(resolve(root,'native/dist/pi-bot-windows.exe'),resolve(runtime,'pi-bot-windows.exe'));

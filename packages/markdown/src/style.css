@@ -1,0 +1,17 @@
+@import 'katex/dist/katex.min.css';
+.pi-markdown{overflow-wrap:anywhere;line-height:1.65;user-select:text;-webkit-user-select:text;min-width:0;max-width:100%;}
+.pi-markdown>:first-child{margin-top:0}.pi-markdown>:last-child{margin-bottom:0}
+.pi-markdown p,.pi-markdown ul,.pi-markdown ol,.pi-markdown pre,.pi-markdown blockquote{margin:0 0 .65em}
+.pi-markdown pre{white-space:pre;overflow-x:auto;padding:10px;background:rgba(128,128,128,.08);border-radius:8px}
+.pi-markdown table{display:block;max-width:100%;overflow-x:auto;border-collapse:collapse}
+.pi-markdown td,.pi-markdown th{padding:5px 9px;border:1px solid rgba(128,128,128,.25)}
+.pi-math{display:inline-block;position:relative;max-width:100%;vertical-align:middle;padding-inline-end:22px;box-sizing:border-box;}
+.pi-math-content{display:inline-block;max-width:100%;overflow-x:auto;vertical-align:middle;padding-bottom:2px;}
+.pi-math-block{display:block;margin:.7em 0;text-align:center;}
+.pi-math-block>.pi-math-content{display:block;}
+.pi-math .katex-display{margin:.3em 0;}
+.pi-math .katex{white-space:nowrap;}
+.pi-math-copy{position:absolute;right:0;top:0;opacity:0;border:1px solid #ccc;border-radius:4px;background:Canvas;color:CanvasText;font:12px system-ui;cursor:pointer;user-select:none;-webkit-user-select:none;}
+.pi-math:hover>.pi-math-copy,.pi-math:focus-within>.pi-math-copy{opacity:1;}
+@media(hover:none){.pi-math{padding-inline-end:0}.pi-math-copy{position:static;opacity:1;margin-left:4px;vertical-align:super;}}
+.pi-math-error{font:inherit;white-space:pre-wrap;}

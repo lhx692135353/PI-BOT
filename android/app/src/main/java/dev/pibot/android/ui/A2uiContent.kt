@@ -47,8 +47,16 @@ internal fun a2uiAssetPath(url: String): String? {
         "/a2ui/index.html" -> "a2ui/index.html"
         "/a2ui/renderer.js" -> "a2ui/renderer.js"
         "/a2ui/style.css" -> "a2ui/style.css"
-        else -> null
+        else -> if (Regex("^/a2ui/KaTeX_[A-Za-z0-9_-]+\\.(woff2?|ttf)$").matches(path)) path.removePrefix("/") else null
     }
+}
+internal fun localUiAssetResponse(context: android.content.Context, url: String): WebResourceResponse {
+    val path = a2uiAssetPath(url)
+    if (path != null) {
+        val mime = when { path.endsWith(".js") -> "text/javascript"; path.endsWith(".css") -> "text/css"; path.endsWith(".woff2") -> "font/woff2"; path.endsWith(".woff") -> "font/woff"; path.endsWith(".ttf") -> "font/ttf"; else -> "text/html" }
+        return runCatching { WebResourceResponse(mime, if(mime.startsWith("font/")) null else "UTF-8", context.assets.open(path)) }.getOrElse { WebResourceResponse("text/plain", "UTF-8", 404, "Not Found", emptyMap(), ByteArrayInputStream(ByteArray(0))) }
+    }
+    return WebResourceResponse("text/plain", "UTF-8", 403, "Blocked", emptyMap(), ByteArrayInputStream(ByteArray(0)))
 }
 private class UiBridge(private val post: (String) -> Unit) {
     @JavascriptInterface fun postMessage(value: String) { if (value.length <= 240_000) post(value) }
@@ -94,12 +102,7 @@ fun A2uiContent(message: Message, repository: PiBotRepository, disabled: Boolean
                     override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?) = true
                     override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
                         if (request?.url?.toString()?.matches(Regex("https://tile\\.openstreetmap\\.org/[0-9]+/[0-9]+/[0-9]+\\.png")) == true) return null
-                        val path = request?.url?.toString()?.let(::a2uiAssetPath)
-                        if (path != null) {
-                            val mime = when { path.endsWith(".js") -> "text/javascript"; path.endsWith(".css") -> "text/css"; else -> "text/html" }
-                            return runCatching { WebResourceResponse(mime, "UTF-8", context.assets.open(path)) }.getOrElse { blocked() }
-                        }
-                        return blocked()
+                        return localUiAssetResponse(context, request?.url?.toString().orEmpty())
                     }
                     private fun blocked() = WebResourceResponse("text/plain", "UTF-8", 403, "Blocked", emptyMap(), ByteArrayInputStream(ByteArray(0)))
                     override fun onPageFinished(view: WebView, url: String) { if (url == "$UI_ORIGIN/a2ui/index.html") sendDocument(view) }
@@ -112,6 +115,13 @@ fun A2uiContent(message: Message, repository: PiBotRepository, disabled: Boolean
                             "height" -> packet["height"]?.jsonPrimitive?.intOrNull?.takeIf { it >= 0 }?.let {
                                 contentHeight = it.toFloat()
                                 pageWidth = packet["width"]?.jsonPrimitive?.intOrNull?.takeIf { value -> value > 0 }?.toFloat() ?: 0f
+                            }
+                            "copy" -> {
+                                val id = packet["id"]?.jsonPrimitive?.contentOrNull ?: return@launch
+                                val text = packet["payload"]?.jsonObject?.get("text")?.jsonPrimitive?.contentOrNull ?: return@launch
+                                if(text.length <= 200_000) (context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("公式",text))
+                                val response = buildJsonObject { put("id",JsonPrimitive(id));put("result",JsonNull) }
+                                web?.evaluateJavascript("window.piBotUi?.respond(JSON.parse(${JSONObject.quote(response.toString())}));",null)
                             }
                             "displayed" -> {
                                 val ids = packet["ids"] as? kotlinx.serialization.json.JsonArray ?: return@launch

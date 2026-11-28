@@ -28,7 +28,7 @@ export function ImageGenerationPage() {
   if (!form) return <p className={error ? "error" : "muted"}>{error || "正在加载生图配置…"}</p>;
   return <form className="form" onSubmit={submit} style={{ maxWidth: 720 }}>
     <h2>图片生成</h2>
-    <p className="muted">让 Bot 根据提示词生成图片，结果作为聊天附件保存，可预览和下载。</p>
+    <p className="muted">让 Bot 生成或修改图片，结果作为聊天附件保存。原图标注和裁剪不依赖模型配置。</p>
     <fieldset disabled={saving} style={{ border: 0, padding: 0, margin: 0, display: "grid", gap: 18 }}>
       <label className="check"><input type="checkbox" checked={form.enabled} onChange={event => { setForm({ ...form, enabled: event.target.checked }); setSaved(false); }} />启用生图</label>
       <label>CLIProxy 地址
@@ -42,11 +42,11 @@ export function ImageGenerationPage() {
       <div>
         <p>可用模型</p>
         {MODELS.map(model => <label key={model} className="check" style={{ marginTop: 10 }}>
-          <input type="checkbox" checked={form.models.includes(model)} onChange={event => {
+          <input type="checkbox" aria-label={model} checked={form.models.includes(model)} onChange={event => {
             const models = event.target.checked ? [...form.models, model] : form.models.filter(value => value !== model);
             setForm({ ...form, models, default_model: models.includes(form.default_model) ? form.default_model : models[0] ?? "" });
             setSaved(false);
-          }} />{model}
+          }} />{model}<span className="muted small">{model === "gpt-image-2.6-sunburst" ? " · 生成 / 编辑 / 蒙版" : " · 生成 / 编辑"}</span>
         </label>)}
       </div>
       <label>默认模型

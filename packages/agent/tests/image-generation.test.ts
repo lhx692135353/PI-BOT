@@ -10,7 +10,7 @@ test("image tools isolate provider credentials, bind run/call identity and propa
     requests.push({ url, init }); return Response.json(status === 200 ? { artifact: { id: "image", mime: "image/png" } } : { detail: "结果未确认" }, { status });
   });
   const tools = imageGenerationTools("https://server/prefix/", () => "scoped-agent-token", "run", true);
-  assert.deepEqual(imageGenerationTools("https://server", () => "token", "run", false).map(tool => tool.name), ["image_models"]);
+  assert.deepEqual(imageGenerationTools("https://server", () => "token", "run", false).map(tool => tool.name), ["image_models", "image_read"]);
   const generate = tools.find(tool => tool.name === "image_generate")!;
   const abort = new AbortController();
   const result = await generate.execute("call-one", { prompt: "robot", model: "gemini-3.1-flash-image", run_id: "forged", request_id: "forged" }, abort.signal, undefined, {} as any);

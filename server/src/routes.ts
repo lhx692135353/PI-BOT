@@ -1,4 +1,5 @@
 import { markBotRead } from "./bots.js";
+import { imageTaskFields } from "./image-source.js";
 import { imageGenerationRoutes } from "./image-generation-routes.js";
 import { endpointExperience, resolveExperienceConflict } from './endpoint-experience.js';
 import {documentRoutes,readableDocument} from './documents.js';
@@ -349,6 +350,7 @@ export const routes: Route[] = [
     body: z.object({
       run_id: uuid,
       ...routingFields,
+      ...imageTaskFields,
       browser_test_origin: z.string().trim().max(2048).optional(),
       browser_test_visible: z.boolean().optional(),
       electron_test: z.discriminatedUnion("app", [

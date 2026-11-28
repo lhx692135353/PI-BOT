@@ -18,7 +18,8 @@
     "@a2ui/react": "0.13.0",
     "@a2ui/markdown-it": "0.2.1",
     "zod": "3.25.76",
-    "zod-to-json-schema": "3.25.2"
+    "zod-to-json-schema": "3.25.2",
+    "@pi-bot/markdown": "*"
   },
   "peerDependencies": {
     "react": "^19.0.0",

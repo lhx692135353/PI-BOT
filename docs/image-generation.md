@@ -26,3 +26,21 @@
 升级时 API、Runner、桌面执行器应同步更新。API 自动应用 `0035-image-generation` 迁移；旧配置默认关闭。
 
 验证包括三种协议适配、图片大小/解码限制、任务权限与用户隔离、幂等和并发、取消后不发布、附件下载，以及后台配置和预览的浏览器测试。测试使用模拟网关，不会消耗真实生图额度。
+
+
+## 原图标注、裁剪和 AI 编辑
+
+除文生图外，后台任务现在支持：
+
+- `image_read(source)`：读取预览及 EXIF 方向校正后的原图尺寸。`source` 为 `{message_id,image_id}` 或 `{artifact_id}`；模型上下文提供消息图片 ID，输出附件可继续作为来源。
+- `image_annotate(source,annotations)`：在原图上叠加 `point`、`text`、`line`、`arrow`、`rectangle`、`circle`。位置使用 0–1 的比例坐标，左上为原点；半径、线宽和字号相对短边，文字 y 是基线。教学图表上的标点使用此工具，不重新生成曲线。
+- `image_crop(source,crop)`：按比例坐标独立裁剪，结果是新附件，不覆盖原图。
+- `image_edit(source,prompt,model?,mask?,aspect_ratio?)`：基于真实原图编辑；GPT Image 和 Grok 使用 CLIProxy `/v1/images/edits`，Gemini 使用原生接口的图片 parts。省略比例不强制改图为方形；蒙版仅 GPT Image 支持，需透明通道且与原图尺寸一致。
+
+标注和裁剪不依赖 CLIProxy 配置，不产生模型生图费用。容器包含 Noto CJK 字体；直接在 Linux 运行时安装 `fontconfig fonts-noto-cjk`，Windows 使用已安装的中文字体。字体由发行包附带其许可证，KaTeX 字体与服务端中文标注字体独立。
+
+`image_models` 保持 `models` 和 `default_model`，新增各模型的 `capabilities`（generate/edit/mask）及本地 annotation/crop 能力。这描述已接入的协议；网关版本、供应商权限仍须支持对应操作。失败不会自动换模型或改成文生图。
+
+创建图片任务时设置 `expected_output: "image"`，涉及原图时显式传 `image_refs`。服务端校验并传递引用，续接时保留。只有本任务或子任务实际产生、并关联到回复的新图片附件才算完成；输入图片不能当作输出。缺少图片时不会发布成功的最终回答。操作记录包含来源和参数摘要，成功重放复用附件；超时或中断保留未知状态，不自动重复调用收费接口。
+
+数据库迁移 `0037-image-editing` 为新增字段，原始消息图片不重复存储。API、Runner 和桌面执行器应同步升级；旧客户端仍能显示标准图片附件。

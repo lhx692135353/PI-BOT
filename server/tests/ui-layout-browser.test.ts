@@ -12,7 +12,7 @@ import { ARTIFACT_ID, documentOf } from '../../packages/a2ui/tests/widget-fixtur
 test('wide tables stay inside messages and native pages report uncapped height with a reachable bottom', {skip: !process.env.PI_BOT_TEST_BROWSER, timeout: 90000}, async t => {
   const dir = await mkdtemp(join(tmpdir(), 'pibot-ui-layout-'));
   t.after(() => rm(dir, {recursive: true, force: true}));
-  await build({entryPoints: {tables: 'desktop/tests/generative-ui-browser/tables.tsx', native: 'packages/a2ui/web/main.tsx'}, bundle: true, format: 'esm', jsx: 'automatic', outdir: dir});
+  await build({entryPoints: {tables: 'desktop/tests/generative-ui-browser/tables.tsx', native: 'packages/a2ui/web/main.tsx'}, bundle: true, format: 'esm', loader:{".woff2":"file",".woff":"file",".ttf":"file"}, jsx: 'automatic', outdir: dir});
   const server = createServer(async (req, res) => {
     const native = req.url === '/native';
     if (req.url === '/' || native) {

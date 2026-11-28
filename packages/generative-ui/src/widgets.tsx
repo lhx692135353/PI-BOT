@@ -4,22 +4,18 @@ import { defaultGenerativeUILibrary } from '@assistant-ui/generative-ui/react';
 import { renderMermaidSVG } from 'beautiful-mermaid';
 import * as L from 'leaflet';
 import './leaflet.css';
-import { renderMarkdown } from '@a2ui/markdown-it';
+import { renderMarkdown } from '@pi-bot/markdown';
+import { Markdown as SharedMarkdown } from '@pi-bot/markdown/react';
+import '@pi-bot/markdown/styles';
 import { classifyTemporal, fromLocalDateTime, getTemporalInputStep, normalizeTemporalInputValue, toPickerLocalDateTime } from './temporal.js';
 
-export async function safeMarkdown(value: string) {
-  const html = await renderMarkdown(value);
-  const document = new DOMParser().parseFromString(html, 'text/html');
-  for(const image of document.querySelectorAll('img'))if(!/^data:image\/(png|jpeg|webp|gif);base64,/.test(image.getAttribute('src')??''))image.replaceWith(document.createTextNode(image.alt));
-  return document.body.innerHTML;
-}
-function Markdown({value}:{value:string}) {
-  const [html,setHtml]=useState('');
-  useEffect(()=>{let active=true;void safeMarkdown(value).then(v=>{if(active)setHtml(v);});return()=>{active=false;};},[value]);
-  return <div data-aui="markdown" dangerouslySetInnerHTML={{__html:html}}/>;
+export async function safeMarkdown(value: string) { return renderMarkdown(value); }
+function Markdown({value,host}:{value:string;host?:MediaHost}) {
+  return <div data-aui="markdown"><SharedMarkdown source={value} host={{copy:host?.copy,openLink:href=>{if(host?.openExternal)void host.openExternal(href);else window.open(href,'_blank','noopener,noreferrer');}}}/></div>;
 }
 
 export interface MediaHost {
+  copy?(text:string):void|Promise<void>;
   image(id: string, variant?: 'thumbnail' | 'original'): Promise<string>;
   open(id: string): Promise<void>;
   preview?(id: string): Promise<void>;
@@ -152,7 +148,7 @@ function LibraryWidget({type,props,children}:{type:string;props:Record<string,an
   return defaultGenerativeUILibrary[type].render({...props,children,$status:'done'});
 }
 export function Widget({ type, props, children, change, fire, host }: {type:string;props:Record<string,any>;children?:React.ReactNode;change(value:unknown):void;fire(slot?:'confirm'|'cancel'):void;host?:MediaHost}) {
-  if(type==='Markdown')return <Markdown value={props.value}/>;
+  if(type==='Markdown')return <Markdown value={props.value} host={host}/>;
   if(type==='DatePicker')return <DateField props={props} change={change} fire={()=>fire()}/>;
   if(CONTROL_KEYS[type])return <Control type={type} props={props} change={change} fire={()=>fire()}/>;
   if(type==='Image'&&props.artifact_id)return <ArtifactImage id={props.artifact_id} alt={props.alt} caption={false} host={host} onLoad={()=>host?.displayed?.([props.artifact_id])}/>;

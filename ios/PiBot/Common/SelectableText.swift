@@ -4,13 +4,38 @@ import PiBotKit
 
 /// One message as one selectable text: partial selection, copy and links work like
 /// Android's `CopyableMessage`. Markdown is flattened by `messageDocument`.
-struct SelectableText: UIViewRepresentable {
+struct SelectableText: View {
+    let text: String
+    var markdown = true
+    var color: UIColor = UIColor(Palette.ink)
+    var size: CGFloat = 16
+    @State private var hasMath = false
+    @State private var selecting = false
+    @State private var heldText: String?
+    var body: some View {
+        let renderMath = markdown && (hasMath || (!selecting && containsMath(text)))
+        Group {
+            if renderMath { MathMarkdown(text: text, color: color, size: size) }
+            else { NativeSelectableText(text: heldText ?? text, markdown: markdown, color: color, size: size, selectionChanged: { active in
+                if active && !selecting { heldText = text }
+                if !active { heldText = nil }
+                selecting = active
+            }) }
+        }
+        .onChange(of: renderMath, initial: true) { _, value in if value { hasMath = true } }
+    }
+}
+
+private struct NativeSelectableText: UIViewRepresentable {
     let text: String
     var markdown = true
     var color: UIColor = UIColor(Palette.ink)
     var size: CGFloat = 16
 
-    final class Coordinator {
+    var selectionChanged: (Bool) -> Void = { _ in }
+    final class Coordinator: NSObject, UITextViewDelegate {
+        var selectionChanged: (Bool) -> Void = { _ in }
+        func textViewDidChangeSelection(_ textView: UITextView) { selectionChanged(textView.selectedRange.length > 0) }
         var key: String?
         var rendered = NSAttributedString()
         var shown: String?
@@ -35,6 +60,8 @@ struct SelectableText: UIViewRepresentable {
 
     func makeUIView(context: Context) -> UITextView {
         let view = UITextView()
+        view.delegate = context.coordinator
+        context.coordinator.selectionChanged = selectionChanged
         view.isEditable = false
         view.isSelectable = true
         view.isScrollEnabled = false
@@ -50,6 +77,8 @@ struct SelectableText: UIViewRepresentable {
 
     func updateUIView(_ view: UITextView, context: Context) {
         let coordinator = context.coordinator
+        coordinator.selectionChanged = selectionChanged
+        guard view.selectedRange.length == 0 else { return }
         let next = attributed(coordinator)
         // Reassigning unchanged text would drop the user's selection.
         guard coordinator.shown != coordinator.key else { return }

@@ -402,3 +402,18 @@ version(s), and exceptions or additional permissions here}.”
 > look for such a notice.
 >
 > You may add additional accurate notices of copyright ownership.
+
+
+## 图片标注字体
+
+服务端容器通过 Debian `fonts-noto-cjk` 分发 Noto Sans CJK（来源 https://github.com/notofonts/noto-cjk，SIL Open Font License 1.1）；原始字体和许可证由发行包安装并保留在镜像中（`/usr/share/doc/fonts-noto-cjk/copyright`）。未修改字体。直接部署使用系统字体，不从用户上传的图片或模型输出加载字体。
+
+
+## 数学与化学公式渲染
+
+- KaTeX `0.19.1` 与 mhchem 扩展：来源 https://github.com/KaTeX/KaTeX，MIT。mhchem 保留 MathJax Consortium 与 Martin Hensel 的 Apache-2.0 上游声明。
+- KaTeX 字体：来源 https://github.com/KaTeX/katex-fonts，MIT，Copyright (c) 2018 Khan Academy；未修改字体。
+- markdown-it `14.3.2`：https://github.com/markdown-it/markdown-it，MIT。
+- DOMPurify `3.4.11`：https://github.com/cure53/DOMPurify，按随包附带的 Apache-2.0 许可分发。
+
+完整许可及 mhchem 声明位于 `packages/markdown/licenses/`，构建时复制到移动端本地渲染资源、服务端 dist 和桌面 runtime 的 licenses 目录。未修改上游源码。

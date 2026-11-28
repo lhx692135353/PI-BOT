@@ -3,6 +3,7 @@ import { z } from "zod";
 import { fail, HttpError, type Tx } from "./db.js";
 import type { Settings } from "./config.js";
 import { Vault } from "./security.js";
+import { imageSourceSchema } from "./image-source.js";
 
 export const IMAGE_MODELS = ["grok-imagine-image-2.0", "gpt-image-2.6-sunburst", "gemini-3.1-flash-image"] as const;
 export const IMAGE_GENERATION_TIMEOUT_MS = 180000;
@@ -20,6 +21,13 @@ export const generateImageBody = z.object({
   aspect_ratio: z.enum(["1:1", "3:2", "2:3"]).default("1:1"),
 }).strict();
 export type GenerateImageInput = z.infer<typeof generateImageBody>;
+export const editImageBody = generateImageBody.omit({ aspect_ratio: true }).extend({
+  source: imageSourceSchema, mask: imageSourceSchema.optional(),
+  aspect_ratio: z.enum(["1:1", "3:2", "2:3"]).optional(),
+}).strict();
+export const imageCapabilities = (models: string[]) => Object.fromEntries(models.map(name => [name, {
+  generate: true, edit: true, mask: name === "gpt-image-2.6-sunburst",
+}]));
 
 export function imageBaseUrl(value: string) {
   let url: URL;
@@ -136,5 +144,43 @@ export async function generateImage(base: string, key: string, input: GenerateIm
     if (abort.aborted) return fail(504, "生图超时，未确认结果，请勿自动重复生成");
     if (error instanceof HttpError) throw error;
     return fail(502, "无法连接生图服务，结果未确认，请勿自动重复生成");
+  }
+}
+
+/** Edit transports always contain the actual source, never just its description. */
+export async function editImage(base: string, key: string, input: z.infer<typeof editImageBody>, image: Buffer,
+  mask?: Buffer, signal?: AbortSignal, request: typeof fetch = fetch) {
+  if (mask && input.model !== "gpt-image-2.6-sunburst") fail(422, "所选模型不支持蒙版编辑");
+  const abort = signal ? AbortSignal.any([signal, AbortSignal.timeout(IMAGE_GENERATION_TIMEOUT_MS)]) : AbortSignal.timeout(IMAGE_GENERATION_TIMEOUT_MS);
+  const gemini = input.model === "gemini-3.1-flash-image";
+  let body: BodyInit;
+  if (gemini) {
+    body = JSON.stringify({ contents: [{ role: "user", parts: [{ text: input.prompt },
+      { inlineData: { mimeType: "image/png", data: image.toString("base64") } }] }],
+      generationConfig: { responseModalities: ["TEXT", "IMAGE"], ...(input.aspect_ratio ? { imageConfig: { aspectRatio: input.aspect_ratio } } : {}) } });
+  } else {
+    const form = new FormData();
+    form.set("model", input.model!); form.set("prompt", input.prompt); form.set("n", "1"); form.set("response_format", "b64_json");
+    form.set("image", new Blob([new Uint8Array(image)], { type: "image/png" }), "source.png");
+    if (mask) form.set("mask", new Blob([new Uint8Array(mask)], { type: "image/png" }), "mask.png");
+    if (input.aspect_ratio) form.set("size", { "1:1": "1024x1024", "3:2": "1536x1024", "2:3": "1024x1536" }[input.aspect_ratio]);
+    body = form;
+  }
+  try {
+    const response = await request(gemini ? `${base}/v1beta/models/${input.model}:generateContent` : `${base}/v1/images/edits`, {
+      method: "POST", redirect: "error", signal: abort, headers: { Authorization: `Bearer ${key}`, ...(gemini ? { "Content-Type": "application/json" } : {}) }, body,
+    });
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => {});
+      fail(response.status === 429 ? 503 : 502, `改图服务拒绝请求（HTTP ${response.status}），请检查网关的编辑能力和模型权限；未改用文生图`);
+    }
+    const result = await generatedImage(await responseJson(response), gemini);
+    abort.throwIfAborted();
+    return result;
+  } catch (error) {
+    if (signal?.aborted) return fail(499, "改图已取消，未发布图片");
+    if (abort.aborted) return fail(504, "改图超时，结果未确认，请勿自动重试");
+    if (error instanceof HttpError) throw error;
+    return fail(502, "无法连接改图服务，结果未确认，请勿自动重试");
   }
 }

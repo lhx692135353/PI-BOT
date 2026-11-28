@@ -142,6 +142,11 @@ private struct A2UIWebView: UIViewRepresentable {
                     pageWidth = CGFloat(max(0, packet["width"]?.intValue ?? 0))
                     updateHeight()
                 }
+            case "copy":
+                guard let id = packet["id"]?.stringValue, let text = packet["payload"]?["text"]?.stringValue, text.count <= 200_000 else { return }
+                UIPasteboard.general.string = text
+                let response = JSONValue.object(["id": .string(id), "result": .null]).jsonString()
+                web?.evaluateJavaScript("window.piBotUi?.respond(JSON.parse(\(JSONValue.string(response).jsonString())));", completionHandler: nil)
             case "displayed":
                 if case .array(let items)? = packet["ids"] {
                     let allowed = Set(parent.message.attachments.map(\.id))
@@ -201,11 +206,16 @@ private final class WeakScriptHandler: NSObject, WKScriptMessageHandler {
 }
 
 /// Renderer assets only. No account token, file system or general native API is exposed to the page.
-private final class A2UIAssets: NSObject, WKURLSchemeHandler {
+final class A2UIAssets: NSObject, WKURLSchemeHandler {
     private static let files = ["/a2ui/index.html": "text/html", "/a2ui/renderer.js": "text/javascript", "/a2ui/style.css": "text/css"]
 
+    private static func mime(_ path: String) -> String? {
+        if let type = files[path] { return type }
+        guard path.range(of: #"^/a2ui/KaTeX_[A-Za-z0-9_-]+\.(woff2?|ttf)$"#, options: .regularExpression) != nil else { return nil }
+        return path.hasSuffix("woff2") ? "font/woff2" : path.hasSuffix("woff") ? "font/woff" : "font/ttf"
+    }
     func webView(_ webView: WKWebView, start task: any WKURLSchemeTask) {
-        guard let url = task.request.url, url.host == "app", let mime = Self.files[url.path],
+        guard let url = task.request.url, url.host == "app", let mime = Self.mime(url.path),
               let file = Bundle.main.url(forResource: url.lastPathComponent, withExtension: nil, subdirectory: "a2ui"),
               let data = try? Data(contentsOf: file) else {
             task.didFailWithError(URLError(.fileDoesNotExist))

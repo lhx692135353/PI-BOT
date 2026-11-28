@@ -15,7 +15,7 @@ test("admin saves selectable image models without exposing saved keys and genera
 }, async t => {
   const dir = tempDir();
   t.after(() => dir.cleanup());
-  await build({ entryPoints: { main: "admin/src/main.tsx", "report-viewer": "server/src/report-viewer.tsx" }, bundle: true, format: "esm", jsx: "automatic", outdir: dir.path });
+  await build({ entryPoints: { main: "admin/src/main.tsx", "report-viewer": "server/src/report-viewer.tsx" }, bundle: true, format: "esm", loader:{".woff2":"file",".woff":"file",".ttf":"file"}, jsx: "automatic", outdir: dir.path });
   const image = await sharp({ create: { width: 640, height: 480, channels: 3, background: "#f4692a" } }).png().toBuffer();
   let config = { enabled: false, base_url: "", models: [...IMAGE_MODELS], default_model: IMAGE_MODELS[1], configured: false };
   const saves: any[] = [];

@@ -11,7 +11,7 @@ const CACHE_BYTES = 16 * 1024 * 1024;
 export async function compressModelImage(image: ChatImage): Promise<ChatImage> {
   const key = createHash('sha256').update(image.mime_type).update(image.data).digest('hex');
   const cached = cache.get(key);
-  if (cached) { cache.delete(key); cache.set(key, cached); return { ...cached, name: image.name }; }
+  if (cached) { cache.delete(key); cache.set(key, cached); return { ...cached, name: image.name, ...(image.id ? { id: image.id } : {}) }; }
   const input = Buffer.from(image.data, 'base64');
   if (!input.length || input.length > MAX_IMAGE_BYTES) throw new Error('图片原图大小超限');
   try {
@@ -39,7 +39,7 @@ export async function compressModelImage(image: ChatImage): Promise<ChatImage> {
     remember(key);
     // Avoid a second lossy encode at the next guard in the same process.
     remember(createHash('sha256').update(result.mime_type).update(result.data).digest('hex'));
-    return { ...result };
+    return { ...result, ...(image.id ? { id: image.id } : {}) };
   } catch (error) {
     throw new Error('图片压缩失败，原图不会发送给模型：' + (error instanceof Error ? error.message : '无法解码图片'));
   }

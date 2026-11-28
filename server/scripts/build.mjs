@@ -1,3 +1,4 @@
+import { cp, mkdir } from "node:fs/promises";
 import { build } from "esbuild";
 import { createRequire } from "node:module";
 import { resolve } from "node:path";
@@ -26,4 +27,7 @@ await build({
   sourcemap: true,
 });
 
-await build({entryPoints:["src/report-viewer.tsx"],outfile:"dist/report-viewer.js",bundle:true,platform:"browser",format:"esm",target:"es2022",minify:true});
+await build({entryPoints:["src/report-viewer.tsx"],outfile:"dist/report-viewer.js",bundle:true,platform:"browser",format:"esm",target:"es2022",minify:true,loader:{".woff2":"file",".woff":"file",".ttf":"file"},assetNames:"markdown-assets/[name]"});
+
+await mkdir("dist/licenses",{recursive:true});
+await cp(resolve(root,"packages/markdown/licenses"),"dist/licenses",{recursive:true});

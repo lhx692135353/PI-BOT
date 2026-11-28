@@ -1,6 +1,7 @@
 import { routingParameters, routingDescription } from "./routing.js";
 import { RuntimeError, errorInfo, httpErrorInfo } from "@pi-bot/runtime-contracts";
 import { Type } from "typebox";
+import { imageTaskParameters } from "./image-source.js";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 
 export const TASK_TOOL_NAMES = new Set(["device_status", "endpoint_experience", "start_task", "task_status", "task_message", "cancel_task"]);
@@ -45,6 +46,7 @@ export function taskTools(baseUrl: string, token: () => string, runId: string): 
       name: "start_task", label: "安排后台任务",
       description: "创建独立的后台任务并立即返回。先简短回应用户要核实什么，再安排任务。task 自包含但精简，保留目标、必要上下文、位置、约束和期望输出；详细执行计划交给后台，不复制历史全文，不省略关键条件，不重复创建已有任务。最多同时执行两个，其他排队。" + routingDescription,
       parameters: Type.Object({
+        ...imageTaskParameters,
         ...routingParameters,
         browser_test_origin: Type.Optional(Type.String({ maxLength: 2048, description: "端侧 Web 功能测试的 HTTP(S) origin，只含协议、主机和端口。服务端自动添加端侧浏览器能力要求。未指定电脑时省略 device_id。已知项目设备时保留 resources.target。" })),
         browser_test_visible: Type.Optional(Type.Boolean({ description: "已知需要用户登录、扫码，或用户要求观看时开启。从任务开始在执行电脑上显示独立浏览器窗口。默认后台运行。" })),

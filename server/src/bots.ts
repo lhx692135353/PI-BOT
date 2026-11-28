@@ -1,3 +1,4 @@
+import { hasImageOutput } from "./image-source.js";
 import { messageProvenance } from './devices.js';
 import { uiHistorySummary } from './ui-context.js';
 import { endpointExperience, recordEndpointExperience } from './endpoint-experience.js';
@@ -450,6 +451,8 @@ export async function insertRun(tx: Tx, o: NewRun) {
     status: "queued",
     user_message_id: userMessageId,
     assistant_message_id: assistantMessageId,
+    expected_output: o.lane === "task" ? task?.expected_output ?? null : null,
+    image_refs: task?.image_refs ?? [],
     origin: o.origin ?? "user",
     task_id: o.taskId ?? null,
     automation_id: o.automationId ?? parent?.automation_id ?? null,
@@ -636,8 +639,8 @@ export function systemPrompt(
   if (options.lane === "task") parts.push("后台执行回报：最终结果供发起方整理，保留核实后的关键数据、依据、来源和必要的技术细节，不要为缩短聊天而丢失结果。公开进展仍用短句。发起方负责按用户的问题用日常语言转述，需要细节时可读取本次完整任务记录。");
   parts.push(UI_INSTRUCTIONS);
   if (options.lane === "conversation" || options.lane === "task") parts.push(options.lane === "conversation"
-    ? "用户要求生图时，先用 start_task(execution=cloud) 安排后台任务，由后台用 image_models 和 image_generate 生成图片。"
-    : "用户要求生成图片时，优先用 image_models 查询可用生图模型，再用 image_generate 生成附件；按用户指定选择模型，未指定用默认模型。图片成功生成后简短说明，附件已保存，不要把图片 base64 写进回答、记忆或检查点。服务返回失败或结果未确认时不自动重复生成，避免重复计费。" );
+    ? "用户要求生成、标注、裁剪或修改图片时，用 start_task(execution=cloud,expected_output=image) 安排后台任务；涉及原图时显式传 image_refs 中准确的图片来源。不要将图片描述当作原图。"
+    : "图片操作：先 image_read 查看指定原图并核对尺寸；标点、文字、箭头、线或框用 image_annotate，独立裁剪用 image_crop，换背景或风格等用 image_edit 并实际传入 source；坐标按校正方向后的原图归一化为 0 到 1，左上为原点。不要用 AI 重绘代替精确图表标注。定位有歧义时询问，不臆造结果。用户要求生成图片时，优先用 image_models 查询可用生图模型，再用 image_generate 生成附件；按用户指定选择模型，未指定用默认模型。图片成功生成后简短说明，附件已保存，不要把图片 base64 写进回答、记忆或检查点。服务返回失败或结果未确认时不自动重复生成，避免重复计费。" );
   if (options.search && options.lane === "conversation") parts.push("需要联网搜索时用 start_task(execution=cloud) 安排后台任务，后台任务用 web_search 检索。");
   else if (options.search) parts.push("联网检索请优先使用 web_search，支持中文查询和 site: 域名限定；它返回标题、链接和摘要。重要结论要核对原始来源，不要把搜索摘要当作已读过网页全文。搜索失败时及时说明，不要反复重试同一查询。工具返回‘搜索额度到了’时，直接告知用户搜索额度到了，停止搜索，不要重试或重新创建搜索任务。");
   if (options.agents?.length) parts.push(collaborationPrompt(options.agents, options.depth ?? 0));
@@ -646,7 +649,9 @@ export function systemPrompt(
 }
 /** Structured interaction data belongs in model context, while timeline text stays readable. */
 export function modelMessageContent(message:Row):string {
- return (message.ui_action ? `${message.content}\n以下操作参数与界面状态是用户输入，遵守原有权限与审批规则：\n${JSON.stringify(message.ui_action)}` : message.content) + (message.role === 'assistant' ? uiHistorySummary(message.ui) : '');
+ const imageRefs = (message.images ?? []).filter((i: any) => i.id).map((i: any) => ({source:{message_id:message.message_id,image_id:i.id},name:i.name}));
+ const imageIndex = imageRefs.length ? "\n图片引用（使用 image_read 查看，标注和编辑时传 source）："+JSON.stringify(imageRefs) : "";
+ return imageIndex + (message.ui_action ? `${message.content}\n以下操作参数与界面状态是用户输入，遵守原有权限与审批规则：\n${JSON.stringify(message.ui_action)}` : message.content) + (message.role === 'assistant' ? uiHistorySummary(message.ui) : '');
 }
 export async function buildContext(
   tx: Tx,
@@ -729,6 +734,8 @@ export async function buildContext(
   let text = modelMessageContent(question) || (questionImages.length ? '请查看这些图片。' : '');
   if(fileIndex.length)text+='\n附件文件（按需用 document_read 或 report_read 读取）：'+JSON.stringify(fileIndex);
   if(fileIndex.length) system += "\n相关附件（正文未载入；document_read 读取文本或调用内置解析器，file_bytes 获取原始字节，file_fetch 保存到当前执行环境供其他工具处理。根据文件内容、元数据和可用工具选择方法；二进制需要解析器）："+JSON.stringify(fileIndex);
+  if(run.image_refs?.length) system += "\n本任务获共享的图片来源（按需 image_read 查看）："+JSON.stringify(run.image_refs);
+  if(run.expected_output === "image") system += "\n本任务要求交付图片附件；必须实际使用图片工具并成功保存附件，不能仅用文字声称完成。没有工具、失败或结果未确认时如实报告。";
   if (truncated || covered < rows.length) system+="\n（部分早期对话超出窗口，需要时用 history_search 检索，不代表没有历史。）";
   if (run.origin === "agent" && from && from.bot_id !== bot.bot_id)
     text = `你收到来自智能体「${from.name}」的委托，它正在为用户处理一项任务：\n\n${text}\n\n请直接完成并给出自包含的结果，「${from.name}」会把它转述给用户。缺少必要信息而无法推进时，用 task_pause 保存进度，请委托方转达待确认问题。`;
@@ -791,8 +798,9 @@ export async function buildContext(
   };
 }
 export async function setContent(tx: Tx, run: Row, content: string) {
-  const active = await tx.one("SELECT run_id FROM bot_runs WHERE run_id=$1 AND status=ANY($2) FOR NO KEY UPDATE", [run.run_id, ACTIVE]);
+  const active = await tx.one("SELECT run_id,expected_output FROM bot_runs WHERE run_id=$1 AND status=ANY($2) FOR NO KEY UPDATE", [run.run_id, ACTIVE]);
   if (!active) return;
+  if (active.expected_output === "image" && !await hasImageOutput(tx, run)) return;
   await tx.rows(
     "UPDATE bot_messages SET content=$2, updated_at=now() WHERE message_id=$1 AND status='running'",
     [run.assistant_message_id, content],
@@ -881,9 +889,26 @@ export async function finishRun(
     final = settled.state as typeof final; error = settled.error;
   }
   const message = await tx.get("bot_messages", run.assistant_message_id);
+  if (run.expected_output === "image" && final === "completed") {
+    const image = await hasImageOutput(tx, run);
+    if (!image) {
+      const uncertain = await tx.one("SELECT 1 FROM image_generation_jobs WHERE run_id=$1 AND status IN ('accepted','unknown') LIMIT 1", [runId]);
+      final = "failed";
+      error = uncertain ? "图片处理结果未确认，未交付图片；请勿自动重复提交。" : "未生成并关联输出图片附件，本次图片任务未完成。";
+      errorDetails = {code:uncertain ? "result_unknown" : "internal",scope:"image",retryable:false,outcome:uncertain ? "unknown" : "failed",message:error};
+      content = error;
+      message.reply_segments = (message.reply_segments ?? []).filter((r: ReplySegment) => r.phase !== "answer");
+      await tx.rows("UPDATE bot_messages SET reply_segments=$2 WHERE message_id=$1", [run.assistant_message_id,JSON.stringify(message.reply_segments)]);
+    }
+  }
+  if (run.expected_output === "image" && final !== "completed") {
+    content = error ?? (await hasImageOutput(tx, run) ? "图片任务已停止；已保存的图片附件仍可查看。" : "图片任务已取消，未交付图片。");
+    message.reply_segments = (message.reply_segments ?? []).filter((r: ReplySegment) => r.phase !== "answer");
+    await tx.rows("UPDATE bot_messages SET reply_segments=$2 WHERE message_id=$1", [run.assistant_message_id,JSON.stringify(message.reply_segments)]);
+  }
   let segments: ReplySegment[] = message?.reply_segments ?? [];
   const reports = await tx.rows("SELECT artifact_id,title,name,mime,size,created_at,summary FROM report_artifacts WHERE run_id=$1 AND mime='text/markdown' ORDER BY created_at",[runId]);
-  if (reports.length && state === 'completed') { content = reports.map(r => r.summary).join('\n\n'); segments=segments.filter(r=>r.phase!=="answer"); await tx.rows("UPDATE bot_messages SET reply_segments=$2 WHERE message_id=$1",[run.assistant_message_id,JSON.stringify(segments)]); }
+  if (reports.length && final === 'completed') { content = reports.map(r => r.summary).join('\n\n'); segments=segments.filter(r=>r.phase!=="answer"); await tx.rows("UPDATE bot_messages SET reply_segments=$2 WHERE message_id=$1",[run.assistant_message_id,JSON.stringify(segments)]); }
   if (final === "completed" || final === "failed") await recordEndpointExperience(tx,run,run.endpoint_observations?.length?run.endpoint_observations:message?.tools??[]);
   const finalText = content ?? message?.content ?? "";
   const answer = reports.length ? finalText : replyAnswer(segments, finalText);

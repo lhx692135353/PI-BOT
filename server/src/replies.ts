@@ -1,3 +1,4 @@
+import { hasImageOutput } from "./image-source.js";
 import { z } from "zod";
 import { replyAnswer, type ReplyEvent, type ReplySegment } from "@pi-bot/agent";
 import type { Row, Tx } from "./db.js";
@@ -24,6 +25,7 @@ export async function recordReply(tx: Tx, run: Row, input: ReplyEvent, final = f
   const current = await tx.one("SELECT * FROM bot_runs WHERE run_id=$1 FOR NO KEY UPDATE", [run.run_id]);
   if (!current || current.origin === "automation" || !["queued", "running", "waiting_approval"].includes(current.status)) return;
   run = current;
+  if (!final && run.expected_output === "image" && reply.phase === "answer" && !await hasImageOutput(tx, run)) return;
   const m = await tx.one("SELECT * FROM bot_messages WHERE message_id=$1 FOR UPDATE", [run.assistant_message_id]);
   if (!m || m.status !== "running") return;
   const previous = (m.reply_segments ?? []).find((r: ReplySegment) => r.id === reply.id);

@@ -22,9 +22,7 @@ fi
 
 mkdir -p "${DEST}/bot-face" "${DEST}/a2ui"
 cp "${ROOT}/packages/bot-face/spec.json" "${DEST}/bot-face/spec.json"
-for file in index.html renderer.js style.css; do
-  cp "${A2UI}/dist/${file}" "${DEST}/a2ui/${file}"
-done
+cp -R "${A2UI}/dist/." "${DEST}/a2ui/"
 
 # The renderer bundles third-party JS/CSS; ship their notices alongside it.
 cp "${ROOT}/THIRD_PARTY_NOTICES.md" "${DEST}/THIRD_PARTY_NOTICES.md"

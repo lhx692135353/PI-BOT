@@ -20,6 +20,9 @@ import android.view.MenuItem
 import android.view.MotionEvent
 import android.view.ViewConfiguration
 import android.widget.TextView
+import android.webkit.WebView
+import androidx.compose.runtime.SideEffect
+import dev.pibot.android.domain.containsMath
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -42,10 +45,20 @@ import kotlin.math.abs
 internal class MessageSelectionSession {
     var active by mutableStateOf<SelectableMessageView?>(null)
         private set
+    private var webSelection: WebView? = null
+    fun startWeb(view: WebView) {
+        if(webSelection === view) return
+        active?.finishSelection()
+        webSelection?.evaluateJavascript("window.getSelection()?.removeAllRanges();",null)
+        webSelection = view; onActiveChanged(true)
+    }
+    fun endWeb(view: WebView) { if(webSelection === view) { webSelection = null;onActiveChanged(false) } }
     var onActiveChanged: (Boolean) -> Unit = {}
     var reveal: (SelectableMessageView, Rect) -> Unit = { _, _ -> }
     fun start(view: SelectableMessageView) {
         if (active === view) return
+        webSelection?.evaluateJavascript("window.getSelection()?.removeAllRanges();",null)
+        webSelection = null
         active?.finishSelection()
         active = view
         onActiveChanged(true)
@@ -55,7 +68,7 @@ internal class MessageSelectionSession {
         active = null
         onActiveChanged(false)
     }
-    fun clear() { active?.finishSelection() }
+    fun clear() { active?.finishSelection();webSelection?.evaluateJavascript("window.getSelection()?.removeAllRanges();",null);webSelection = null;onActiveChanged(false) }
 }
 internal val LocalMessageSelection = staticCompositionLocalOf<MessageSelectionSession?> { null }
 
@@ -68,8 +81,13 @@ fun CopyableMessage(
     color: Color = Ink,
 ) {
     val session = LocalMessageSelection.current
-    val document = remember(text, markdown) { messageDocument(text, markdown) }
     val viewHolder = remember { arrayOfNulls<SelectableMessageView>(1) }
+    var hasMath by remember { mutableStateOf(false) }
+    val nativeSelection = session?.active != null && session.active === viewHolder[0]
+    val renderMath = markdown && (hasMath || (!nativeSelection && containsMath(text)))
+    SideEffect { if(renderMath) hasMath = true }
+    if(renderMath) { MathMarkdown(text,modifier,color);return }
+    val document = remember(text, markdown) { messageDocument(text, markdown) }
     DisposableEffect(session) {
         onDispose { viewHolder[0]?.finishSelection(); viewHolder[0] = null }
     }

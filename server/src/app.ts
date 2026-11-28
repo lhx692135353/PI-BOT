@@ -222,7 +222,13 @@ export async function createApp(
     }
   });
 
-  app.get("/reports/view/:id", async (_req, reply) => reply.header("cache-control","no-store").header("content-security-policy", "default-src 'self'; style-src 'unsafe-inline'; script-src 'self'; frame-src blob:; frame-ancestors 'none'; base-uri 'none'").type("text/html").send(reportViewer));
+  app.get("/reports/view/:id", async (_req, reply) => reply.header("cache-control","no-store").header("content-security-policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'self'; frame-src blob:; frame-ancestors 'none'; base-uri 'none'").type("text/html").send(reportViewer));
+  app.get("/reports/view/viewer.css", async (_req, reply) => reply.type("text/css").send(await readFile(new URL("../dist/report-viewer.css",import.meta.url))));
+  app.get("/reports/view/markdown-assets/:name", async (req, reply) => {
+    const name=(req.params as {name:string}).name;
+    if(!/^KaTeX_[A-Za-z0-9_-]+\.(woff2?|ttf)$/.test(name))return reply.code(404).send();
+    return reply.type(name.endsWith("woff2")?"font/woff2":name.endsWith("woff")?"font/woff":"font/ttf").send(await readFile(new URL(`../dist/markdown-assets/${name}`,import.meta.url)));
+  });
   app.get("/reports/view/viewer.js", async (_req, reply) => reply.type("text/javascript").send(await readFile(new URL("../dist/report-viewer.js",import.meta.url))));
   app.get("/openapi.json", async () => openapi());
 

@@ -8,6 +8,7 @@ on:
       - "packages/bot-face/spec.json"
       - "packages/a2ui/**"
       - "packages/generative-ui/**"
+      - "packages/markdown/**"
       - "package-lock.json"
       - ".github/workflows/ios.yml"
   push:
@@ -17,6 +18,7 @@ on:
       - "packages/bot-face/spec.json"
       - "packages/a2ui/**"
       - "packages/generative-ui/**"
+      - "packages/markdown/**"
       - "package-lock.json"
       - ".github/workflows/ios.yml"
   workflow_dispatch:
@@ -41,4 +43,12 @@ jobs:
         run: swift test
       - name: Simulator build
         working-directory: ios
-        run: xcodebuild -project PiBot.xcodeproj -scheme PiBot -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+        run: xcodebuild -project PiBot.xcodeproj -scheme PiBot -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
+
+      - name: Native math rendering, selection and clipboard smoke test
+        run: bash ios/scripts/test-math-simulator.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pibot-ios-math-smoke
+          path: ios/build/math-*

@@ -4,8 +4,8 @@ import { AttachmentMenu } from './attachment-menu.js';
 import type {ArtifactRef} from '../../../packages/protocol/src/index.js';
 import { confirmAction, showNotice } from './dialogs.js';
 import { memo, useMemo, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { Markdown as SharedMarkdown } from '@pi-bot/markdown/react';
+import '@pi-bot/markdown/styles';
 import { PiBot } from './bot-avatar.js';
 import type { Mood } from '@pi-bot/bot-face';
 import type { AgentTaskRef, Approval, Bot, FromBot, Message, MessagePage, TaskConversation } from '../../../packages/protocol/src/index.js';
@@ -23,12 +23,10 @@ const day = (iso: string) => new Date(iso).toLocaleDateString('zh-CN', { month: 
 const NO_IMAGES: ChatImage[] = [];
 
 const Markdown = memo(function Markdown({ text }: { text: string }) {
-  return (
-    <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
-      img: ({src,alt}) => src && /^data:image\/(png|jpeg|webp|gif);base64,/.test(src) ? <img src={src} alt={alt??''}/> : <span>{alt}</span>,
-      a: ({ href, children }) => <a href={href} onClick={e => { e.preventDefault(); if(href&&/^\/remote\/artifacts\/[0-9a-f-]{36}$/.test(href))void call<{url:string}>('remoteArtifact',{id:href.split('/').at(-1)}).then(r=>bridge.openExternal(r.url)).catch(e=>showNotice(errorText(e)));else if (href && /^https?:/.test(href)) void bridge.openExternal(href); }}>{children}</a>,
-    }}>{text}</ReactMarkdown>
-  );
+  return <SharedMarkdown source={text} host={{openLink:href=>{
+    if(/^\/remote\/artifacts\/[0-9a-f-]{36}$/.test(href))void call<{url:string}>('remoteArtifact',{id:href.split('/').at(-1)}).then(r=>bridge.openExternal(r.url)).catch(e=>showNotice(errorText(e)));
+    else if(/^https?:/.test(href))void bridge.openExternal(href);
+  }}}/>;
 });
 
 function Progress({ lines }: { lines: string[] }) {
