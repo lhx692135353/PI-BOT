@@ -253,7 +253,8 @@ class PiBotRepository(
 
     suspend fun preferences(): DevelopmentPreferences = authed { u, t -> api.preferences(u, t) }
 
-    suspend fun setPreferences(enabled: Boolean): DevelopmentPreferences = authed { u, t -> api.setPreferences(u, t, enabled) }
+    suspend fun setPreferences(enabled: Boolean? = null, skin: String? = null): DevelopmentPreferences =
+        authed { u, t -> api.setPreferences(u, t, pstackEnabled = enabled, skin = skin) }
 
     suspend fun revokeDevice(id: String) { authed { u,t -> api.revokeDevice(u,t,id) }; refreshMe() }
 

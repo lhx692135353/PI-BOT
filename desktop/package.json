@@ -24,21 +24,25 @@
   "dependencies": {
     "@earendil-works/pi-ai": "1.5.2",
     "@earendil-works/pi-coding-agent": "1.5.2",
+    "@pi-bot/a2ui": "*",
     "@pi-bot/agent": "*",
     "@pi-bot/bot-face": "*",
+    "@pi-bot/runtime-contracts": "*",
+    "@types/three": "^0.187.0",
     "playwright": "1.65.1",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-markdown": "10.1.0",
     "remark-gfm": "4.0.1",
+    "three": "^0.187.0",
     "typebox": "1.3.27",
     "ws": "8.21.3",
-    "zod": "4.6.5",
-    "@pi-bot/a2ui": "*",
-    "@pi-bot/runtime-contracts": "*"
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "@electron-forge/cli": "7.11.2",
+    "@electron-forge/maker-squirrel": "7.11.2",
+    "@electron-forge/maker-zip": "7.11.2",
     "@napi-rs/canvas": "1.0.11",
     "@types/node": "24.13.6",
     "@types/react": "19.3.0",
@@ -49,9 +53,7 @@
     "node": "24.21.0",
     "tsx": "4.23.15",
     "typescript": "7.0.2",
-    "vite": "8.3.1",
-    "@electron-forge/maker-squirrel": "7.11.2",
-    "@electron-forge/maker-zip": "7.11.2"
+    "vite": "8.3.1"
   },
   "engines": {
     "node": ">=24"

@@ -1,6 +1,10 @@
 package dev.pibot.android.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -8,9 +12,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import dev.pibot.android.face.IronManAvatar
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
@@ -52,7 +59,12 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(repository: PiBotRepository, onBack: () -> Unit, onPhone: (String) -> Unit = {}) {
+fun SettingsScreen(
+    repository: PiBotRepository,
+    onBack: () -> Unit,
+    onPhone: (String) -> Unit = {},
+    onPreviewIntro: () -> Unit = {},
+) {
     val session by repository.session.collectAsStateWithLifecycle()
     val computer by repository.computer.collectAsStateWithLifecycle()
     val live by repository.live.collectAsStateWithLifecycle()
@@ -60,7 +72,10 @@ fun SettingsScreen(repository: PiBotRepository, onBack: () -> Unit, onPhone: (St
     val cloud by repository.cloudComputer.collectAsStateWithLifecycle()
     val call by repository.liveCall.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val push = (context.applicationContext as PiBotApp).push
+    val app = context.applicationContext as PiBotApp
+    val push = app.push
+    val skinStore = app.skinStore
+    val currentSkin by skinStore.skin.collectAsStateWithLifecycle()
     val pushStatus by push.status.collectAsStateWithLifecycle()
     val pushRestartRequired by push.restartRequired.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
@@ -69,9 +84,13 @@ fun SettingsScreen(repository: PiBotRepository, onBack: () -> Unit, onPhone: (St
     var changing by remember { mutableStateOf(false) }
     var pstack by remember { mutableStateOf<Boolean?>(null) }
     var savingPstack by remember { mutableStateOf(false) }
+    var savingSkin by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { runCatching { repository.refreshMe() }.onFailure { error = errorText(it) } }
     LaunchedEffect(repository) {
-        runCatching { repository.preferences() }.onSuccess { pstack = it.pstackEnabled }.onFailure { error = errorText(it) }
+        runCatching { repository.preferences() }.onSuccess {
+            pstack = it.pstackEnabled
+            skinStore.applyFromServer(it.skin)
+        }.onFailure { error = errorText(it) }
     }
 
     Scaffold(
@@ -85,6 +104,59 @@ fun SettingsScreen(repository: PiBotRepository, onBack: () -> Unit, onPhone: (St
         containerColor = Paper,
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp)) {
+            Group("外观与皮肤 · 随账号多端同步") {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    for (option in AppSkin.entries) {
+                        val selected = currentSkin == option
+                        Column(
+                            Modifier
+                                .weight(1f)
+                                .background(if (selected) AccentSoft else Paper, RoundedCornerShape(12.dp))
+                                .border(BorderStroke(if (selected) 2.dp else 1.dp, if (selected) Accent else Line), RoundedCornerShape(12.dp))
+                                .clickable(enabled = !savingSkin && !selected) {
+                                    savingSkin = true
+                                    skinStore.setLocal(option)
+                                    scope.launch {
+                                        try {
+                                            val updated = repository.setPreferences(skin = option.wire)
+                                            skinStore.applyFromServer(updated.skin)
+                                        } catch (e: Exception) {
+                                            error = errorText(e)
+                                        } finally {
+                                            savingSkin = false
+                                        }
+                                    }
+                                }
+                                .padding(12.dp),
+                        ) {
+                            Text(option.label, fontWeight = FontWeight.SemiBold, color = Ink)
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                if (option == AppSkin.IRONMAN) "红金反应堆配色 · 12 款固定机甲头像" else "经典暖纸界面 · 原生 Bot 头像",
+                                color = Muted,
+                                fontSize = 12.sp,
+                            )
+                        }
+                    }
+                }
+                if (currentSkin == AppSkin.IRONMAN) {
+                    Spacer(Modifier.height(12.dp))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        items(ARMOR_MODELS) { armor ->
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                IronManAvatar(seed = armor.code, mood = "happy", size = 40.dp, armorIndex = armor.id)
+                                Spacer(Modifier.height(2.dp))
+                                Text(armor.code, color = Muted, fontSize = 10.sp)
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("每个 Bot 按 ID 固定分配机甲，不改动原头像", color = Muted, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                        TextButton(onClick = onPreviewIntro) { Text("预览启动动画") }
+                    }
+                }
+            }
             Group("账号") {
                 Item("用户", session?.user?.let { it.displayName.ifBlank { it.username } } ?: "")
                 Item("服务器", session?.serverUrl ?: "")

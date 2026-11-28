@@ -3,18 +3,84 @@ import PiBotKit
 
 struct SettingsView: View {
     @Environment(AppStore.self) private var store
+    @Environment(SkinStore.self) private var skinStore
     @Environment(\.dismiss) private var dismiss
     @State private var removing: Device?
     @State private var error: String?
     @State private var changing = false
     @State private var pstack: Bool?
     @State private var savingPstack = false
+    @State private var savingSkin = false
 
     private var version: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "" }
 
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    HStack(spacing: 10) {
+                        ForEach(AppSkin.allCases) { option in
+                            let selected = skinStore.skin == option
+                            Button {
+                                guard !selected, !savingSkin else { return }
+                                savingSkin = true
+                                skinStore.skin = option
+                                Task {
+                                    defer { savingSkin = false }
+                                    do {
+                                        let prefs = try await store.setPreferences(skin: option.rawValue)
+                                        skinStore.applyFromServer(prefs.skin)
+                                    } catch is CancellationError {}
+                                    catch { self.error = errorText(error) }
+                                }
+                            } label: {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(option.label)
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(Palette.ink)
+                                    Text(option.subtitle)
+                                        .font(.caption2)
+                                        .foregroundStyle(Palette.muted)
+                                        .multilineTextAlignment(.leading)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(10)
+                                .background(selected ? Palette.accentSoft : Palette.paper, in: RoundedRectangle(cornerRadius: 12))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(selected ? Palette.accent : Palette.line, lineWidth: selected ? 2 : 1)
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(savingSkin)
+                        }
+                    }
+                    .listRowInsets(EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12))
+
+                    if skinStore.skin == .ironman {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 10) {
+                                ForEach(armorModels) { armor in
+                                    VStack(spacing: 3) {
+                                        IronManAvatarView(seed: armor.code, mood: "happy", size: 38, armorIndex: armor.id)
+                                        Text(armor.code).font(.system(size: 10)).foregroundStyle(Palette.muted)
+                                    }
+                                }
+                            }
+                            .padding(.vertical, 4)
+                        }
+                        Button("预览启动动画") {
+                            dismiss()
+                            skinStore.previewIntro()
+                        }
+                    }
+                } header: {
+                    Text("外观与皮肤 · 随账号多端同步")
+                } footer: {
+                    if skinStore.skin == .ironman {
+                        Text("每个 Bot 按 ID 固定分配一款机甲头像，切回默认皮肤即可恢复原头像。")
+                    }
+                }
                 Section("账号") {
                     LabeledContent("用户", value: store.session?.user.shownName ?? "")
                     LabeledContent("服务器", value: store.session?.serverUrl ?? "")
@@ -89,7 +155,11 @@ struct SettingsView: View {
             .sheet(isPresented: $changing) { PasswordSheet() }
         }
         .task {
-            do { pstack = try await store.preferences().pstackEnabled } catch is CancellationError {} catch { self.error = errorText(error) }
+            do {
+                let prefs = try await store.preferences()
+                pstack = prefs.pstackEnabled
+                skinStore.applyFromServer(prefs.skin)
+            } catch is CancellationError {} catch { self.error = errorText(error) }
         }
         .task {
             do { try await store.refreshMe() } catch is CancellationError {} catch { self.error = errorText(error) }

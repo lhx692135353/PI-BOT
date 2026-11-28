@@ -332,8 +332,8 @@ public final class AppStore {
 
     public func preferences() async throws -> DevelopmentPreferences { try await authed { try await self.api.preferences($0, token: $1) } }
 
-    public func setPreferences(_ enabled: Bool) async throws -> DevelopmentPreferences {
-        try await authed { try await self.api.setPreferences($0, token: $1, enabled: enabled) }
+    public func setPreferences(_ enabled: Bool? = nil, skin: String? = nil) async throws -> DevelopmentPreferences {
+        try await authed { try await self.api.setPreferences($0, token: $1, enabled: enabled, skin: skin) }
     }
 
     public func authorizations() async throws -> [SavedAuthorization] { try await authed { try await self.api.authorizations($0, token: $1) } }

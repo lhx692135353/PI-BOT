@@ -465,14 +465,20 @@ export const routes: Route[] = [
     method: "GET", path: "/me", auth: "actor", tag: "auth", summary: "当前用户与电脑在线状态",
     handler: async ({ tx, hub, s, user }) => ({ user: userOut(user), computer: await computerStatus(tx, hub, user.user_id), devices: await deviceList(tx, hub, user.user_id), cloud_computer: await cloudComputer(tx, s, user.user_id) }),
   },
-  { method: "GET", path: "/me/preferences", auth: "actor", tag: "auth", summary: "读取个人开发设置",
-    handler: async ({ user }) => ({ pstack_enabled: user.pstack_enabled === true }) },
-  { method: "PATCH", path: "/me/preferences", auth: "actor", tag: "auth", summary: "更新个人开发设置",
-    body: z.object({ pstack_enabled: z.boolean() }).strict(),
+  { method: "GET", path: "/me/preferences", auth: "actor", tag: "auth", summary: "读取个人偏好设置",
+    handler: async ({ user }) => ({ pstack_enabled: user.pstack_enabled === true, skin: user.skin === "ironman" ? "ironman" : "default" }) },
+  { method: "PATCH", path: "/me/preferences", auth: "actor", tag: "auth", summary: "更新个人偏好设置",
+    body: z.object({ pstack_enabled: z.boolean().optional(), skin: z.enum(["default", "ironman"]).optional() }).strict()
+      .refine(v => v.pstack_enabled !== undefined || v.skin !== undefined, "至少提供一个偏好字段"),
     handler: async ({ tx, user, hub, body, after }) => {
-      await tx.update("users", user.user_id, { pstack_enabled: body.pstack_enabled });
+      const nextPstack = body.pstack_enabled !== undefined ? body.pstack_enabled : user.pstack_enabled === true;
+      const nextSkin = body.skin !== undefined ? body.skin : (user.skin === "ironman" ? "ironman" : "default");
+      const patch: Record<string, unknown> = {};
+      if (body.pstack_enabled !== undefined) patch.pstack_enabled = body.pstack_enabled;
+      if (body.skin !== undefined) patch.skin = body.skin;
+      await tx.update("users", user.user_id, patch);
       after(() => hub.publish(user.user_id, { type: "bots" }));
-      return body;
+      return { pstack_enabled: nextPstack, skin: nextSkin };
     } },
   {
     method: "POST", path: "/devices/register", auth: "user", tag: "device", summary: "注册或更新当前用户的一台执行电脑",

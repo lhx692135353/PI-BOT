@@ -112,8 +112,8 @@ struct BotListView: View {
                 if let main { selection = main.id }
             } label: {
                 ZStack(alignment: .bottomTrailing) {
-                    BotFace(avatar: main?.avatar ?? .orange, mood: main?.mood(now: now) ?? "happy", size: 136,
-                            seed: seedOf(main?.id ?? "welcome"), entrance: true)
+                    SkinnedBotFace(avatar: main?.avatar ?? .orange, mood: main?.mood(now: now) ?? "happy", size: 136,
+                                   seed: seedOf(main?.id ?? "welcome"), entrance: true, botId: main?.id)
                     if main?.isMain == true {
                         Text("★").font(.system(size: 13)).foregroundStyle(.white)
                             .frame(width: 23, height: 23)
@@ -167,7 +167,7 @@ private struct BotRow: View {
         let waiting = !bot.pendingApprovals.isEmpty
         HStack(spacing: 12) {
             ZStack(alignment: .topTrailing) {
-                BotFace(avatar: bot.avatar, mood: bot.mood(now: now), size: 54, seed: seedOf(bot.id), paused: true, effects: false)
+                SkinnedBotFace(avatar: bot.avatar, mood: bot.mood(now: now), size: 54, seed: seedOf(bot.id), paused: true, effects: false, botId: bot.id)
                 if waiting {
                     Circle().fill(Palette.danger).frame(width: 9, height: 9).accessibilityLabel("有待审批请求")
                 }

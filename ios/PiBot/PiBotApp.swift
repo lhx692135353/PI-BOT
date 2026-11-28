@@ -5,6 +5,7 @@ import PiBotKit
 struct PiBotApp: App {
     @State private var store: AppStore
     @State private var voice: VoiceCallController
+    @State private var skin = SkinStore.shared
 
     init() {
         let store = AppStore(timelineStore: FileTimelineCache())
@@ -19,22 +20,34 @@ struct PiBotApp: App {
             RootView()
                 .environment(store)
                 .environment(voice)
+                .environment(skin)
                 .tint(Palette.accent)
-                .preferredColorScheme(.light)
+                .preferredColorScheme(skin.skin == .ironman ? .dark : .light)
         }
     }
 }
 
 struct RootView: View {
     @Environment(AppStore.self) private var store
+    @Environment(SkinStore.self) private var skinStore
     @Environment(\.scenePhase) private var phase
 
     var body: some View {
-        Group {
-            if store.session == nil { LoginView() } else { SignedInView() }
+        ZStack {
+            Group {
+                if store.session == nil { LoginView() } else { SignedInView() }
+            }
+            if let token = skinStore.introToken {
+                IronManIntroOverlay {
+                    skinStore.introToken = nil
+                }
+                .id(token)
+                .zIndex(100)
+            }
         }
         .onChange(of: phase, initial: true) { syncEvents() }
         .onChange(of: store.session) { syncEvents() }
+        .onChange(of: store.bots?.count) { syncSkin() }
     }
 
     /// Live events only while the app is on screen, like Android's ON_START / ON_STOP.
@@ -43,6 +56,16 @@ struct RootView: View {
             store.stopEvents()
         } else if phase == .active {
             store.startEvents()
+            syncSkin()
+        }
+    }
+
+    private func syncSkin() {
+        guard store.session != nil else { return }
+        Task {
+            if let prefs = try? await store.preferences() {
+                skinStore.applyFromServer(prefs.skin)
+            }
         }
     }
 }

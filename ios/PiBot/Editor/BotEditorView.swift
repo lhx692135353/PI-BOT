@@ -3,6 +3,7 @@ import PiBotKit
 
 struct BotEditorView: View {
     @Environment(AppStore.self) private var store
+    @Environment(SkinStore.self) private var skinStore
     let botId: String?
     let onDone: (String?) -> Void
     let onArchived: () -> Void
@@ -136,14 +137,23 @@ struct BotEditorView: View {
     }
 
     private var preview: some View {
-        let dark = avatar.scheme == "dark"
+        let isIronMan = skinStore.skin == .ironman
+        let dark = avatar.scheme == "dark" || isIronMan
         let spec = BotFaceAssets.spec
         return VStack(spacing: 2) {
-            BotFace(avatar: avatar, mood: "happy", size: 150)
+            SkinnedBotFace(avatar: avatar, mood: "happy", size: 150, botId: botId)
             Text(name.trimmingCharacters(in: .whitespaces).isEmpty ? "新 Bot" : name)
                 .font(.system(size: 18, weight: .semibold)).foregroundStyle(dark ? hexColor("#F2F1EF") : Palette.ink)
-            Text("\(spec?.shape(avatar.shape).label ?? avatar.shape) · \(spec?.color(avatar.color).label ?? avatar.color)")
-                .font(.footnote).foregroundStyle(Palette.muted)
+            Text(
+                isIronMan
+                    ? "当前皮肤机甲：\(botId.map { armorSpec(for: $0).name } ?? "创建后按 ID 固定分配")"
+                    : "\(spec?.shape(avatar.shape).label ?? avatar.shape) · \(spec?.color(avatar.color).label ?? avatar.color)"
+            )
+            .font(.footnote).foregroundStyle(Palette.muted)
+            if isIronMan {
+                Text("下方造型与颜色仍会保存为默认皮肤头像")
+                    .font(.caption2).foregroundStyle(Palette.muted)
+            }
             Button("随机换一个") {
                 var next = avatarFor(UUID().uuidString.lowercased())
                 next.scheme = avatar.scheme
@@ -154,7 +164,7 @@ struct BotEditorView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 16)
         .background(
-            LinearGradient(colors: dark ? [hexColor("#2C2D33"), hexColor("#1C1D21")] : [hexColor("#FFF6EE"), hexColor("#F6EFE7")],
+            LinearGradient(colors: dark ? [hexColor("#1A2233"), hexColor("#0E131E")] : [hexColor("#FFF6EE"), hexColor("#F6EFE7")],
                            startPoint: .top, endPoint: .bottom),
             in: RoundedRectangle(cornerRadius: 24)
         )

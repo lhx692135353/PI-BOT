@@ -20,7 +20,7 @@ struct TaskConversationSheet: View {
                         HStack(spacing: 6) {
                             ForEach(Array(bots.enumerated()), id: \.element.id) { index, bot in
                                 if index > 0 { Text("↔").foregroundStyle(Palette.muted) }
-                                BotFace(avatar: bot.avatar, mood: "happy", size: 24, seed: seedOf(bot.id))
+                                SkinnedBotFace(avatar: bot.avatar, mood: "happy", size: 24, seed: seedOf(bot.id), botId: bot.id)
                                 Text(bot.name).font(.footnote).lineLimit(1)
                             }
                         }
@@ -39,7 +39,7 @@ struct TaskConversationSheet: View {
                         let sender = page?.bots.first { $0.id == message.fromBotId }
                         VStack(alignment: .leading, spacing: 6) {
                             HStack(spacing: 6) {
-                                if let sender { BotFace(avatar: sender.avatar, mood: "happy", size: 22, seed: seedOf(sender.id)) }
+                                if let sender { SkinnedBotFace(avatar: sender.avatar, mood: "happy", size: 22, seed: seedOf(sender.id), botId: sender.id) }
                                 Text(sender?.name ?? "智能体").font(.footnote).foregroundStyle(Palette.accent)
                                 Spacer()
                                 if let at = message.createdAt { Text(clockTime(at)).font(.system(size: 11)).foregroundStyle(Palette.muted) }

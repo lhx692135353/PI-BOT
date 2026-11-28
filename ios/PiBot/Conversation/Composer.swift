@@ -237,7 +237,7 @@ struct CallOverlay: View {
         NowReader(period: 1) { now in
             let elapsed = call.startedAt > 0 ? max(0, now - call.startedAt) / 1000 : 0
             VStack(spacing: 0) {
-                BotFace(avatar: bot.avatar, mood: mood, size: 180, seed: seedOf(bot.id))
+                SkinnedBotFace(avatar: bot.avatar, mood: mood, size: 180, seed: seedOf(bot.id), botId: bot.id)
                 Text(bot.name).font(.title2.weight(.semibold)).padding(.top, 16)
                 Text(call.error ?? phase).foregroundStyle(call.error != nil ? Palette.danger : Palette.muted).padding(.top, 6)
                 Text(String(format: "%02d:%02d", elapsed / 60, elapsed % 60))

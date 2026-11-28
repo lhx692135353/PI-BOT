@@ -113,7 +113,38 @@ public struct ComputerStatus: Decodable, Hashable, Sendable {
 
 public struct DevelopmentPreferences: Codable, Sendable {
     public let pstackEnabled: Bool
-    enum CodingKeys: String, CodingKey { case pstackEnabled = "pstack_enabled" }
+    public let skin: String
+
+    public init(pstackEnabled: Bool = false, skin: String = "default") {
+        self.pstackEnabled = pstackEnabled
+        self.skin = skin
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case pstackEnabled = "pstack_enabled"
+        case skin
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        pstackEnabled = try c.decodeIfPresent(Bool.self, forKey: .pstackEnabled) ?? false
+        skin = try c.decodeIfPresent(String.self, forKey: .skin) ?? "default"
+    }
+}
+
+public struct PreferencesPatch: Encodable, Sendable {
+    public let pstackEnabled: Bool?
+    public let skin: String?
+
+    public init(pstackEnabled: Bool? = nil, skin: String? = nil) {
+        self.pstackEnabled = pstackEnabled
+        self.skin = skin
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case pstackEnabled = "pstack_enabled"
+        case skin
+    }
 }
 
 public struct Me: Decodable, Sendable {

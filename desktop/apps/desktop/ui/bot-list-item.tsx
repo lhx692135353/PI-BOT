@@ -37,6 +37,7 @@ export function BotListItem({ bot, mood, summary, selected, onSelect, onContextM
     >
       <span className="bot-avatar">
         <PiBot
+          botId={bot.id}
           avatar={bot.avatar}
           mood={mood}
           size={bot.is_main ? 64 : 44}

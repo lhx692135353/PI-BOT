@@ -55,7 +55,23 @@ fun parseColor(hex: String): Color = Color(android.graphics.Color.parseColor(hex
  * [entrance] plays a single welcome hop and turn, respecting reduced motion.
  */
 @Composable
-fun PiBotFace(avatar: Avatar, mood: String, size: Dp, modifier: Modifier = Modifier, seed: Int = 1, paused: Boolean = false, effects: Boolean = true, entrance: Boolean = false) {
+fun PiBotFace(
+    avatar: Avatar,
+    mood: String,
+    size: Dp,
+    modifier: Modifier = Modifier,
+    seed: Int = 1,
+    paused: Boolean = false,
+    effects: Boolean = true,
+    entrance: Boolean = false,
+    botId: String? = null,
+    forceOriginal: Boolean = false,
+) {
+    if (!forceOriginal && dev.pibot.android.ui.LocalAppSkin.current == dev.pibot.android.ui.AppSkin.IRONMAN) {
+        val armorSeed = botId ?: "${avatar.shape}:${avatar.color}:${avatar.scheme}:$seed"
+        IronManAvatar(seed = armorSeed, mood = mood, size = size, modifier = modifier)
+        return
+    }
     val context = LocalContext.current
     val spec = remember { BotFaceAssets.spec(context) }
     val reduceMotion = remember { reduceMotion(context) }

@@ -38,7 +38,7 @@ struct MessageRow: View {
         VStack(alignment: .leading, spacing: 4) {
             Button { onOpenBot(from.id) } label: {
                 HStack(spacing: 6) {
-                    if let avatar = from.avatar { BotFace(avatar: avatar, mood: "happy", size: 22, seed: seedOf(from.id)) }
+                    if let avatar = from.avatar { SkinnedBotFace(avatar: avatar, mood: "happy", size: 22, seed: seedOf(from.id), botId: from.id) }
                     Text(relayLabel(from)).font(.caption).foregroundStyle(Palette.muted)
                 }
             }

@@ -7,6 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.pibot.android.ui.AppRoot
 import dev.pibot.android.ui.PiBotTheme
 
@@ -17,10 +18,12 @@ class MainActivity : ComponentActivity() {
             statusBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
         )
-        val repository = (application as PiBotApp).repository
-        (application as PiBotApp).push.handleIntent(intent)
+        val app = application as PiBotApp
+        val repository = app.repository
+        app.push.handleIntent(intent)
         setContent {
-            PiBotTheme {
+            val skin = app.skinStore.skin.collectAsStateWithLifecycle().value
+            PiBotTheme(skin = skin) {
                 AppRoot(repository)
             }
         }

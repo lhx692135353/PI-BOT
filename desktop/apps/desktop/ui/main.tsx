@@ -16,6 +16,8 @@ import { SavedAuthorizations } from './saved-authorizations.js';
 import { phoneAssociationKey } from './phone-client.js';
 import { DevicePhoneButton, PhoneDock } from './phone-control.js';
 import { ThemeToggle } from './theme.js';
+import { getSkin, SkinPicker, syncSkinFromServer } from './skin.js';
+import { IronManIntro } from './ironman-intro.js';
 import { Icon } from './icons.js';
 import './style.css';
 
@@ -81,7 +83,7 @@ function statusLine(bot: Bot, mood: Mood, now: number) {
   return bot.last_message?.preview || '还没有对话';
 }
 
-function Settings({ state, cloud, onClose, onOpenPhone }: { state: AccountState; cloud: CloudComputer | null; onClose(): void; onOpenPhone(device: Device): void }) {
+function Settings({ state, cloud, onClose, onOpenPhone, onPreviewIntro }: { state: AccountState; cloud: CloudComputer | null; onClose(): void; onOpenPhone(device: Device): void; onPreviewIntro(): void }) {
   const [devices,setDevices] = useState<Device[]>([]);
   const [error,setError] = useState('');
   const [pstack, setPstack] = useState<boolean | null>(null);
@@ -110,6 +112,7 @@ function Settings({ state, cloud, onClose, onOpenPhone }: { state: AccountState;
         <div className="modal settings">
           <h2>设置</h2>
           <ThemeToggle />
+          <SkinPicker onPreviewIntro={onPreviewIntro} onError={msg => setError(msg)} />
           <dl>
             <dt>账号</dt><dd>{state.user?.display_name}（{state.user?.username}）</dd>
             <dt>这台电脑</dt><dd>{state.deviceLabel}{state.notice && <p role="status">{state.notice}</p>}</dd>
@@ -191,7 +194,7 @@ function Inspector({ bot, currentDeviceId, onClose, onOpenLibrary }: { bot: Bot;
   return (
     <aside className="inspector" aria-label={`${bot.name} 的目标和资料库`}>
       <button type="button" className="ghost icon-button inspector-close" onClick={onClose} aria-label="关闭"><Icon name="close" size={18} /></button>
-      <PiBot avatar={bot.avatar} mood="idle" size={72} />
+      <PiBot botId={bot.id} avatar={bot.avatar} mood="idle" size={72} />
       <h2>{bot.name}</h2>
       <button className="ghost" onClick={()=>void call<{url:string}>("remoteDesktop",{botId:bot.id}).then(r=>bridge.openExternal(r.url)).catch(e=>setLibraryError(errorText(e)))}>云端桌面与文件</button>
       <div className="inspector-tabs">
@@ -252,6 +255,7 @@ function App() {
   const [menu, setMenu] = useState<{ bot: Bot; x: number; y: number } | null>(null);
   const [inspector, setInspector] = useState(false);
   const [settings, setSettings] = useState(false);
+  const [introKey, setIntroKey] = useState<number | null>(() => (getSkin() === 'ironman' ? 1 : null));
   const [phoneTarget, setPhoneTarget] = useState<{ botId: string | null; deviceId: string | null } | null>(null);
   const [now, setNow] = useState(Date.now());
   const [loadError, setLoadError] = useState('');
@@ -328,7 +332,7 @@ function App() {
     const unsubscribe = bridge.subscribe((event: AppEvent) => {
       if (event.type === 'service.status') { setService(event.connected); if (event.connected) loadStatus(); }
       else if (event.type === 'account') setAccount(event.state);
-      else if (event.type === 'bots') void loadBots();
+      else if (event.type === 'bots') { void loadBots(); void syncSkinFromServer().catch(() => {}); }
       else if (event.type === 'bot') { void loadBots(); if (event.bot_id === selectedRef.current) void loadTail(event.bot_id); }
       else if(event.type==='stream') setPages(p=>{const page=applyStream(p[event.bot_id],event);return page?{...p,[event.bot_id]:page}:p;});
       else if (event.type === 'delta') setPages(p => {
@@ -346,6 +350,7 @@ function App() {
     if (!online) return;
     void loadBots();
     void call<ModelOption[]>('models').then(setModels).catch(() => {});
+    void syncSkinFromServer().catch(() => {});
   }, [online, loadBots]);
   useEffect(() => {
     if (!selected) return;
@@ -431,7 +436,7 @@ function App() {
           <>
             <header className="bot-head">
               <button type="button" className="bot-identity" aria-expanded={inspector} onClick={() => setInspector(open => !open)}>
-                <PiBot avatar={bot.avatar} mood={botMood(bot, activities[bot.id], now)} size={52} followPointer />
+                <PiBot botId={bot.id} avatar={bot.avatar} mood={botMood(bot, activities[bot.id], now)} size={52} followPointer />
                 <span className="bot-title">
                   <h1>{bot.name}</h1>
                   <span className="muted small cli-path" title={bot.cli_directory ?? undefined}>{bot.runtime === 'cursor' || bot.runtime === 'codex' ? `${bot.runtime === 'cursor' ? '本机 Cursor' : '本机 Codex'} · ${bot.cli_directory}` : `${bot.is_main ? '主智能体 · ' : ''}${models.find(m => m.id === bot.model_id)?.name ?? '默认模型'}`}</span>
@@ -481,7 +486,8 @@ function App() {
       </>}
       {phoneTarget && <PhoneDock key={phoneAssociationKey(account.serverUrl, account.user?.id ?? null)} associationKey={phoneAssociationKey(account.serverUrl, account.user?.id ?? null)} botId={phoneTarget.botId ? bot?.id ?? phoneTarget.botId : null} pinnedDeviceId={phoneTarget.deviceId} devices={devices} executionDeviceId={null} onClose={() => setPhoneTarget(null)} />}
       {editor && <BotEditor bot={editor === 'new' ? undefined : editor} models={models} deviceId={account.deviceId} onClose={() => setEditor(null)} onSaved={b => { setEditor(null); setSelected(b.id); void loadBots(); }} />}
-      {settings && <Settings state={account} cloud={cloud} onClose={() => setSettings(false)} onOpenPhone={device => { setSettings(false); setPhoneTarget({ botId: null, deviceId: device.id }); }} />}
+      {settings && <Settings state={account} cloud={cloud} onClose={() => setSettings(false)} onOpenPhone={device => { setSettings(false); setPhoneTarget({ botId: null, deviceId: device.id }); }} onPreviewIntro={() => { setSettings(false); setIntroKey(k => (k ?? 0) + 1); }} />}
+      {introKey !== null && <IronManIntro key={introKey} onDone={() => setIntroKey(null)} />}
     </div>
   );
 }

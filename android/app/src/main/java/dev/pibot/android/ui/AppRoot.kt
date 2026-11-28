@@ -12,7 +12,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -32,10 +34,21 @@ import dev.pibot.android.data.PiBotRepository
 
 @Composable
 fun AppRoot(repository: PiBotRepository) {
-    val push = (LocalContext.current.applicationContext as PiBotApp).push
+    val app = LocalContext.current.applicationContext as PiBotApp
+    val push = app.push
+    val skinStore = app.skinStore
     val session by repository.session.collectAsStateWithLifecycle()
+    val bots by repository.bots.collectAsStateWithLifecycle()
     val owner = LocalLifecycleOwner.current
     val signedIn = session != null
+    var introKey by remember { mutableStateOf<Int?>(if (skinStore.skin.value == AppSkin.IRONMAN) 1 else null) }
+
+    LaunchedEffect(signedIn, bots?.size) {
+        if (signedIn) {
+            runCatching { repository.preferences() }.onSuccess { skinStore.applyFromServer(it.skin) }
+        }
+    }
+
     DisposableEffect(owner, signedIn) {
         val observer = LifecycleEventObserver { _, event ->
             if (!signedIn) return@LifecycleEventObserver
@@ -49,12 +62,19 @@ fun AppRoot(repository: PiBotRepository) {
         owner.lifecycle.addObserver(observer)
         onDispose { owner.lifecycle.removeObserver(observer) }
     }
-    if (!signedIn) LoginScreen(repository) else Signed(repository)
-    if (signedIn) PushPermissionPrompt(push)
+    Box(Modifier.fillMaxSize()) {
+        if (!signedIn) LoginScreen(repository) else Signed(repository, onPreviewIntro = { introKey = (introKey ?: 0) + 1 })
+        if (signedIn) PushPermissionPrompt(push)
+        introKey?.let { keyVal ->
+            key(keyVal) {
+                IronManIntroOverlay(onDone = { introKey = null })
+            }
+        }
+    }
 }
 
 @Composable
-private fun Signed(repository: PiBotRepository) {
+private fun Signed(repository: PiBotRepository, onPreviewIntro: () -> Unit) {
     val push = (LocalContext.current.applicationContext as PiBotApp).push
     val target by push.target.collectAsStateWithLifecycle()
     val nav = rememberNavController()
@@ -167,7 +187,7 @@ private fun Signed(repository: PiBotRepository) {
                 composable("phone/device/{deviceId}") { phoneEntry ->
                     PhoneControlScreen(repository, botId = null, fixedDeviceId = phoneEntry.arguments?.getString("deviceId"), onBack = { nav.popBackStack() })
                 }
-                composable("settings") { SettingsScreen(repository, onBack = { nav.popBackStack() }, onPhone = { nav.navigate("phone/device/$it") }) }
+                composable("settings") { SettingsScreen(repository, onBack = { nav.popBackStack() }, onPhone = { nav.navigate("phone/device/$it") }, onPreviewIntro = { nav.popBackStack(); onPreviewIntro() }) }
             }
         }
     }

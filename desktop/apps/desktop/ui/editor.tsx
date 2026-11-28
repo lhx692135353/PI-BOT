@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { PiBot, AVATAR_COLORS, colorfulAvatar } from './bot-avatar.js';
+import { armorFor, useSkin } from './skin.js';
 import { avatarFor, SHAPES, spec, type Avatar } from '@pi-bot/bot-face';
 import type { Bot, ModelOption } from '../../../packages/protocol/src/index.js';
 import { bridge, call, errorText } from './bridge.js';
@@ -8,6 +9,7 @@ type Runtime = 'pi' | 'cursor' | 'codex';
 interface CliProfileScan { cursor: { installed: boolean; profiles: { id: string; label: string }[] }; codex: { installed: boolean; profiles: { id: string; label: string }[] } }
 
 export function BotEditor({ bot, models, deviceId, onClose, onSaved }: { bot?: Bot; models: ModelOption[]; deviceId?: string | null; onClose(): void; onSaved(bot: Bot): void }) {
+  const skin = useSkin();
   const [name, setName] = useState(bot?.name ?? '');
   const [persona, setPersona] = useState(bot?.persona ?? '');
   const [modelId, setModelId] = useState<string>(bot?.model_id ?? '');
@@ -45,9 +47,16 @@ export function BotEditor({ bot, models, deviceId, onClose, onSaved }: { bot?: B
     <div className="backdrop" onMouseDown={e => e.target === e.currentTarget && onClose()}>
       <form className="modal editor" onSubmit={submit}>
         <div className="editor-preview">
-          <PiBot avatar={avatar} mood={name ? 'happy' : 'idle'} size={168} followPointer />
+          <PiBot botId={bot?.id} avatar={avatar} mood={name ? 'happy' : 'idle'} size={168} followPointer />
           <strong>{name || '新 Bot'}</strong>
-          <span className="muted small">{spec.shapes[avatar.shape].label} · {spec.colors[avatar.color].label}</span>
+          <span className="muted small">
+            {skin === 'ironman'
+              ? `当前皮肤机甲：${bot ? armorFor(bot.id).name : '创建后按 ID 固定分配'}`
+              : `${spec.shapes[avatar.shape].label} · ${spec.colors[avatar.color].label}`}
+          </span>
+          {skin === 'ironman' && (
+            <span className="muted small">下方造型与颜色仍会保存为默认皮肤头像</span>
+          )}
           <button type="button" className="ghost small" onClick={() => setAvatar(colorfulAvatar(avatarFor(crypto.randomUUID())))}>随机换一个</button>
         </div>
         <div className="editor-fields">
@@ -83,7 +92,7 @@ export function BotEditor({ bot, models, deviceId, onClose, onSaved }: { bot?: B
             <div className="shapes">
               {SHAPES.map(shape => (
                 <button type="button" key={shape} className={shape === avatar.shape ? 'picked' : ''} onClick={() => setAvatar({ ...avatar, shape })} title={spec.shapes[shape].label}>
-                  <PiBot avatar={{ ...avatar, shape }} mood="idle" size={48} paused />
+                  <PiBot avatar={{ ...avatar, shape }} mood="idle" size={48} paused forceOriginal />
                 </button>
               ))}
             </div>

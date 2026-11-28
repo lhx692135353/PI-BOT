@@ -347,11 +347,17 @@ test("multiple workers share the Bot capacity limit and queued user turns preced
 
 test("a paused Pi task is resumable with its original account workflow choice and checkpoint", { skip }, async () => {
   const user = (await api("/me")).data.user;
-  assert.deepEqual((await api("/me/preferences")).data, { pstack_enabled: false });
-  const toggle = (enabled: boolean) => fetch(`${base}/me/preferences`, {
+  assert.deepEqual((await api("/me/preferences")).data, { pstack_enabled: false, skin: "default" });
+  const patchPref = (patch: Record<string, unknown>) => fetch(`${base}/me/preferences`, {
     method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ pstack_enabled: enabled }),
+    body: JSON.stringify(patch),
   });
+  const toggle = (enabled: boolean) => patchPref({ pstack_enabled: enabled });
+  const skinRes = await patchPref({ skin: "ironman" });
+  assert.equal(skinRes.status, 200);
+  assert.deepEqual(await skinRes.json(), { pstack_enabled: false, skin: "ironman" });
+  assert.deepEqual((await api("/me/preferences")).data, { pstack_enabled: false, skin: "ironman" });
+  assert.equal((await patchPref({ skin: "default" })).status, 200);
   assert.equal((await toggle(true)).status, 200);
   const dedicated = (await api("/bots", { name: "pause coding", persona: "" })).data.id;
   const parent = await db.tx(async tx => {

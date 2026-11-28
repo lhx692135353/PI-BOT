@@ -59,7 +59,7 @@ export const VoiceCall = forwardRef<VoiceHandle, Props>(function VoiceCall({ bot
 
   return (
     <div className="call-overlay" role="dialog" aria-label="语音通话">
-      <PiBot avatar={bot.avatar} mood={phase === 'speaking' ? 'working' : mood} size={180} followPointer />
+      <PiBot botId={bot.id} avatar={bot.avatar} mood={phase === 'speaking' ? 'working' : mood} size={180} followPointer />
       <h2>{bot.name}</h2>
       <p className="muted">{error || PHASE[phase] || '通话中'}</p>
       <p className="call-clock">{startedAt ? clock(now - startedAt) : '00:00'}</p>

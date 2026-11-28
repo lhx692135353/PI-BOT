@@ -163,7 +163,7 @@ fun BotListScreen(
                                 .padding(horizontal = 24.dp, vertical = 4.dp),
                             contentAlignment = Alignment.Center,
                         ) {
-                            PiBotFace(main?.avatar ?: ORANGE, main?.mood(now) ?: "happy", 136.dp, seed = seedOf(main?.id ?: "welcome"), entrance = true)
+                            PiBotFace(main?.avatar ?: ORANGE, main?.mood(now) ?: "happy", 136.dp, seed = seedOf(main?.id ?: "welcome"), entrance = true, botId = main?.id)
                             if (main?.isMain == true) Box(
                                 Modifier.align(Alignment.BottomEnd).padding(end = 20.dp, bottom = 12.dp).size(23.dp).background(Accent, CircleShape),
                                 contentAlignment = Alignment.Center,
@@ -228,7 +228,7 @@ private fun BotConversationRow(bot: Bot, now: Long, selected: Boolean, onClick: 
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box {
-            PiBotFace(bot.avatar, bot.mood(now), 54.dp, seed = seedOf(bot.id), paused = true, effects = false)
+            PiBotFace(bot.avatar, bot.mood(now), 54.dp, seed = seedOf(bot.id), paused = true, effects = false, botId = bot.id)
             if (waiting) Box(Modifier.align(Alignment.TopEnd).size(9.dp).background(Danger, CircleShape).semantics { contentDescription = "有待审批请求" })
         }
         Spacer(Modifier.width(12.dp))

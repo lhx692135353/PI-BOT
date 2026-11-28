@@ -26,7 +26,8 @@ export const schemas = {
   phoneInput: z.object({...phoneSession,event:phoneInputEvent}).strict(),
   phoneRelease: z.object(phoneSession).strict(),
   preferences: z.object({}).strict(),
-  setPreferences: z.object({ pstack_enabled: z.boolean() }).strict(),
+  setPreferences: z.object({ pstack_enabled: z.boolean().optional(), skin: z.enum(['default', 'ironman']).optional() }).strict()
+    .refine(v => v.pstack_enabled !== undefined || v.skin !== undefined, '至少提供一个偏好字段'),
   documentCapabilities:z.object({}),
   documentUploadBegin:z.object({botId:id,request_id:id,name:z.string().min(1).max(255),size:z.number().int().positive().max(10*1024*1024)}).strict(),
   documentUploadChunk:z.object({id,part:z.number().int().min(0).max(39),data:z.string().max(349528)}).strict(),

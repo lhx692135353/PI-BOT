@@ -148,7 +148,7 @@ fun FilesScreen(repository: PiBotRepository, botId: String, onBack: () -> Unit) 
                 }
             }
             if (b != null && opened == null && !entries.isNullOrEmpty()) {
-                PiBotFace(b.avatar, "searching", 56.dp, seed = seedOf(b.id), modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp))
+                PiBotFace(b.avatar, "searching", 56.dp, seed = seedOf(b.id), modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp), botId = b.id)
             }
         }
     }

@@ -48,7 +48,10 @@ data class ComputerStatus(val online: Boolean = false, val device: Device? = nul
 data class CloudComputer(val target: String? = null, val label: String = "云端电脑", val online: Boolean = false)
 
 @Serializable
-data class DevelopmentPreferences(@SerialName("pstack_enabled") val pstackEnabled: Boolean)
+data class DevelopmentPreferences(
+    @SerialName("pstack_enabled") val pstackEnabled: Boolean = false,
+    val skin: String = "default",
+)
 
 @Serializable
 data class Me(
@@ -310,8 +313,13 @@ class PiBotApi(private val http: OkHttpClient, private val json: Json = API_JSON
 
     fun preferences(url: ServerUrl, token: String): DevelopmentPreferences = call(url, "GET", "/me/preferences", token)
 
-    fun setPreferences(url: ServerUrl, token: String, enabled: Boolean): DevelopmentPreferences =
-        call(url, "PATCH", "/me/preferences", token, DevelopmentPreferences(enabled))
+    fun setPreferences(url: ServerUrl, token: String, pstackEnabled: Boolean? = null, skin: String? = null): DevelopmentPreferences {
+        val body = buildJsonObject {
+            pstackEnabled?.let { put("pstack_enabled", kotlinx.serialization.json.JsonPrimitive(it)) }
+            skin?.let { put("skin", kotlinx.serialization.json.JsonPrimitive(it)) }
+        }
+        return call(url, "PATCH", "/me/preferences", token, body)
+    }
 
     fun devices(url: ServerUrl, token: String): List<Device> = call(url, "GET", "/devices", token)
 

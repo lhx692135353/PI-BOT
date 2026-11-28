@@ -115,16 +115,28 @@ fun BotEditorScreen(repository: PiBotRepository, botId: String?, onDone: (String
         containerColor = Paper,
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).imePadding().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
-            val dark = avatar.scheme == "dark"
+            val skin = LocalAppSkin.current
+            val dark = avatar.scheme == "dark" || skin == AppSkin.IRONMAN
             Column(
                 Modifier.fillMaxWidth()
-                    .background(Brush.verticalGradient(if (dark) listOf(Color(0xFF2C2D33), Color(0xFF1C1D21)) else listOf(Color(0xFFFFF6EE), Color(0xFFF6EFE7))), RoundedCornerShape(24.dp))
+                    .background(Brush.verticalGradient(if (dark) listOf(Color(0xFF1A2233), Color(0xFF0E131E)) else listOf(Color(0xFFFFF6EE), Color(0xFFF6EFE7))), RoundedCornerShape(24.dp))
                     .padding(vertical = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                PiBotFace(avatar, "happy", 150.dp)
+                PiBotFace(avatar, "happy", 150.dp, botId = existing?.id)
                 Text(name.ifBlank { "新 Bot" }, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, color = if (dark) Color(0xFFF2F1EF) else Ink)
-                Text("${spec.shape(avatar.shape).label} · ${spec.color(avatar.color).label}", color = Muted, fontSize = 13.sp)
+                Text(
+                    if (skin == AppSkin.IRONMAN) {
+                        "当前皮肤机甲：${existing?.let { armorFor(it.id).name } ?: "创建后按 ID 固定分配"}"
+                    } else {
+                        "${spec.shape(avatar.shape).label} · ${spec.color(avatar.color).label}"
+                    },
+                    color = Muted,
+                    fontSize = 13.sp,
+                )
+                if (skin == AppSkin.IRONMAN) {
+                    Text("下方造型与颜色仍会保存为默认皮肤头像", color = Muted, fontSize = 11.sp)
+                }
                 TextButton(onClick = { avatar = avatarFor(UUID.randomUUID().toString()).copy(scheme = avatar.scheme) }) { Text("随机换一个") }
             }
             Spacer(Modifier.height(16.dp))
@@ -157,7 +169,7 @@ fun BotEditorScreen(repository: PiBotRepository, botId: String?, onDone: (String
                             .border(BorderStroke(2.dp, if (picked) Accent else Color.Transparent), RoundedCornerShape(16.dp))
                             .clickable { avatar = avatar.copy(shape = shape) },
                         contentAlignment = Alignment.Center,
-                    ) { PiBotFace(avatar.copy(shape = shape), "idle", 56.dp, paused = true, effects = false) }
+                    ) { PiBotFace(avatar.copy(shape = shape), "idle", 56.dp, paused = true, effects = false, forceOriginal = true) }
                 }
             }
 

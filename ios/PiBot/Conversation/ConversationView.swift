@@ -152,7 +152,7 @@ struct ConversationView: View {
                 NowReader { now in
                     let tool = store.timeline(botId).runningTool
                     HStack(spacing: 6) {
-                        BotFace(avatar: bot.avatar, mood: bot.mood(now: now, tool: tool), size: 36, seed: seedOf(bot.id))
+                        SkinnedBotFace(avatar: bot.avatar, mood: bot.mood(now: now, tool: tool), size: 36, seed: seedOf(bot.id), botId: bot.id)
                         Text(bot.name).font(.headline).foregroundStyle(Palette.ink).lineLimit(1)
                     }
                 }
@@ -243,7 +243,7 @@ struct ConversationView: View {
             if let summary = bot.activity?.summary {
                 NowReader { now in
                     HStack(spacing: 8) {
-                        BotFace(avatar: bot.avatar, mood: bot.mood(now: now, tool: timeline.runningTool), size: 26, seed: seedOf(bot.id))
+                        SkinnedBotFace(avatar: bot.avatar, mood: bot.mood(now: now, tool: timeline.runningTool), size: 26, seed: seedOf(bot.id), botId: bot.id)
                         Text(summary).font(.footnote).foregroundStyle(Palette.muted)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -344,7 +344,7 @@ private struct Intro: View {
 
     var body: some View {
         VStack(spacing: 4) {
-            BotFace(avatar: bot.avatar, mood: "happy", size: 112, seed: seedOf(bot.id))
+            SkinnedBotFace(avatar: bot.avatar, mood: "happy", size: 112, seed: seedOf(bot.id), botId: bot.id)
             Text("和 \(bot.name) 打个招呼").fontWeight(.semibold).padding(.top, 8)
             Text(bot.persona.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "它会记住你们的对话。" : bot.persona)
                 .font(.footnote).foregroundStyle(Palette.muted).lineLimit(4).multilineTextAlignment(.center)

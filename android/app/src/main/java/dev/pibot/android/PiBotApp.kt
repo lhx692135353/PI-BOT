@@ -23,10 +23,13 @@ class PiBotApp : Application() {
         private set
     lateinit var repository: PiBotRepository
         private set
+    lateinit var skinStore: dev.pibot.android.ui.SkinStore
+        private set
 
     override fun onCreate() {
         super.onCreate()
         if (PushRestartActivity.isRestartProcess(this)) return
+        skinStore = dev.pibot.android.ui.SkinStore(this)
         val http = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)

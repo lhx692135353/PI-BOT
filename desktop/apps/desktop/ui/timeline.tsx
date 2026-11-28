@@ -86,12 +86,12 @@ function ConversationDialog({ bot, task, onClose, onOpenBot }: { bot: Bot; task:
   const participants = data?.bots ?? [{ id: bot.id, name: bot.name, avatar: bot.avatar }, { id: task.bot_id, name: task.bot_name, avatar: null }];
   return <dialog className="conversation-dialog" ref={dialog} onCancel={e => { e.preventDefault(); onClose(); }} onClick={e => { if (e.target === dialog.current) onClose(); }} aria-labelledby="conversation-title">
     <div className="conversation-panel">
-      <header><div id="conversation-title" className="conversation-participants">{participants.map((b, i) => <span key={b.id}>{i > 0 && <span className="muted">↔ </span>}{b.avatar && <PiBot avatar={b.avatar} mood="happy" size={26} />}{b.name}</span>)}</div><button className="ghost" onClick={onClose} aria-label="关闭传话详情">×</button></header>
+      <header><div id="conversation-title" className="conversation-participants">{participants.map((b, i) => <span key={b.id}>{i > 0 && <span className="muted">↔ </span>}{b.avatar && <PiBot botId={b.id} avatar={b.avatar} mood="happy" size={26} />}{b.name}</span>)}</div><button className="ghost" onClick={onClose} aria-label="关闭传话详情">×</button></header>
       <div className="conversation-meta">{data?.total ?? task.message_count ?? 0} 条消息往来 · {TASK_STATE[data?.status ?? task.status]}{data?.execution_label ? ` · 本次使用：${data.execution_label}` : ""}</div>
       <div className="conversation-messages" aria-live="polite">
         {!data && busy && <p className="muted">正在加载传话…</p>}
         {data && !data.messages.length && <p className="muted">还没有传话记录</p>}
-        {uniqueById(data?.messages ?? []).map(m => { const sender = participants.find(b => b.id === m.from_bot_id); return <article key={m.id}><div className="conversation-sender">{sender?.avatar && <PiBot avatar={sender.avatar} mood="happy" size={22} />}<strong>{sender?.name ?? '智能体'}</strong>{m.created_at && <time>{time(m.created_at)}</time>}</div><div className="bubble markdown"><Markdown text={m.content} /></div></article>; })}
+        {uniqueById(data?.messages ?? []).map(m => { const sender = participants.find(b => b.id === m.from_bot_id); return <article key={m.id}><div className="conversation-sender">{sender?.avatar && <PiBot botId={sender.id} avatar={sender.avatar} mood="happy" size={22} />}<strong>{sender?.name ?? '智能体'}</strong>{m.created_at && <time>{time(m.created_at)}</time>}</div><div className="bubble markdown"><Markdown text={m.content} /></div></article>; })}
         {error && <p className="error" role="alert">{error} <button className="ghost" disabled={busy} onClick={() => void load()}>重试</button></p>}
         {data?.has_more && <button className="ghost" disabled={busy} onClick={() => void load(true)}>{busy ? '正在加载…' : '加载更多往来'}</button>}
       </div>
@@ -147,7 +147,7 @@ function RelayMessage({ m, onOpenBot }: { m: Message & { from_bot: FromBot }; on
   return (
     <div className="msg relay" data-message={m.id}>
       <button className="relay-head" onClick={() => onOpenBot(from.id)} title={`打开 ${from.name} 的时间线`}>
-        {from.avatar && <PiBot avatar={from.avatar} mood="happy" size={22} />}
+        {from.avatar && <PiBot botId={from.id} avatar={from.avatar} mood="happy" size={22} />}
         <span>{from.kind === 'report' ? `${from.name} 的回报` : `来自 ${from.name} 的委托`}</span>
       </button>
       <div className="bubble markdown"><Markdown text={m.content} /></div>
@@ -365,7 +365,7 @@ export function Timeline({ bot, messages, hasMore, mood, online, onLoadMore, onS
         )}
         {!messages.length && (
           <div className="intro">
-            <PiBot avatar={bot.avatar} mood={mood === 'idle' ? 'happy' : mood} size={150} followPointer />
+            <PiBot botId={bot.id} avatar={bot.avatar} mood={mood === 'idle' ? 'happy' : mood} size={150} followPointer />
             <h2>{bot.is_main ? '有什么想做的，告诉我' : `我是 ${bot.name}`}</h2>
             <p className="muted">{bot.is_main ? '我是 Pi Bot，你的主智能体。查资料、写作、整理文件，或只是聊聊天，都可以直接找我。' : bot.persona ? bot.persona.slice(0, 140) : '告诉我你想做什么。我的资料都放在自己的资料库里，随时可以在文件管理器中查看。'}</p>
           </div>
@@ -396,7 +396,7 @@ export function Timeline({ bot, messages, hasMore, mood, online, onLoadMore, onS
             </div>
           )];
         })}
-        {bot.activity?.summary && <div className="task-activity" role="status" aria-live="polite"><PiBot avatar={bot.avatar} mood={mood} size={26} /><span>{bot.activity.summary}</span></div>}
+        {bot.activity?.summary && <div className="task-activity" role="status" aria-live="polite"><PiBot botId={bot.id} avatar={bot.avatar} mood={mood} size={26} /><span>{bot.activity.summary}</span></div>}
         {bot.pending_approvals.map(a => <ApprovalCard key={a.id} approval={a} />)}
       </div>
       {farFromBottom && <button type="button" className="jump-bottom" onClick={toBottom} title="回到最新消息" aria-label="回到最新消息"><Icon name="arrow" size={18} style={{ transform: 'rotate(180deg)' }} /></button>}

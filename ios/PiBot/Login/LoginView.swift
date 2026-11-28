@@ -23,7 +23,7 @@ struct LoginView: View {
         GeometryReader { proxy in
             ScrollView {
                 VStack(spacing: 0) {
-                    BotFace(avatar: .orange, mood: mood, size: 150)
+                    SkinnedBotFace(avatar: .orange, mood: mood, size: 150)
                     Text("Pi Bot").font(.system(size: 28, weight: .bold)).foregroundStyle(Palette.ink)
                     Text("你的 Bot 们在电脑上干活，手机随时找它们。")
                         .foregroundStyle(Palette.muted).multilineTextAlignment(.center).padding(.top, 6)

@@ -2322,7 +2322,7 @@
         "tags": [
           "auth"
         ],
-        "summary": "读取个人开发设置",
+        "summary": "读取个人偏好设置",
         "security": [
           {
             "UserBearer": []
@@ -2344,7 +2344,7 @@
         "tags": [
           "auth"
         ],
-        "summary": "更新个人开发设置",
+        "summary": "更新个人偏好设置",
         "security": [
           {
             "UserBearer": []
@@ -2363,11 +2363,15 @@
                 "properties": {
                   "pstack_enabled": {
                     "type": "boolean"
+                  },
+                  "skin": {
+                    "type": "string",
+                    "enum": [
+                      "default",
+                      "ironman"
+                    ]
                   }
                 },
-                "required": [
-                  "pstack_enabled"
-                ],
                 "additionalProperties": false
               }
             }

@@ -66,7 +66,7 @@ internal fun TaskConversationDialog(botId: String, task: AgentTaskRef, repositor
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         bots.forEachIndexed { i, bot ->
                             if (i > 0) Text("↔", color = Muted)
-                            PiBotFace(bot.avatar, "happy", 24.dp, seed = seedOf(bot.id))
+                            PiBotFace(bot.avatar, "happy", 24.dp, seed = seedOf(bot.id), botId = bot.id)
                             Text(bot.name, fontSize = 13.sp, modifier = Modifier.weight(1f))
                         }
                     }
@@ -80,7 +80,7 @@ internal fun TaskConversationDialog(botId: String, task: AgentTaskRef, repositor
                         val sender = page?.bots?.find { it.id == message.fromBotId }
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                sender?.let { PiBotFace(it.avatar, "happy", 22.dp, seed = seedOf(it.id)) }
+                                sender?.let { PiBotFace(it.avatar, "happy", 22.dp, seed = seedOf(it.id), botId = it.id) }
                                 Text(sender?.name ?: "智能体", color = Accent, fontSize = 13.sp, modifier = Modifier.weight(1f))
                                 message.createdAt?.let { Text(clockTime(it), color = Muted, fontSize = 11.sp) }
                             }

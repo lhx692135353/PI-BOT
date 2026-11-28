@@ -1,18 +1,45 @@
 import SwiftUI
 import PiBotKit
 
+@MainActor
 enum Palette {
-    static let accent = hexColor("#F4692A")
-    static let accentSoft = hexColor("#FFEFE4")
-    static let paper = hexColor("#F6F4F1")
-    static let card = Color.white
-    static let ink = hexColor("#1F1F23")
-    static let muted = hexColor("#8A877F")
-    static let line = hexColor("#E7E3DC")
-    static let good = hexColor("#2FA36B")
-    static let danger = hexColor("#D9483B")
-    static let codeBackground = hexColor("#F2EFEA")
-    static let chip = hexColor("#EFEBE5")
+    private static var isIronMan: Bool { SkinStore.shared.skin == .ironman }
+
+    static var accent: Color { isIronMan ? hexColor("#B52B33") : hexColor("#F4692A") }
+    static var accentSoft: Color { isIronMan ? hexColor("#2A161B") : hexColor("#FFEFE4") }
+    static var paper: Color { isIronMan ? hexColor("#0B0F17") : hexColor("#F6F4F1") }
+    static var card: Color { isIronMan ? hexColor("#131A26") : Color.white }
+    static var ink: Color { isIronMan ? hexColor("#EEF2F7") : hexColor("#1F1F23") }
+    static var muted: Color { isIronMan ? hexColor("#93A1B5") : hexColor("#8A877F") }
+    static var line: Color { isIronMan ? hexColor("#232E42") : hexColor("#E7E3DC") }
+    static var good: Color { isIronMan ? hexColor("#75DDF1") : hexColor("#2FA36B") }
+    static var danger: Color { isIronMan ? hexColor("#FF7A7F") : hexColor("#D9483B") }
+    static var codeBackground: Color { isIronMan ? hexColor("#172030") : hexColor("#F2EFEA") }
+    static var chip: Color { isIronMan ? hexColor("#192233") : hexColor("#EFEBE5") }
+}
+
+/// 皮肤感知的 Bot 头像视图：默认皮肤使用原有 BotFace，钢铁侠皮肤按 botId 确定性映射 12 款机甲。
+struct SkinnedBotFace: View {
+    let avatar: Avatar
+    let mood: String
+    let size: CGFloat
+    var seed: Int32 = 1
+    var paused: Bool = false
+    var effects: Bool = true
+    var entrance: Bool = false
+    var botId: String? = nil
+    var forceOriginal: Bool = false
+
+    @Environment(SkinStore.self) private var skinStore
+
+    var body: some View {
+        if !forceOriginal && skinStore.skin == .ironman {
+            let armorSeed = botId ?? "\(avatar.shape):\(avatar.color):\(avatar.scheme):\(seed)"
+            IronManAvatarView(seed: armorSeed, mood: mood, size: size)
+        } else {
+            BotFace(avatar: avatar, mood: mood, size: size, seed: seed, paused: paused, effects: effects, entrance: entrance)
+        }
+    }
 }
 
 private let clockFormatter: DateFormatter = {
@@ -82,7 +109,7 @@ struct EmptyStateView<Action: View>: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            BotFace(avatar: avatar, mood: mood, size: 160)
+            SkinnedBotFace(avatar: avatar, mood: mood, size: 160)
             Text(title).font(.title3.weight(.semibold)).multilineTextAlignment(.center).padding(.top, 12)
             Text(message).foregroundStyle(Palette.muted).multilineTextAlignment(.center).lineSpacing(4).padding(.top, 8)
             action().padding(.top, 20)

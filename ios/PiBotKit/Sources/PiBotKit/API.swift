@@ -90,8 +90,8 @@ public final class PiBotAPI: @unchecked Sendable {
         try await call(url, "GET", "/me/preferences", token: token)
     }
 
-    public func setPreferences(_ url: ServerURL, token: String, enabled: Bool) async throws -> DevelopmentPreferences {
-        try await call(url, "PATCH", "/me/preferences", token: token, body: DevelopmentPreferences(pstackEnabled: enabled))
+    public func setPreferences(_ url: ServerURL, token: String, enabled: Bool? = nil, skin: String? = nil) async throws -> DevelopmentPreferences {
+        try await call(url, "PATCH", "/me/preferences", token: token, body: PreferencesPatch(pstackEnabled: enabled, skin: skin))
     }
 
     public func revokeDevice(_ url: ServerURL, token: String, id: String) async throws -> Device {

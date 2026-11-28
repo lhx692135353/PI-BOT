@@ -41,7 +41,7 @@ struct FilesView: View {
             ZStack(alignment: .bottomTrailing) {
                 content
                 if let bot, opened == nil, !(list?.entries.isEmpty ?? true) {
-                    BotFace(avatar: bot.avatar, mood: "searching", size: 56, seed: seedOf(bot.id))
+                    SkinnedBotFace(avatar: bot.avatar, mood: "searching", size: 56, seed: seedOf(bot.id), botId: bot.id)
                         .padding(16)
                         .allowsHitTesting(false)
                 }

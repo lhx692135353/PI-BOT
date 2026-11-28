@@ -206,7 +206,7 @@ fun TimelineScreen(
                     Modifier.weight(1f).background(Card, RoundedCornerShape(28.dp)).padding(start = 4.dp, end = 16.dp, top = 4.dp, bottom = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    PiBotFace(current.avatar, mood, 44.dp, seed = seedOf(current.id))
+                    PiBotFace(current.avatar, mood, 44.dp, seed = seedOf(current.id), botId = current.id)
                     Spacer(Modifier.size(6.dp))
                     Column(Modifier.weight(1f)) {
                         Text(current.name, fontSize = 16.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -294,7 +294,7 @@ fun TimelineScreen(
                         displayBot.activity?.summary?.let { summary ->
                             item(key = "task-activity") {
                                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 6.dp)) {
-                                    PiBotFace(current.avatar, mood, 26.dp, seed = seedOf(current.id))
+                                    PiBotFace(current.avatar, mood, 26.dp, seed = seedOf(current.id), botId = current.id)
                                     Spacer(Modifier.size(8.dp))
                                     Text(summary, color = Muted, fontSize = 13.sp)
                                 }
@@ -346,7 +346,7 @@ fun TimelineScreen(
 @Composable
 private fun Intro(bot: Bot) {
     Column(Modifier.fillMaxWidth().padding(vertical = 40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        PiBotFace(bot.avatar, "happy", 112.dp, seed = seedOf(bot.id))
+        PiBotFace(bot.avatar, "happy", 112.dp, seed = seedOf(bot.id), botId = bot.id)
         Spacer(Modifier.height(12.dp))
         Text("和 ${bot.name} 打个招呼", fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(4.dp))
@@ -367,7 +367,7 @@ private fun RelayItem(message: Message, from: FromBot, onOpenBot: (String) -> Un
             Modifier.clickable { onOpenBot(from.id) }.padding(vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            from.avatar?.let { PiBotFace(it, "happy", 22.dp, seed = seedOf(from.id)) }
+            from.avatar?.let { PiBotFace(it, "happy", 22.dp, seed = seedOf(from.id), botId = from.id) }
             Spacer(Modifier.size(6.dp))
             Text(relayLabel(from), fontSize = 12.sp, color = Muted)
         }
@@ -565,7 +565,7 @@ private fun CallOverlay(bot: Bot, call: LiveCall, onMute: (Boolean) -> Unit, onH
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        PiBotFace(bot.avatar, mood, 180.dp, seed = seedOf(bot.id))
+        PiBotFace(bot.avatar, mood, 180.dp, seed = seedOf(bot.id), botId = bot.id)
         Spacer(Modifier.height(16.dp))
         Text(bot.name, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(6.dp))
