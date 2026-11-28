@@ -1,0 +1,48 @@
+desktop/apps/desktop/src/main.ts
+  s_70340281981c89::t_46ad9598b7c466 193
+  s_70340281981c89::t_ccc847552916bf 181-186
+  s_70340281981c89::t_1b58e4bec4eb5a 36-65
+  s_70340281981c89::t_c70b9d769b9f97 128
+ios/PiBot.xcodeproj/project.pbxproj
+  s_70340281981c89::t_6040e822b823c1 220,255
+ios/PiBot/Common/SkinStore.swift
+  s_70340281981c89::t_8b8f227b3b7b23 95,113-114,121-128
+  s_70340281981c89::t_08f6fc2b1961ff 4
+  s_70340281981c89::t_f621dc8dfc106b 129
+android/app/src/main/AndroidManifest.xml
+  s_70340281981c89::t_97dbd3e5374c3c 43-62,67
+android/app/src/main/java/dev/pibot/android/ui/SkinStore.kt
+  s_70340281981c89::t_85bd90b48eb81a 3,5
+  s_70340281981c89::t_f2b1fb83dd9b55 77-78,87,94-144,148-149
+desktop/apps/desktop/src/preload.ts
+  s_70340281981c89::t_1fdd068200813f 17
+desktop/apps/desktop/ui/bridge.ts
+  s_70340281981c89::t_511e4496d98526 36
+desktop/scripts/build-icon.ts
+  s_70340281981c89::t_9ce68187756d37 78-339
+desktop/apps/desktop/ui/skin.tsx
+  s_70340281981c89::t_fea86ce5e636c2 2
+  s_70340281981c89::t_ba3856b0363975 166-170
+android/app/src/main/res/drawable/ic_launcher_ironman.xml
+  s_70340281981c89::t_07afaaca9cbeef 1-89
+ios/PiBot/Assets.xcassets/AppIconIronMan.appiconset/Contents.json
+  s_70340281981c89::t_dbe27e12b01523 1-14
+desktop/packages/protocol/src/index.ts
+  s_70340281981c89::t_10fda8b180096b 136
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "38d709f7dc944bc11b59cd8c2c582f8b6731fe20",
+  "prompts": {},
+  "sessions": {
+    "s_70340281981c89": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "16309712-02cc-4be8-abd0-38c2bdf72b61",
+        "model": "litellm-gemini-4-neon"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
