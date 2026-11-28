@@ -1,0 +1,21 @@
+server/src/migrate.ts
+  s_70340281981c89::t_04ad52c6430d60 11
+desktop/tests/harness-e2e.test.ts
+  s_70340281981c89::t_10be95a9de458d 380-381
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "185a77919e707a6550b8f9416259dcbe6ba5e65c",
+  "prompts": {},
+  "sessions": {
+    "s_70340281981c89": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "16309712-02cc-4be8-abd0-38c2bdf72b61",
+        "model": "litellm-gemini-4-neon"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
