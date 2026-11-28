@@ -1,0 +1,165 @@
+ios/PiBot/PiBotApp.swift
+  s_70340281981c89::t_cb314367b47c6b 8,23,25,32,36-46,50,59-68
+ios/PiBot/Common/IronManIntroOverlay.swift
+  s_70340281981c89::t_e1dab808a6141a 1,3-230
+  s_70340281981c89::t_6a294c53e774c2 2
+ios/PiBot/Common/Theme.swift
+  s_70340281981c89::t_78389fa0da6457 4,6-42
+  s_70340281981c89::t_deff62181d0f89 112
+ios/PiBot/Conversation/MessageRow.swift
+  s_70340281981c89::t_221e5a6656ad01 41
+desktop/apps/desktop/ui/ironman-intro.tsx
+  s_70340281981c89::t_f57a544dd8666c 1-261
+ios/PiBotKit/Sources/PiBotKit/Models.swift
+  s_70340281981c89::t_e1eb9cf66e1bae 116-147
+desktop/packages/protocol/src/index.ts
+  s_70340281981c89::t_eeca19a0cf6788 29-30
+desktop/tests/skin-hash.test.ts
+  s_70340281981c89::t_93cfca6ca379ae 15-17
+  s_70340281981c89::t_85f6aa8c772bee 1-14,18-33
+desktop/apps/desktop/ui/bot-avatar.tsx
+  s_70340281981c89::t_a7d598d24ec1b7 4-5,15-23,25-36
+android/app/src/main/java/dev/pibot/android/ui/FilesScreen.kt
+  s_70340281981c89::t_138514a4d3f957 151
+ios/PiBot/Bots/BotListView.swift
+  s_70340281981c89::t_d80c8f4e811177 170
+  s_70340281981c89::t_19221d4d2d9f55 115-116
+ios/PiBot/Editor/BotEditorView.swift
+  s_70340281981c89::t_e353b4ee2962b3 140-141,144,147-156,167
+  s_70340281981c89::t_1d553b68dcf1a7 6
+desktop/apps/desktop/ui/skin.tsx
+  s_70340281981c89::t_4ec5ec7f158979 1-2,4-212
+  s_70340281981c89::t_d6adf37cade8aa 3
+  s_70340281981c89::t_35e6188a48047a 213-290
+desktop/apps/desktop/ui/main.tsx
+  s_70340281981c89::t_512b7c4ec6e1ff 115
+  s_70340281981c89::t_46949a18d17995 258
+  s_70340281981c89::t_d5b533a75007af 439
+  s_70340281981c89::t_3d7504fc198dd4 353
+  s_70340281981c89::t_35134ff42895ea 489-490
+  s_70340281981c89::t_136b4d173b74dd 335
+  s_70340281981c89::t_cbc6e28af435cb 19-20
+  s_70340281981c89::t_feb82f72352e28 197
+  s_70340281981c89::t_cfd859b2332f59 86
+android/app/src/main/java/dev/pibot/android/ui/SkinStore.kt
+  s_70340281981c89::t_a83d5a1f613097 1-96
+android/app/src/main/java/dev/pibot/android/MainActivity.kt
+  s_70340281981c89::t_1c7563754e99fc 10
+  s_70340281981c89::t_468caf9ddf4137 21-23,25-26
+ios/PiBot/Common/IronManAvatarView.swift
+  s_70340281981c89::t_4737ea7804880d 2
+  s_70340281981c89::t_cf2aecd85f3e81 1,3-201
+desktop/package.json
+  s_70340281981c89::t_cd9da2ec36f9e5 27,30-31,37,40,44-45,56
+server/src/routes.ts
+  s_70340281981c89::t_4b592c60cd43dc 468-472,474-479,481
+android/app/src/main/java/dev/pibot/android/ui/BotListScreen.kt
+  s_70340281981c89::t_4b67ee43dd28ef 231
+  s_70340281981c89::t_e220695f3ba261 166
+android/app/src/test/java/dev/pibot/android/SkinHashTest.kt
+  s_70340281981c89::t_55890976f3904a 1-20
+android/app/src/main/java/dev/pibot/android/ui/TimelineScreen.kt
+  s_70340281981c89::t_290276f71283f9 349
+  s_70340281981c89::t_13bd92f98719a3 209
+  s_70340281981c89::t_c7a98566faf315 297
+  s_70340281981c89::t_b6195d94ee2940 568
+  s_70340281981c89::t_cb6549ac9721c7 370
+android/app/src/main/java/dev/pibot/android/ui/AppRoot.kt
+  s_70340281981c89::t_e80ae3d916b50f 37-39,41,44-51,65-73,77
+  s_70340281981c89::t_00c90f771c30b4 190
+  s_70340281981c89::t_d6c1d93c64ee19 15,17
+server/migrations/0036-user-skin.sql
+  s_70340281981c89::t_11032ebf9f5bed 1
+server/tests/async-tasks.test.ts
+  s_70340281981c89::t_381d8c4854d035 350-351,353,355-360
+desktop/apps/desktop/ui/bot-list-item.tsx
+  s_70340281981c89::t_c3ca9380d0eb70 40
+desktop/apps/desktop/ui/editor.tsx
+  s_70340281981c89::t_f5236c486ab480 12
+  s_70340281981c89::t_23f3f8dabaddbc 50,52-59
+  s_70340281981c89::t_652cc55806ef5c 95
+  s_70340281981c89::t_a6e4347ece95ae 3
+android/app/src/main/java/dev/pibot/android/data/PiBotRepository.kt
+  s_70340281981c89::t_97584d570a2493 256-257
+server/openapi.json
+  s_70340281981c89::t_49afe5e3093f41 2325,2347,2366-2372
+android/app/src/main/java/dev/pibot/android/ui/Theme.kt
+  s_70340281981c89::t_85ac61c6c950e3 3,6,9-10,14-63,65,67,69-72,74-77,79-105,109-121
+desktop/apps/desktop/ui/timeline.tsx
+  s_70340281981c89::t_c70ea35c5b7379 89
+  s_70340281981c89::t_d60724b758f2e1 368
+  s_70340281981c89::t_7617e62a49c2d3 399
+  s_70340281981c89::t_6b3783eb88b56a 94
+  s_70340281981c89::t_9b811e6aa8f046 150
+android/app/src/main/java/dev/pibot/android/face/PiBotFace.kt
+  s_70340281981c89::t_c6a46e312e394c 58-74
+android/app/src/main/java/dev/pibot/android/ui/TaskConversationDialog.kt
+  s_70340281981c89::t_e3210abbdd8212 83
+  s_70340281981c89::t_aa9a5e6516c199 69
+desktop/apps/desktop/ui/ironman-avatar.tsx
+  s_70340281981c89::t_af2e1986b74045 1-23,25-48,51-225
+  s_70340281981c89::t_fc223dec7b3e50 24
+  s_70340281981c89::t_006e7e2e059743 49-50
+android/app/src/main/java/dev/pibot/android/ui/BotEditorScreen.kt
+  s_70340281981c89::t_5b3231781a52b6 172
+  s_70340281981c89::t_f96427bccf8026 118-119,122,126,128-139
+desktop/apps/desktop/ui/style.css
+  s_70340281981c89::t_4aeecd9b8c36c6 424-461
+  s_70340281981c89::t_7a42cab343419d 56-97
+android/app/src/main/java/dev/pibot/android/PiBotApp.kt
+  s_70340281981c89::t_4512f261b79ef7 26-27,32
+android/app/src/main/java/dev/pibot/android/ui/SettingsScreen.kt
+  s_70340281981c89::t_73bfeaf73625a1 107-159
+  s_70340281981c89::t_5ef8aa1771099e 3,5-7,15-16,20
+  s_70340281981c89::t_b05485882e9d7f 62-67,75-78,87,90-93
+desktop/apps/desktop/ui/call.tsx
+  s_70340281981c89::t_d0b2cf55ab930c 62
+android/app/src/main/java/dev/pibot/android/face/IronManAvatar.kt
+  s_70340281981c89::t_32ef37df105bef 1-289
+android/app/src/main/java/dev/pibot/android/ui/IronManIntroOverlay.kt
+  s_70340281981c89::t_37b7158fed13c6 1-298
+ios/PiBotKit/Sources/PiBotKit/API.swift
+  s_70340281981c89::t_1f4a160cb5a38c 93-94
+ios/PiBotKit/Sources/PiBotKit/AppStore.swift
+  s_70340281981c89::t_8d2df38ddf8f04 335-336
+ios/PiBot/Conversation/ConversationView.swift
+  s_70340281981c89::t_4ed926d0bd81b8 246
+  s_70340281981c89::t_7aaefbdcb427f1 155
+  s_70340281981c89::t_7e922b0b61de93 347
+ios/PiBot/Conversation/TaskConversationSheet.swift
+  s_70340281981c89::t_97cf181cd64531 23
+  s_70340281981c89::t_586f02eb69cb97 42
+ios/PiBot/Conversation/Composer.swift
+  s_70340281981c89::t_a5cb49e77ce8a1 240
+ios/PiBot/Login/LoginView.swift
+  s_70340281981c89::t_759aaf6a561d30 26
+android/app/src/main/java/dev/pibot/android/data/PiBotApi.kt
+  s_70340281981c89::t_2ee538dfc47078 316-322
+  s_70340281981c89::t_9d182d7d196489 51-54
+ios/PiBot/Common/SkinStore.swift
+  s_70340281981c89::t_503b340d7fdc52 1-3,5-117
+  s_70340281981c89::t_c5bc9607c9bc2f 4
+ios/PiBot/Files/FilesView.swift
+  s_70340281981c89::t_beb90f8a7079e3 44
+ios/PiBot/Settings/SettingsView.swift
+  s_70340281981c89::t_7d4ad875f4bb6a 6,13,20-83
+  s_70340281981c89::t_a264c743f2c7fb 158-162
+package-lock.json
+  s_70340281981c89::t_8bc171c3dc59c8 60,66,2416-2421,5782-5787,5982-6001,6014-6019,11861-11866,15653-15658
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b38c92ff51bb21c6273a54b40742a83c7050a556",
+  "prompts": {},
+  "sessions": {
+    "s_70340281981c89": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "16309712-02cc-4be8-abd0-38c2bdf72b61",
+        "model": "litellm-gemini-4-neon"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
