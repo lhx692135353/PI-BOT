@@ -1,6 +1,8 @@
 package dev.pibot.android.ui
 
+import android.content.ComponentName
 import android.content.Context
+import android.content.pm.PackageManager
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.graphics.Color
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -72,7 +74,8 @@ fun armorIndexFor(seed: String): Int = (fnv1a32(seed) % ARMOR_MODELS.size).toInt
 fun armorFor(seed: String): ArmorSpec = ARMOR_MODELS[armorIndexFor(seed)]
 
 class SkinStore(context: Context) {
-    private val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val appContext = context.applicationContext
+    private val prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     private val _skin = MutableStateFlow(AppSkin.fromWire(prefs.getString(KEY_SKIN, AppSkin.DEFAULT.wire)))
     val skin: StateFlow<AppSkin> = _skin.asStateFlow()
 
@@ -81,15 +84,69 @@ class SkinStore(context: Context) {
             _skin.value = skin
         }
         prefs.edit().putString(KEY_SKIN, skin.wire).apply()
+        applyLauncherIcon(skin)
     }
 
     fun applyFromServer(wire: String?) {
         setLocal(AppSkin.fromWire(wire))
     }
 
+    /**
+     * 通过切换 activity-alias 联动更新桌面启动器图标。
+     * 仅在目标组件当前启用状态与期望不一致时调用 PackageManager，避免重复刷新桌面。
+     */
+    fun applyLauncherIcon(target: AppSkin) {
+        runCatching {
+            val pm = appContext.packageManager
+            val defaultAlias = ComponentName(appContext, DEFAULT_ALIAS)
+            val ironManAlias = ComponentName(appContext, IRONMAN_ALIAS)
+            val wantIronMan = target == AppSkin.IRONMAN
+            val defaultEnabled = pm.getComponentEnabledSetting(defaultAlias)
+            val ironManEnabled = pm.getComponentEnabledSetting(ironManAlias)
+
+            val defaultIsActive = defaultEnabled == PackageManager.COMPONENT_ENABLED_STATE_ENABLED ||
+                defaultEnabled == PackageManager.COMPONENT_ENABLED_STATE_DEFAULT
+            val ironManIsActive = ironManEnabled == PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+
+            if (wantIronMan) {
+                if (!ironManIsActive) {
+                    pm.setComponentEnabledSetting(
+                        ironManAlias,
+                        PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                        PackageManager.DONT_KILL_APP,
+                    )
+                }
+                if (defaultIsActive) {
+                    pm.setComponentEnabledSetting(
+                        defaultAlias,
+                        PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                        PackageManager.DONT_KILL_APP,
+                    )
+                }
+            } else {
+                if (!defaultIsActive) {
+                    pm.setComponentEnabledSetting(
+                        defaultAlias,
+                        PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                        PackageManager.DONT_KILL_APP,
+                    )
+                }
+                if (ironManIsActive) {
+                    pm.setComponentEnabledSetting(
+                        ironManAlias,
+                        PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                        PackageManager.DONT_KILL_APP,
+                    )
+                }
+            }
+        }
+    }
+
     companion object {
         private const val PREFS_NAME = "pibot_skin_prefs"
         private const val KEY_SKIN = "skin"
+        private const val DEFAULT_ALIAS = "dev.pibot.android.MainActivityDefault"
+        private const val IRONMAN_ALIAS = "dev.pibot.android.MainActivityIronMan"
     }
 }
 

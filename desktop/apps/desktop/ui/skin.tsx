@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { call } from './bridge.js';
+import { bridge, call } from './bridge.js';
 import { IronManAvatar } from './ironman-avatar.js';
 
 export type AppSkin = 'default' | 'ironman';
@@ -162,6 +162,11 @@ function applySkin(skin: AppSkin, persistLocal = true) {
     } catch {
       /* Ignore storage quota/privacy failures; skin still works in memory. */
     }
+  }
+  try {
+    void bridge.setAppIcon?.(skin)?.catch(() => {});
+  } catch {
+    /* Non-Electron environments (e.g. unit tests / browser preview) have no desktop bridge. */
   }
   listeners.forEach(listener => listener());
 }

@@ -33,7 +33,36 @@ function diagnostic(event: string, detail?: string) {
   } catch { /* Diagnostics must not interrupt input. */ }
 }
 const page = pathToFileURL(join(__dirname, '../ui-dist/index.html')).href;
-const iconPath = join(__dirname, '../assets/pi-bot.png');
+type AppSkin = 'default' | 'ironman';
+const skinStatePath = join(dataDir, 'electron', 'skin.json');
+function readPersistedSkin(): AppSkin {
+  try {
+    const parsed = JSON.parse(readFileSync(skinStatePath, 'utf8'));
+    return parsed?.skin === 'ironman' ? 'ironman' : 'default';
+  } catch {
+    return 'default';
+  }
+}
+function persistSkin(skin: AppSkin) {
+  try {
+    writeFileSync(skinStatePath, JSON.stringify({ skin }), { mode: 0o600 });
+  } catch { /* Skin icon preference must not block UI. */ }
+}
+function iconPathForSkin(skin: AppSkin): string {
+  const base = skin === 'ironman' ? 'pi-bot-ironman' : 'pi-bot';
+  const ext = process.platform === 'win32' ? 'ico' : 'png';
+  const candidate = join(__dirname, `../assets/${base}.${ext}`);
+  return existsSync(candidate) ? candidate : join(__dirname, '../assets/pi-bot.png');
+}
+let currentAppSkin: AppSkin = readPersistedSkin();
+function applyAppIcon(skin: AppSkin) {
+  currentAppSkin = skin;
+  const path = iconPathForSkin(skin);
+  const image = nativeImage.createFromPath(path);
+  if (image.isEmpty()) return;
+  if (process.platform === 'darwin') app.dock?.setIcon(image);
+  if (window && !window.isDestroyed() && process.platform !== 'darwin') window.setIcon(image);
+}
 const client = new ServiceClient(event => { if(event.type==='service.status')diagnostic('service-connection',String(event.connected)); if(event.type==='account')diagnostic('account-connection',event.state.connection);window?.webContents.send('agent:event', event); });
 function validSender(event: Electron.IpcMainInvokeEvent) { if (!window || event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame || event.senderFrame.url !== page) throw new Error('不受信任的 IPC 来源'); }
 declare const __PI_BOT_BUILD__: { version: string; buildNumber: number };
@@ -96,7 +125,7 @@ else {
   if (process.platform === 'darwin') app.setActivationPolicy('regular');
   app.on('second-instance', () => { if (window) present(window); });
   app.whenReady().then(() => {
-    if (process.platform === 'darwin') app.dock?.setIcon(nativeImage.createFromPath(iconPath));
+    applyAppIcon(currentAppSkin);
     ipcMain.handle('updates:state', async event => { validSender(event); return { ...await updater.state(), supported: updatesSupported }; });
     ipcMain.handle('updates:check', async (event, channel: unknown) => { validSender(event); await ensureUpdatesSupported(); return updater.check(channel); });
     ipcMain.handle('updates:download', async event => { validSender(event); await ensureUpdatesSupported(); return updater.download(); });
@@ -149,13 +178,19 @@ else {
       const error = await shell.openPath(await libraryDir(libraryRoot, slug));
       if (error) throw new Error('无法在文件管理器中打开资料库');
     });
+    ipcMain.handle('agent:setAppIcon', (event, skin: unknown) => {
+      validSender(event);
+      const next: AppSkin = skin === 'ironman' ? 'ironman' : 'default';
+      persistSkin(next);
+      applyAppIcon(next);
+    });
     const createWindow = () => {
       let saved = {width:1280,height:860,maximized:true};
       try {
         const value = JSON.parse(readFileSync(join(dataDir,'electron','window-state.json'),'utf8'));
         if (Number.isInteger(value.width) && value.width >= 900 && value.width <= 7680 && Number.isInteger(value.height) && value.height >= 600 && value.height <= 4320) saved = value;
       } catch { /* First launch uses defaults. */ }
-      window = new BrowserWindow({ width: saved.width, height: saved.height, minWidth: 900, minHeight: 600, show: false, icon: iconPath, title: 'Pi Bot', backgroundColor: nativeTheme.shouldUseDarkColors ? '#101010' : '#ffffff', titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default', webPreferences: { preload: join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false } });
+      window = new BrowserWindow({ width: saved.width, height: saved.height, minWidth: 900, minHeight: 600, show: false, icon: iconPathForSkin(currentAppSkin), title: 'Pi Bot', backgroundColor: nativeTheme.shouldUseDarkColors ? '#101010' : '#ffffff', titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default', webPreferences: { preload: join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false } });
       if (saved.maximized) window.maximize();
       window.on('focus',()=>diagnostic('focus')); window.on('blur',()=>diagnostic('blur'));
       window.on('unresponsive',()=>diagnostic('unresponsive')); window.on('responsive',()=>diagnostic('responsive'));
