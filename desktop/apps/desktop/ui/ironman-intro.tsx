@@ -16,13 +16,15 @@ function prefersReducedMotion(): boolean {
 export function IronManIntro({ onDone }: IronManIntroProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const doneRef = useRef(false);
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
   const [fading, setFading] = useState(false);
 
   useEffect(() => {
     const finish = () => {
       if (doneRef.current) return;
       doneRef.current = true;
-      onDone();
+      onDoneRef.current();
     };
 
     if (prefersReducedMotion()) {
@@ -236,7 +238,7 @@ export function IronManIntro({ onDone }: IronManIntroProps) {
         renderer.domElement.remove();
       }
     };
-  }, [onDone]);
+  }, []);
 
   return (
     <div
