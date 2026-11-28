@@ -377,8 +377,8 @@ test('a visible browser waits for the chat login confirmation before resuming', 
 
 test('a chat task discovers Electron on the desktop and requires one-time launch and login approvals', { skip: electronSkip }, async () => {
   await connectBrowserHarness();
-  assert.deepEqual(await app.call('preferences', {}), { pstack_enabled: false });
-  assert.deepEqual(await app.call('setPreferences', { pstack_enabled: true }), { pstack_enabled: true });
+  assert.deepEqual(await app.call('preferences', {}), { pstack_enabled: false, skin: 'default' });
+  assert.deepEqual(await app.call('setPreferences', { pstack_enabled: true }), { pstack_enabled: true, skin: 'default' });
   await app.call('setPreferences', { pstack_enabled: false });
   writeFileSync(join(dir, 'fixture.cjs'), `
     const { app, BrowserWindow } = require('electron');
