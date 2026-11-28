@@ -1,0 +1,23 @@
+desktop/apps/desktop/ui/ironman-intro.tsx
+  s_70340281981c89::t_610311420a8ada 241
+  s_70340281981c89::t_d3b6a450e13595 19-20,27
+desktop/apps/desktop/ui/main.tsx
+  s_70340281981c89::t_7e189b62269c9f 259
+  s_70340281981c89::t_d88c776245ee94 491
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6da307adf293ba4ada8c2c89f38ac2a548864cd1",
+  "prompts": {},
+  "sessions": {
+    "s_70340281981c89": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "16309712-02cc-4be8-abd0-38c2bdf72b61",
+        "model": "litellm-gemini-4-neon"
+      },
+      "human_author": "liuhx <liuhx20@lenovo.com>"
+    }
+  }
+}
